@@ -1,0 +1,582 @@
+<script>
+// ============================================================================
+// BDPA - js/planificacion.html - Sistema de Planificación y Metas
+// ============================================================================
+// Variables globales del módulo
+let metasData = [];
+let metaEditando = null;
+let filtrosMetasActivos = {};
+
+// Estados de metas
+const ESTADOS_META = {
+    PENDIENTE: 'Pendiente',
+    EN_CURSO: 'En curso',
+    COMPLETADA: 'Completada',
+    RETRASADA: 'Retrasada',
+    CANCELADA: 'Cancelada'
+};
+
+// Prioridades
+const PRIORIDADES_META = {
+    BAJA: 'baja',
+    MEDIA: 'media',
+    ALTA: 'alta',
+    CRITICA: 'critica'
+};
+
+// ============================================================================
+// FUNCIONES PRINCIPALES
+// ============================================================================
+
+/**
+ * Inicializar módulo de planificación
+ */
+function initializePlanificacionModule() {
+    console.log('[PLANIFICACION] Inicializando módulo de planificación');
+    
+    // Configurar event listeners
+    setupPlanificacionEventListeners();
+    
+    // Cargar datos iniciales si estamos en la sección
+    const seccionActiva = document.querySelector('#planificacion-metas:not(.hidden)');
+    if (seccionActiva) {
+        cargarMetas();
+        cargarObrasParaMetas();
+    }
+    
+    console.log('[PLANIFICACION] Módulo inicializado');
+}
+
+/**
+ * Configurar event listeners
+ */
+function setupPlanificacionEventListeners() {
+    // Cambio de obra
+    const obraSelect = document.getElementById('metas-obra');
+    if (obraSelect) {
+        obraSelect.addEventListener('change', handleObraMetaChange);
+    }
+    
+    // Cambio de fechas para validación
+    const fechaInicio = document.getElementById('fecha-inicio-meta');
+    const fechaFin = document.getElementById('fecha-termino-meta');
+    
+    if (fechaInicio) {
+        fechaInicio.addEventListener('change', validarFechasMeta);
+    }
+    
+    if (fechaFin) {
+        fechaFin.addEventListener('change', validarFechasMeta);
+    }
+    
+    // Filtros
+    const filtros = ['filtro-tipo-meta', 'filtro-estado-meta'];
+    filtros.forEach(filtroId => {
+        const elemento = document.getElementById(filtroId);
+        if (elemento) {
+            elemento.addEventListener('change', () => filtrarMetas());
+        }
+    });
+}
+
+/**
+ * Cargar metas de la obra seleccionada
+ */
+async function cargarMetasObra() {
+    const obraId = document.getElementById('metas-obra').value;
+    
+    if (!obraId) {
+        document.getElementById('metas-container').classList.add('hidden');
+        return;
+    }
+    
+    document.getElementById('metas-container').classList.remove('hidden');
+    await cargarMetas();
+}
+
+/**
+ * Cargar metas
+ */
+async function cargarMetas() {
+    try {
+        mostrarLoaderMetas(true);
+        
+        const obraId = document.getElementById('metas-obra').value;
+        const filtros = {
+            obraId,
+            tipo: document.getElementById('filtro-tipo-meta')?.value,
+            estado: document.getElementById('filtro-estado-meta')?.value
+        };
+        
+        const response = await callAPI('obtenerMetasObra', filtros);
+        
+        if (!response.success) {
+            throw new Error(response.message || 'Error al cargar metas');
+        }
+        
+        metasData = response.datos || [];
+        
+        // Procesar estados (marcar retrasadas)
+        actualizarEstadosMetas();
+        
+        mostrarListaMetas();
+        
+    } catch (error) {
+        console.error('[PLANIFICACION] Error cargando metas:', error);
+        mostrarNotificacion('Error al cargar metas: ' + error.message, 'error');
+    } finally {
+        mostrarLoaderMetas(false);
+    }
+}
+
+/**
+ * Mostrar formulario de meta
+ */
+function mostrarFormularioMeta() {
+    metaEditando = null;
+    limpiarFormularioMeta();
+    document.getElementById('formulario-meta').classList.remove('hidden');
+    
+    // Establecer fecha de inicio por defecto (hoy)
+    document.getElementById('fecha-inicio-meta').value = new Date().toISOString().split('T')[0];
+}
+
+/**
+ * Cancelar edición de meta
+ */
+function cancelarMeta() {
+    metaEditando = null;
+    limpiarFormularioMeta();
+    document.getElementById('formulario-meta').classList.add('hidden');
+}
+
+/**
+ * Limpiar formulario
+ */
+function limpiarFormularioMeta() {
+    document.getElementById('nombre-meta').value = '';
+    document.getElementById('tipo-meta').value = 'avance';
+    document.getElementById('categoria-meta').value = 'general';
+    document.getElementById('valor-meta').value = '';
+    document.getElementById('unidad-meta').value = 'porcentaje';
+    document.getElementById('fecha-inicio-meta').value = '';
+    document.getElementById('fecha-termino-meta').value = '';
+    document.getElementById('descripcion-meta').value = '';
+}
+
+/**
+ * Guardar meta
+ */
+async function guardarMeta() {
+    try {
+        // Validar formulario
+        if (!validarFormularioMeta()) {
+            return;
+        }
+        
+        mostrarLoaderMetas(true);
+        
+        const datosMeta = {
+            id: metaEditando?.id,
+            obraId: document.getElementById('metas-obra').value,
+            nombre: document.getElementById('nombre-meta').value.trim(),
+            tipo: document.getElementById('tipo-meta').value,
+            categoria: document.getElementById('categoria-meta').value,
+            valorObjetivo: parseFloat(document.getElementById('valor-meta').value),
+            unidad: document.getElementById('unidad-meta').value,
+            fechaInicio: document.getElementById('fecha-inicio-meta').value,
+            fechaTermino: document.getElementById('fecha-termino-meta').value,
+            descripcion: document.getElementById('descripcion-meta').value.trim(),
+            estado: metaEditando?.estado || ESTADOS_META.PENDIENTE,
+            valorActual: metaEditando?.valorActual || 0
+        };
+        
+        const response = await callAPI('guardarMeta', datosMeta);
+        
+        if (!response.success) {
+            throw new Error(response.message || 'Error al guardar meta');
+        }
+        
+        mostrarNotificacion('Meta guardada correctamente', 'success');
+        cancelarMeta();
+        cargarMetas();
+        
+    } catch (error) {
+        console.error('[PLANIFICACION] Error guardando meta:', error);
+        mostrarNotificacion('Error al guardar meta: ' + error.message, 'error');
+    } finally {
+        mostrarLoaderMetas(false);
+    }
+}
+
+/**
+ * Mostrar lista de metas
+ */
+function mostrarListaMetas() {
+    const container = document.getElementById('metas-lista');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    if (metasData.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-bullseye fa-3x text-muted"></i>
+                <p class="text-muted">No hay metas registradas para esta obra</p>
+            </div>
+        `;
+        return;
+    }
+    
+    metasData.forEach(meta => {
+        const progreso = calcularProgresoMeta(meta);
+        const diasRestantes = calcularDiasRestantes(meta.fechaTermino);
+        const estadoClase = getEstadoMetaClass(meta.estado);
+        
+        const metaCard = document.createElement('div');
+        metaCard.className = 'goal-card';
+        metaCard.innerHTML = `
+            <div class="goal-header">
+                <h4>${meta.nombre}</h4>
+                <span class="badge badge-${estadoClase}">${meta.estado}</span>
+            </div>
+            
+            <div class="goal-info">
+                <div class="info-row">
+                    <span><i class="fas fa-tag"></i> ${meta.tipo}</span>
+                    <span><i class="fas fa-folder"></i> ${meta.categoria}</span>
+                </div>
+                
+                <div class="info-row">
+                    <span><i class="fas fa-calendar"></i> ${formatearFecha(meta.fechaInicio)} - ${formatearFecha(meta.fechaTermino)}</span>
+                </div>
+                
+                ${meta.descripcion ? `
+                    <div class="goal-description">
+                        <p>${meta.descripcion}</p>
+                    </div>
+                ` : ''}
+                
+                <div class="goal-progress">
+                    <div class="progress-info">
+                        <span>Progreso: ${meta.valorActual} / ${meta.valorObjetivo} ${meta.unidad}</span>
+                        <span>${progreso}%</span>
+                    </div>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar ${getProgressClass(progreso)}" style="width: ${progreso}%"></div>
+                    </div>
+                </div>
+                
+                ${meta.estado !== ESTADOS_META.COMPLETADA && diasRestantes !== null ? `
+                    <div class="dias-restantes ${diasRestantes < 0 ? 'text-danger' : diasRestantes <= 7 ? 'text-warning' : 'text-muted'}">
+                        <i class="fas fa-clock"></i> 
+                        ${diasRestantes < 0 ? 'Vencida hace ' + Math.abs(diasRestantes) + ' días' : 
+                          diasRestantes === 0 ? 'Vence hoy' : 
+                          'Quedan ' + diasRestantes + ' días'}
+                    </div>
+                ` : ''}
+            </div>
+            
+            <div class="goal-actions">
+                <button class="btn btn-sm btn-success" onclick="actualizarProgresoMeta('${meta.id}')" title="Actualizar progreso">
+                    <i class="fas fa-percentage"></i>
+                </button>
+                <button class="btn btn-sm btn-warning" onclick="editarMeta('${meta.id}')" title="Editar">
+                    <i class="fas fa-edit"></i>
+                </button>
+                ${usuarioActual?.rol === 'Admin' || usuarioActual?.rol === 'Supervisor' ? `
+                    <button class="btn btn-sm btn-danger" onclick="eliminarMeta('${meta.id}')" title="Eliminar">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                ` : ''}
+            </div>
+        `;
+        
+        container.appendChild(metaCard);
+    });
+}
+
+/**
+ * Actualizar progreso de meta
+ */
+async function actualizarProgresoMeta(id) {
+    const meta = metasData.find(m => m.id === id);
+    if (!meta) return;
+    
+    const nuevoValor = prompt(`Actualizar progreso de "${meta.nombre}"\nValor actual: ${meta.valorActual} ${meta.unidad}\nValor objetivo: ${meta.valorObjetivo} ${meta.unidad}\n\nIngrese el nuevo valor:`, meta.valorActual);
+    
+    if (nuevoValor === null) return;
+    
+    const valor = parseFloat(nuevoValor);
+    if (isNaN(valor) || valor < 0) {
+        mostrarNotificacion('El valor debe ser un número válido mayor o igual a 0', 'error');
+        return;
+    }
+    
+    try {
+        const progreso = Math.min(100, Math.round((valor / meta.valorObjetivo) * 100));
+        const response = await callAPI('actualizarAvanceMeta', {
+            id,
+            valorActual: valor,
+            progreso,
+            estado: progreso >= 100 ? ESTADOS_META.COMPLETADA : 
+                    progreso > 0 ? ESTADOS_META.EN_CURSO : ESTADOS_META.PENDIENTE
+        });
+        
+        if (!response.success) {
+            throw new Error(response.message || 'Error al actualizar progreso');
+        }
+        
+        mostrarNotificacion('Progreso actualizado correctamente', 'success');
+        cargarMetas();
+        
+    } catch (error) {
+        console.error('[PLANIFICACION] Error actualizando progreso:', error);
+        mostrarNotificacion('Error al actualizar progreso', 'error');
+    }
+}
+
+/**
+ * Editar meta
+ */
+async function editarMeta(id) {
+    try {
+        const meta = metasData.find(m => m.id === id);
+        if (!meta) {
+            mostrarNotificacion('Meta no encontrada', 'error');
+            return;
+        }
+        
+        metaEditando = meta;
+        
+        // Cargar datos en el formulario
+        document.getElementById('nombre-meta').value = meta.nombre;
+        document.getElementById('tipo-meta').value = meta.tipo;
+        document.getElementById('categoria-meta').value = meta.categoria;
+        document.getElementById('valor-meta').value = meta.valorObjetivo;
+        document.getElementById('unidad-meta').value = meta.unidad;
+        document.getElementById('fecha-inicio-meta').value = meta.fechaInicio;
+        document.getElementById('fecha-termino-meta').value = meta.fechaTermino;
+        document.getElementById('descripcion-meta').value = meta.descripcion || '';
+        
+        document.getElementById('formulario-meta').classList.remove('hidden');
+        
+    } catch (error) {
+        console.error('[PLANIFICACION] Error editando meta:', error);
+        mostrarNotificacion('Error al editar meta', 'error');
+    }
+}
+
+/**
+ * Eliminar meta
+ */
+async function eliminarMeta(id) {
+    const meta = metasData.find(m => m.id === id);
+    if (!meta) return;
+    
+    if (!confirm(`¿Está seguro de eliminar la meta "${meta.nombre}"?\n\nEsta acción no se puede deshacer.`)) {
+        return;
+    }
+    
+    try {
+        const response = await callAPI('eliminarMeta', { id });
+        
+        if (!response.success) {
+            throw new Error(response.message || 'Error al eliminar meta');
+        }
+        
+        mostrarNotificacion('Meta eliminada correctamente', 'success');
+        cargarMetas();
+        
+    } catch (error) {
+        console.error('[PLANIFICACION] Error eliminando meta:', error);
+        mostrarNotificacion('Error al eliminar meta', 'error');
+    }
+}
+
+// ============================================================================
+// FUNCIONES AUXILIARES
+// ============================================================================
+
+/**
+ * Validar formulario de meta
+ */
+function validarFormularioMeta() {
+    const nombre = document.getElementById('nombre-meta').value.trim();
+    const valor = document.getElementById('valor-meta').value;
+    const fechaInicio = document.getElementById('fecha-inicio-meta').value;
+    const fechaTermino = document.getElementById('fecha-termino-meta').value;
+    
+    if (!nombre) {
+        mostrarNotificacion('El nombre de la meta es requerido', 'error');
+        return false;
+    }
+    
+    if (!valor || parseFloat(valor) <= 0) {
+        mostrarNotificacion('El valor objetivo debe ser mayor a 0', 'error');
+        return false;
+    }
+    
+    if (!fechaInicio || !fechaTermino) {
+        mostrarNotificacion('Las fechas son requeridas', 'error');
+        return false;
+    }
+    
+    if (new Date(fechaInicio) > new Date(fechaTermino)) {
+        mostrarNotificacion('La fecha de inicio no puede ser posterior a la fecha de término', 'error');
+        return false;
+    }
+    
+    return true;
+}
+
+/**
+ * Validar fechas de meta
+ */
+function validarFechasMeta() {
+    const fechaInicio = document.getElementById('fecha-inicio-meta').value;
+    const fechaTermino = document.getElementById('fecha-termino-meta').value;
+    
+    if (fechaInicio && fechaTermino) {
+        if (new Date(fechaInicio) > new Date(fechaTermino)) {
+            document.getElementById('fecha-termino-meta').value = fechaInicio;
+        }
+    }
+}
+
+/**
+ * Calcular días restantes
+ */
+function calcularDiasRestantes(fechaTermino) {
+    if (!fechaTermino) return null;
+    
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    
+    const fin = new Date(fechaTermino);
+    fin.setHours(0, 0, 0, 0);
+    
+    const diferencia = fin - hoy;
+    return Math.ceil(diferencia / (1000 * 60 * 60 * 24));
+}
+
+/**
+ * Calcular progreso de meta
+ */
+function calcularProgresoMeta(meta) {
+    if (!meta.valorObjetivo || meta.valorObjetivo === 0) return 0;
+    return Math.min(100, Math.round((meta.valorActual / meta.valorObjetivo) * 100));
+}
+
+/**
+ * Actualizar estados de metas
+ */
+function actualizarEstadosMetas() {
+    const hoy = new Date();
+    
+    metasData.forEach(meta => {
+        if (meta.estado !== ESTADOS_META.COMPLETADA && meta.estado !== ESTADOS_META.CANCELADA) {
+            const fechaTermino = new Date(meta.fechaTermino);
+            const progreso = calcularProgresoMeta(meta);
+            
+            if (fechaTermino < hoy && progreso < 100) {
+                meta.estado = ESTADOS_META.RETRASADA;
+            }
+        }
+    });
+}
+
+/**
+ * Cargar obras para selector
+ */
+async function cargarObrasParaMetas() {
+    try {
+        const response = await callAPI('obtenerObras', { activas: true });
+        
+        if (!response.success) return;
+        
+        const obras = response.datos || [];
+        const select = document.getElementById('metas-obra');
+        
+        select.innerHTML = '<option value="">Seleccione una obra</option>';
+        
+        obras.forEach(obra => {
+            const option = document.createElement('option');
+            option.value = obra.id;
+            option.textContent = obra.nombre;
+            select.appendChild(option);
+        });
+        
+    } catch (error) {
+        console.error('[PLANIFICACION] Error cargando obras:', error);
+    }
+}
+
+/**
+ * Manejar cambio de obra
+ */
+function handleObraMetaChange() {
+    cargarMetasObra();
+}
+
+/**
+ * Filtrar metas
+ */
+function filtrarMetas() {
+    cargarMetas();
+}
+
+/**
+ * Obtener clase CSS para estado
+ */
+function getEstadoMetaClass(estado) {
+    const clases = {
+        [ESTADOS_META.PENDIENTE]: 'secondary',
+        [ESTADOS_META.EN_CURSO]: 'info',
+        [ESTADOS_META.COMPLETADA]: 'success',
+        [ESTADOS_META.RETRASADA]: 'danger',
+        [ESTADOS_META.CANCELADA]: 'dark'
+    };
+    return clases[estado] || 'secondary';
+}
+
+/**
+ * Obtener clase CSS para progreso
+ */
+function getProgressClass(progreso) {
+    if (progreso >= 100) return 'bg-success';
+    if (progreso >= 75) return 'bg-info';
+    if (progreso >= 50) return 'bg-warning';
+    if (progreso >= 25) return 'bg-danger';
+    return 'bg-secondary';
+}
+
+/**
+ * Mostrar/ocultar loader
+ */
+function mostrarLoaderMetas(mostrar) {
+    const loader = document.getElementById('metas-loader');
+    if (loader) {
+        if (mostrar) {
+            loader.classList.remove('hidden');
+        } else {
+            loader.classList.add('hidden');
+        }
+    }
+}
+
+/**
+ * Formatear fecha
+ */
+function formatearFecha(fecha) {
+    if (!fecha) return '-';
+    
+    const opciones = {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    };
+    
+    return new Date(fecha).toLocaleDateString('es-CL', opciones);
+}
+</script>

@@ -1,0 +1,1098 @@
+<!-- Pestañas de navegación del modal -->
+<ul class="nav nav-tabs">
+    <li class="nav-item">
+        <a class="nav-link active" onclick="mostrarTabMaquetacion('info-basica')">
+            <i class="fas fa-info-circle"></i> Información Básica
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" onclick="mostrarTabMaquetacion('infraestructura')">
+            <i class="fas fa-building"></i> Infraestructura
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" onclick="mostrarTabMaquetacion('red-telecomunicaciones')">
+            <i class="fas fa-network-wired"></i> Red de Telecomunicaciones
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" onclick="mostrarTabMaquetacion('mediciones')">
+            <i class="fas fa-tachometer-alt"></i> Mediciones
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" onclick="mostrarTabMaquetacion('sistemas-integrados')">
+            <i class="fas fa-project-diagram"></i> Sistemas Integrados
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" onclick="mostrarTabMaquetacion('vista-previa')">
+            <i class="fas fa-eye"></i> Vista Previa
+        </a>
+    </li>
+</ul>
+
+<!-- Pestaña de Información Básica -->
+<div id="tab-info-basica-maq" class="tab-content">
+    <h3>Información Básica de la Obra</h3>
+    <div class="form-group">
+        <label for="nombre-obra-maq">Nombre de la obra:</label>
+        <input type="text" id="nombre-obra-maq" placeholder="Ingrese el nombre de la obra" />
+    </div>
+    <div class="form-group">
+        <label for="direccion-obra-maq">Dirección:</label>
+        <input type="text" id="direccion-obra-maq" placeholder="Ingrese la dirección de la obra" />
+    </div>
+    <div class="maquetacion-grid">
+        <div class="form-group">
+            <label for="fecha-inicio-maq">Fecha de inicio:</label>
+            <input type="date" id="fecha-inicio-maq" />
+        </div>
+        <div class="form-group">
+            <label for="fecha-termino-maq">Fecha estimada de término:</label>
+            <input type="date" id="fecha-termino-maq" />
+        </div>
+    </div>
+    <div class="maquetacion-grid">
+        <div class="form-group">
+            <label for="tipo-obra-maq">Tipo de obra:</label>
+            <select id="tipo-obra-maq">
+                <option value="lotes">Lotes</option>
+                <option value="condominios">Condominios</option>
+                <option value="condominio_altura">Condominio en altura</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="estado-obra-maq">Estado inicial:</label>
+            <select id="estado-obra-maq">
+                <option value="Planificación">Planificación</option>
+                <option value="En progreso">En progreso</option>
+                <option value="Finalizada">Finalizada</option>
+                <option value="Suspendida">Suspendida</option>
+            </select>
+        </div>
+    </div>
+    <div class="form-group">
+        <label for="descripcion-obra-maq">Descripción:</label>
+        <textarea id="descripcion-obra-maq" placeholder="Descripción detallada del proyecto"></textarea>
+    </div>
+    <div class="form-group">
+        <label for="empresa-cliente-maq">Empresa cliente:</label>
+        <input type="text" id="empresa-cliente-maq" placeholder="Nombre de la empresa cliente" />
+    </div>
+    <div class="step-navigation">
+        <div></div>
+        <button class="btn btn-primary" onclick="mostrarTabMaquetacion('infraestructura')">
+            Siguiente <i class="fas fa-arrow-right"></i>
+        </button>
+    </div>
+</div>
+<!-- Pestaña de Infraestructura -->
+<div id="tab-infraestructura-maq" class="tab-content" style="display: none;">
+    <h3>Configuración de Infraestructura</h3>
+    <div class="maquetacion-section">
+        <div class="maquetacion-section-header">
+            <h4 class="maquetacion-section-title">Componentes Estructurales</h4>
+            <button class="btn btn-sm btn-primary" onclick="agregarComponenteEstructural()">
+                <i class="fas fa-plus"></i> Agregar
+            </button>
+        </div>
+        <div id="componentes-estructurales-maq">
+            <div class="checkbox-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="incluir-torres-maq" onchange="toggleComponente('torres-config-maq', this.checked); actualizarConfiguracionPisosTorres();" />
+                    Torres/Edificios
+                </label>
+                <div id="torres-config-maq" class="item-body" style="display: none;">
+                    <div class="form-group">
+                        <label for="cantidad-torres-maq">Cantidad de torres:</label>
+                        <input type="number" id="cantidad-torres-maq" min="1" value="1" onchange="actualizarConfiguracionPisosTorres()" />
+                    </div>
+                    <div class="form-group">
+                        <label for="nomenclatura-torres-maq">Nomenclatura:</label>
+                        <select id="nomenclatura-torres-maq">
+                            <option value="letras">Letras (A, B, C...)</option>
+                            <option value="numeros">Números (1, 2, 3...)</option>
+                            <option value="personalizado">Personalizada</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="checkbox-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="incluir-pisos-maq" onchange="toggleComponente('pisos-config-maq', this.checked); actualizarConfiguracionPisosTorres();" />
+                    Pisos/Manzanas
+                </label>
+                <div id="pisos-config-maq" class="item-body" style="display: none;">
+                    <div class="form-group">
+                        <label for="configuracion-pisos-global-maq">Configuración:</label>
+                        <select id="configuracion-pisos-global-maq" onchange="toggleConfiguracionPisos(this.value)">
+                            <option value="global">Global (mismos pisos para todas las torres)</option>
+                            <option value="porTorre">Específica por torre</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Configuración global de pisos -->
+                    <div id="pisos-global-maq">
+                        <div class="maquetacion-grid">
+                            <div class="form-group">
+                                <label for="piso-inicio-global-maq">Piso de inicio:</label>
+                                <input type="number" id="piso-inicio-global-maq" min="-10" value="1" />
+                            </div>
+                            <div class="form-group">
+                                <label for="piso-fin-global-maq">Piso final:</label>
+                                <input type="number" id="piso-fin-global-maq" min="-9" value="10" />
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="nomenclatura-pisos-global-maq">Nomenclatura:</label>
+                            <select id="nomenclatura-pisos-global-maq">
+                                <option value="numerico">Numérica (1, 2, 3...)</option>
+                                <option value="alfanumerico">Alfanumérica (P1, P2, P3...)</option>
+                                <option value="personalizado">Personalizada</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <!-- Configuración de pisos por torre -->
+                    <div id="pisos-por-torre-maq" style="display: none;">
+                        <div class="alert alert-info">
+                            Configure primero las torres para definir los pisos específicos por torre.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="checkbox-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="incluir-unidades-maq" onchange="toggleComponente('unidades-config-maq', this.checked)" />
+                    Unidades/Departamentos
+                </label>
+                <div id="unidades-config-maq" class="item-body" style="display: none;">
+                    <div class="form-group">
+                        <label for="unidades-por-piso-maq">Unidades por piso:</label>
+                        <input type="number" id="unidades-por-piso-maq" min="1" value="4" />
+                    </div>
+                    <div class="form-group">
+                        <label for="nomenclatura-unidades-maq">Nomenclatura:</label>
+                        <select id="nomenclatura-unidades-maq">
+                            <option value="numerico">Numérica (101, 102...)</option>
+                            <option value="combinado">Combinada (Torre-Piso-Unidad)</option>
+                            <option value="personalizado">Personalizada</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="checkbox-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="incluir-ctr-maq" onchange="toggleComponente('ctr-config-maq', this.checked)" />
+                    CTR (Centros de Telecomunicaciones)
+                </label>
+                <div id="ctr-config-maq" class="item-body" style="display: none;">
+                    <div class="form-group">
+                        <label for="tipo-ctr-maq">Tipo:</label>
+                        <select id="tipo-ctr-maq">
+                            <option value="principal">Principal</option>
+                            <option value="secundario">Secundario</option>
+                            <option value="distribucion">Distribución</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Shaft (Ductos verticales) -->
+            <div class="checkbox-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="incluir-shaft-maq" onchange="toggleComponente('shaft-config-maq', this.checked)" />
+                    Shaft (Ductos verticales)
+                </label>
+                <div id="shaft-config-maq" class="item-body" style="display: none;">
+                    <div class="form-group">
+                        <label for="configuracion-shaft-maq">Configuración:</label>
+                        <select id="configuracion-shaft-maq" onchange="toggleConfiguracionShaft(this.value)">
+                            <option value="global">Global (misma cantidad por torre)</option>
+                            <option value="especifico">Específico por torre y piso</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Configuración global de shaft -->
+                    <div id="shaft-global-maq">
+                        <div class="form-group">
+                            <label for="cantidad-shaft-por-torre-maq">Shaft por torre:</label>
+                            <input type="number" id="cantidad-shaft-por-torre-maq" min="1" value="1" />
+                        </div>
+                    </div>
+                    
+                    <!-- Configuración específica de shaft por torre y piso -->
+                    <div id="shaft-especifico-maq" style="display: none;">
+                        <div class="form-group">
+                            <label for="torre-shaft-maq">Seleccionar torre:</label>
+                            <select id="torre-shaft-maq" onchange="cargarPisosPorTorre()">
+                                <!-- Opciones generadas dinámicamente -->
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="piso-shaft-maq">Seleccionar piso:</label>
+                            <select id="piso-shaft-maq">
+                                <!-- Opciones generadas dinámicamente -->
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="cantidad-shaft-especifico-maq">Cantidad de shaft:</label>
+                            <input type="number" id="cantidad-shaft-especifico-maq" min="1" value="1" />
+                        </div>
+                        <button class="btn btn-sm btn-primary" onclick="agregarShaftEspecifico()">
+                            <i class="fas fa-plus"></i> Agregar configuración
+                        </button>
+                        
+                        <div class="mt-20">
+                            <h5>Configuraciones de shaft agregadas:</h5>
+                            <div id="lista-shaft-especifico-maq" class="table-container">
+                                <table class="resumen-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Torre</th>
+                                            <th>Piso</th>
+                                            <th>Cantidad</th>
+                                            <th>Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <!-- Lista generada dinámicamente -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="checkbox-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="incluir-sot-maq" onchange="toggleComponente('sot-config-maq', this.checked)" />
+                    SOTU/SOTS (Salas de telecomunicaciones)
+                </label>
+                <div id="sot-config-maq" class="item-body" style="display: none;">
+                    <div class="form-group">
+                        <label for="distribucion-sot-maq">Distribución:</label>
+                        <select id="distribucion-sot-maq">
+                            <option value="por_piso">Una por piso</option>
+                            <option value="cada_dos_pisos">Una cada dos pisos</option>
+                            <option value="personalizado">Personalizada</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="checkbox-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="incluir-camaras-maq" onchange="toggleComponente('camaras-config-maq', this.checked)" />
+                    Cámaras de paso
+                </label>
+                <div id="camaras-config-maq" class="item-body" style="display: none;">
+                    <div class="form-group">
+                        <label for="cantidad-camaras-maq">Cantidad de cámaras:</label>
+                        <input type="number" id="cantidad-camaras-maq" min="1" value="2" />
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Sección de detalle de pisos -->
+    <div class="maquetacion-section" id="seccion-detalle-pisos-maq">
+        <div class="maquetacion-section-header">
+            <h4 class="maquetacion-section-title">Configuración de Pisos por Torre</h4>
+        </div>
+        <div id="pisos-detalle-maq">
+            <div class="alert alert-info">
+                Configure primero los componentes estructurales para habilitar la configuración detallada.
+            </div>
+        </div>
+    </div>
+    
+    <div class="step-navigation">
+        <button class="btn btn-secondary" onclick="mostrarTabMaquetacion('info-basica')">
+            <i class="fas fa-arrow-left"></i> Anterior
+        </button>
+        <button class="btn btn-primary" onclick="mostrarTabMaquetacion('red-telecomunicaciones')">
+            Siguiente <i class="fas fa-arrow-right"></i>
+        </button>
+    </div>
+</div>
+<!-- Pestaña de Red de Telecomunicaciones -->
+<div id="tab-red-telecomunicaciones-maq" class="tab-content" style="display: none;">
+    <h3>Configuración de Red de Telecomunicaciones</h3>
+    
+    <!-- Sección Tipo de Red -->
+    <div class="maquetacion-section">
+        <div class="maquetacion-section-header">
+            <h4 class="maquetacion-section-title">Tipo de Red</h4>
+        </div>
+        <div class="form-group">
+            <label for="tipo-red-maq">Seleccione el tipo de red:</label>
+            <select id="tipo-red-maq" onchange="actualizarConfiguracionRed()">
+                <option value="arbol">Árbol</option>
+                <option value="estrella">Estrella</option>
+                <option value="rama">Rama</option>
+                <option value="hibrida">Híbrida</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="descripcion-red-maq">Descripción:</label>
+            <textarea id="descripcion-red-maq" readonly>La topología en árbol distribuye la señal desde un punto central (raíz) a través de múltiples niveles de distribución.</textarea>
+        </div>
+    </div>
+    
+    <!-- Sección Tecnologías de Red -->
+    <div class="maquetacion-section">
+        <div class="maquetacion-section-header">
+            <h4 class="maquetacion-section-title">Tecnologías de Red</h4>
+        </div>
+        
+        <!-- Coaxial Alámbrico -->
+        <div class="checkbox-group">
+            <label class="checkbox-label">
+                <input type="checkbox" id="incluir-coax-ala-maq" onchange="toggleComponente('coax-ala-config-maq', this.checked)" />
+                Coaxial Alámbrico
+            </label>
+            <div id="coax-ala-config-maq" class="item-body" style="display: none;">
+                <div class="form-group">
+                    <label for="marca-coax-maq">Marca del cable coaxial:</label>
+                    <select id="marca-coax-maq">
+                        <option value="bdn">BDN</option>
+                        <option value="trimerx">TrimerX</option>
+                        <option value="televes">Televes</option>
+                        <option value="otro">Otro</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="tipo-coax-maq">Tipo de cable:</label>
+                    <select id="tipo-coax-maq">
+                        <option value="rg6">RG-6</option>
+                        <option value="rg11">RG-11</option>
+                        <option value="otro">Otro</option>
+                    </select>
+                </div>
+                <div class="checkbox-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="incluir-t1-t2-alam-maq" />
+                        Incluir T1 y T2
+                    </label>
+                </div>
+                <div class="checkbox-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="incluir-troncal-coax-maq" onchange="toggleComponente('troncal-coax-config-maq', this.checked)" />
+                        Incluir troncal principal
+                    </label>
+                    <div id="troncal-coax-config-maq" class="item-body" style="display: none;">
+                        <div class="form-group">
+                            <label for="cantidad-troncales-coax-maq">Cantidad de troncales:</label>
+                            <input type="number" id="cantidad-troncales-coax-maq" min="1" value="1" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Coaxial Inalámbrico -->
+        <div class="checkbox-group">
+            <label class="checkbox-label">
+                <input type="checkbox" id="incluir-coax-ina-maq" onchange="toggleComponente('coax-ina-config-maq', this.checked)" />
+                Coaxial Inalámbrico
+            </label>
+            <div id="coax-ina-config-maq" class="item-body" style="display: none;">
+                <div class="checkbox-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="incluir-t1-t2-inal-maq" />
+                        Incluir T1 y T2
+                    </label>
+                </div>
+                <div class="checkbox-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="incluir-troncal-inal-maq" onchange="toggleComponente('troncal-inal-config-maq', this.checked)" />
+                        Incluir troncal principal
+                    </label>
+                    <div id="troncal-inal-config-maq" class="item-body" style="display: none;">
+                        <div class="form-group">
+                            <label for="cantidad-troncales-inal-maq">Cantidad de troncales:</label>
+                            <input type="number" id="cantidad-troncales-inal-maq" min="1" value="1" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Fibra Óptica -->
+        <div class="checkbox-group">
+            <label class="checkbox-label">
+                <input type="checkbox" id="incluir-fibra-maq" onchange="toggleComponente('fibra-config-maq', this.checked)" />
+                Fibra Óptica
+            </label>
+            <div id="fibra-config-maq" class="item-body" style="display: none;">
+                <div class="form-group">
+                    <label for="tipo-fibra-maq">Tipo de fibra:</label>
+                    <select id="tipo-fibra-maq">
+                        <option value="monomodo">Monomodo</option>
+                        <option value="multimodo">Multimodo</option>
+                        <option value="hibrida">Híbrida</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="distribucion-fibra-maq">Distribución:</label>
+                    <select id="distribucion-fibra-maq">
+                        <option value="gpon">GPON</option>
+                        <option value="aon">AON (Active Optical Network)</option>
+                        <option value="pon">PON (Passive Optical Network)</option>
+                    </select>
+                </div>
+                <div class="checkbox-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="incluir-troncal-fibra-maq" onchange="toggleComponente('troncal-fibra-config-maq', this.checked)" />
+                        Incluir troncal principal
+                    </label>
+                    <div id="troncal-fibra-config-maq" class="item-body" style="display: none;">
+                        <div class="form-group">
+                            <label for="cantidad-troncales-fibra-maq">Cantidad de troncales:</label>
+                            <input type="number" id="cantidad-troncales-fibra-maq" min="1" value="1" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Sección PAU (Puntos de Acceso de Usuario) -->
+    <div class="maquetacion-section">
+        <div class="maquetacion-section-header">
+            <h4 class="maquetacion-section-title">Puntos de Acceso del Usuario (PAU)</h4>
+        </div>
+        
+        <div class="checkbox-group">
+            <label class="checkbox-label">
+                <input type="checkbox" id="incluir-pau-maq" onchange="toggleComponente('pau-config-maq', this.checked)" />
+                Configurar PAU por unidad
+            </label>
+            <div id="pau-config-maq" class="item-body" style="display: none;">
+                <div class="form-group">
+                    <label for="puntos-por-unidad-maq">Puntos por unidad:</label>
+                    <input type="number" id="puntos-por-unidad-maq" min="1" value="2" />
+                </div>
+                
+                <!-- Componentes específicos del PAU -->
+                <div class="maquetacion-section">
+                    <div class="maquetacion-section-header">
+                        <h5 class="maquetacion-section-title">Componentes PAU</h5>
+                    </div>
+                    
+                    <div class="checkbox-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="incluir-repartidor-alam-maq" onchange="toggleComponente('repartidor-alam-config-maq', this.checked)" />
+                            Repartidor ALAM
+                        </label>
+                        <div id="repartidor-alam-config-maq" class="item-body" style="display: none;">
+                            <div class="form-group">
+                                <label for="marca-repartidor-alam-maq">Marca:</label>
+                                <input type="text" id="marca-repartidor-alam-maq" placeholder="Ingrese la marca del repartidor" />
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="checkbox-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="incluir-repartidor-inal-maq" onchange="toggleComponente('repartidor-inal-config-maq', this.checked)" />
+                            Repartidor INAL
+                        </label>
+                        <div id="repartidor-inal-config-maq" class="item-body" style="display: none;">
+                            <div class="form-group">
+                                <label for="marca-repartidor-inal-maq">Marca:</label>
+                                <input type="text" id="marca-repartidor-inal-maq" placeholder="Ingrese la marca del repartidor" />
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="checkbox-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="incluir-roseta-fo-maq" onchange="toggleComponente('roseta-fo-config-maq', this.checked)" />
+                            Roseta F.O.
+                        </label>
+                        <div id="roseta-fo-config-maq" class="item-body" style="display: none;">
+                            <div class="form-group">
+                                <label for="marca-roseta-fo-maq">Marca:</label>
+                                <input type="text" id="marca-roseta-fo-maq" placeholder="Ingrese la marca de la roseta" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+<!-- Sección Dispositivos en Shaft -->
+    <div class="maquetacion-section">
+        <div class="maquetacion-section-header">
+            <h4 class="maquetacion-section-title">Dispositivos en Shaft</h4>
+        </div>
+        <div class="checkbox-group">
+            <label class="checkbox-label">
+                <input type="checkbox" id="incluir-dispositivos-shaft-maq" onchange="toggleComponente('dispositivos-shaft-config-maq', this.checked)" />
+                Configurar dispositivos en Shaft
+            </label>
+            <div id="dispositivos-shaft-config-maq" class="item-body" style="display: none;">
+                <div class="form-group">
+                    <label for="torre-shaft-dispositivos-maq">Seleccionar torre:</label>
+                    <select id="torre-shaft-dispositivos-maq" onchange="cargarShaftsPorTorre()">
+                        <!-- Opciones generadas dinámicamente -->
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="shaft-dispositivos-maq">Seleccionar shaft:</label>
+                    <select id="shaft-dispositivos-maq">
+                        <!-- Opciones generadas dinámicamente -->
+                    </select>
+                </div>
+                
+                <!-- Selección de dispositivos en shaft -->
+                <div class="maquetacion-section">
+                    <div class="maquetacion-section-header">
+                        <h5 class="maquetacion-section-title">Seleccionar Dispositivo</h5>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="tipo-dispositivo-shaft-maq">Tipo de dispositivo:</label>
+                        <select id="tipo-dispositivo-shaft-maq" onchange="actualizarOpcionesDispositivo()">
+                            <option value="">Seleccione un tipo de dispositivo</option>
+                            <option value="derivador_alam">Derivador Alámbrico</option>
+                            <option value="derivador_inal">Derivador Inalámbrico</option>
+                            <option value="odf">ODF</option>
+                            <option value="otro">Otro</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Selección específica de derivadores alámbricos -->
+                    <div id="derivador-alam-opciones-maq" style="display: none;">
+                        <div class="form-group">
+                            <label for="modelo-derivador-alam-maq">Modelo:</label>
+                            <select id="modelo-derivador-alam-maq">
+                                <option value="DERIVADOR ALAMBRICO 2D 4DB">DERIVADOR ALAMBRICO 2D 4DB</option>
+                                <option value="DERIVADOR ALAMBRICO 2D 8DB">DERIVADOR ALAMBRICO 2D 8DB</option>
+                                <option value="DERIVADOR ALAMBRICO 2D 11DB">DERIVADOR ALAMBRICO 2D 11DB</option>
+                                <option value="DERIVADOR ALAMBRICO 2D 14DB">DERIVADOR ALAMBRICO 2D 14DB</option>
+                                <option value="DERIVADOR ALAMBRICO 2D 23DB">DERIVADOR ALAMBRICO 2D 23DB</option>
+                                <option value="DERIVADOR ALAMBRICO 2D 26DB">DERIVADOR ALAMBRICO 2D 26DB</option>
+                                <option value="DERIVADOR ALAMBRICO 4D 8DB">DERIVADOR ALAMBRICO 4D 8DB</option>
+                                <option value="DERIVADOR ALAMBRICO 4D 11DB">DERIVADOR ALAMBRICO 4D 11DB</option>
+                                <option value="DERIVADOR ALAMBRICO 4D 17DB">DERIVADOR ALAMBRICO 4D 17DB</option>
+                                <option value="DERIVADOR ALAMBRICO 4D 18DB">DERIVADOR ALAMBRICO 4D 18DB</option>
+                                <option value="DERIVADOR ALAMBRICO 4D 20DB">DERIVADOR ALAMBRICO 4D 20DB</option>
+                                <option value="DERIVADOR ALAMBRICO 4D 23DB">DERIVADOR ALAMBRICO 4D 23DB</option>
+                                <option value="DERIVADOR ALAMBRICO 8D 12DB">DERIVADOR ALAMBRICO 8D 12DB</option>
+                                <option value="DERIVADOR ALAMBRICO 8D 14DB">DERIVADOR ALAMBRICO 8D 14DB</option>
+                                <option value="DERIVADOR ALAMBRICO 8D 16DB">DERIVADOR ALAMBRICO 8D 16DB</option>
+                                <option value="DERIVADOR ALAMBRICO 8D 17DB">DERIVADOR ALAMBRICO 8D 17DB</option>
+                                <option value="DERIVADOR ALAMBRICO 8D 18DB">DERIVADOR ALAMBRICO 8D 18DB</option>
+                                <option value="DERIVADOR ALAMBRICO 8D 20DB">DERIVADOR ALAMBRICO 8D 20DB</option>
+                                <option value="DERIVADOR ALAMBRICA 8D 17DB">DERIVADOR ALAMBRICA 8D 17DB</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <!-- Selección específica de derivadores inalámbricos -->
+                    <div id="derivador-inal-opciones-maq" style="display: none;">
+                        <div class="form-group">
+                            <label for="modelo-derivador-inal-maq">Modelo:</label>
+                            <select id="modelo-derivador-inal-maq">
+                                <option value="DERIVADOR INALAMBRICO 2D 12DB">DERIVADOR INALAMBRICO 2D 12DB</option>
+                                <option value="DERIVADOR INALAMBRICO 2D 15DB">DERIVADOR INALAMBRICO 2D 15DB</option>
+                                <option value="DERIVADOR INALAMBRICO 2D 16DB">DERIVADOR INALAMBRICO 2D 16DB</option>
+                                <option value="DERIVADOR INALAMBRICO 2D 18DB">DERIVADOR INALAMBRICO 2D 18DB</option>
+                                <option value="DERIVADOR INALAMBRICO 2D 24DB">DERIVADOR INALAMBRICO 2D 24DB</option>
+                                <option value="DERIVADOR INALAMBRICO 4D 8DB">DERIVADOR INALAMBRICO 4D 8DB</option>
+                                <option value="DERIVADOR INALAMBRICO 4D 12DB">DERIVADOR INALAMBRICO 4D 12DB</option>
+                                <option value="DERIVADOR INALAMBRICO 4D 16DB">DERIVADOR INALAMBRICO 4D 16DB</option>
+                                <option value="DERIVADOR INALAMBRICO 4D 19DB">DERIVADOR INALAMBRICO 4D 19DB</option>
+                                <option value="DERIVADOR INALAMBRICO 4D 20DB">DERIVADOR INALAMBRICO 4D 20DB</option>
+                                <option value="DERIVADOR INALAMBRICO 4D 24DB">DERIVADOR INALAMBRICO 4D 24DB</option>
+                                <option value="DERIVADOR INAALAMBRICO 4D 29DB">DERIVADOR INAALAMBRICO 4D 29DB</option>
+                                <option value="DERIVADOR INALAMBRICO 6D 16DB">DERIVADOR INALAMBRICO 6D 16DB</option>
+                                <option value="DERIVADOR INALAMBRICO 6D 18DB">DERIVADOR INALAMBRICO 6D 18DB</option>
+                                <option value="DERIVADOR INALAMBRICO 6D 20DB">DERIVADOR INALAMBRICO 6D 20DB</option>
+                                <option value="DERIVADOR INALAMBRICO 6D 24DB">DERIVADOR INALAMBRICO 6D 24DB</option>
+                                <option value="DERIVADOR INALAMBRICO 6D 25DB">DERIVADOR INALAMBRICO 6D 25DB</option>
+                                <option value="DERIVADOR INALAMBRICO 8D 14DB">DERIVADOR INALAMBRICO 8D 14DB</option>
+                                <option value="DERIVADOR INALAMBRICO 8D 18DB">DERIVADOR INALAMBRICO 8D 18DB</option>
+                                <option value="DERIVADOR INALAMBRICO 8D 20DB">DERIVADOR INALAMBRICO 8D 20DB</option>
+                                <option value="DERIVADOR INALAMBRICO 8D 24DB">DERIVADOR INALAMBRICO 8D 24DB</option>
+                                <option value="DERIVADOR INALAMBRICA 4D 24DB">DERIVADOR INALAMBRICA 4D 24DB</option>
+                                <option value="DERIVADOR INALAMBRICA 4D 12DB">DERIVADOR INALAMBRICA 4D 12DB</option>
+                                <option value="DERIVADOR INALAMBRICO 6D/6DB">DERIVADOR INALAMBRICO 6D/6DB</option>
+                                <option value="DERIVADOR INALAMBRICO">DERIVADOR INALAMBRICO</option>
+                                <option value="DERIVADOR INALAMBRICO 4D/20DB">DERIVADOR INALAMBRICO 4D/20DB</option>
+                                <option value="DERIVADOR INALAMBRICO 4D/23DB">DERIVADOR INALAMBRICO 4D/23DB</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <!-- Selección de ODF -->
+                    <div id="odf-opciones-maq" style="display: none;">
+                        <div class="form-group">
+                            <label for="puertos-odf-maq">Número de puertos:</label>
+                            <input type="number" id="puertos-odf-maq" min="1" value="12" placeholder="Ingrese el número de puertos" />
+                        </div>
+                    </div>
+                    
+                    <!-- Otro dispositivo -->
+                    <div id="otro-dispositivo-maq" style="display: none;">
+                        <div class="form-group">
+                            <label for="nombre-otro-dispositivo-maq">Nombre del dispositivo:</label>
+                            <input type="text" id="nombre-otro-dispositivo-maq" placeholder="Nombre del dispositivo" />
+                        </div>
+                        <div class="form-group">
+                            <label for="descripcion-otro-dispositivo-maq">Descripción:</label>
+                            <input type="text" id="descripcion-otro-dispositivo-maq" placeholder="Descripción o especificaciones" />
+                        </div>
+                    </div>
+                    
+                    <button class="btn btn-sm btn-primary mt-20" onclick="agregarDispositivoShaft()">
+                        <i class="fas fa-plus"></i> Agregar dispositivo
+                    </button>
+                    
+                    <div class="mt-20">
+                        <h5>Dispositivos agregados:</h5>
+                        <div id="lista-dispositivos-shaft-maq" class="table-container">
+                            <table class="resumen-table">
+                                <thead>
+                                    <tr>
+                                        <th>Torre</th>
+                                        <th>Shaft</th>
+                                        <th>Dispositivo</th>
+                                        <th>Especificaciones</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Lista generada dinámicamente -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Sección Otros Componentes -->
+    <div class="maquetacion-section">
+        <div class="maquetacion-section-header">
+            <h4 class="maquetacion-section-title">Otros Componentes</h4>
+        </div>
+        
+        <!-- Antenas -->
+        <div class="checkbox-group">
+            <label class="checkbox-label">
+                <input type="checkbox" id="incluir-antenas-maq" onchange="toggleComponente('antenas-config-maq', this.checked)" />
+                Antenas de Televisión
+            </label>
+            <div id="antenas-config-maq" class="item-body" style="display: none;">
+                <div class="form-group">
+                    <label for="tipo-antenas-maq">Tipo:</label>
+                    <select id="tipo-antenas-maq">
+                        <option value="uhf">UHF</option>
+                        <option value="vhf">VHF</option>
+                        <option value="satelital">Satelital</option>
+                        <option value="mixta">Mixta</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="cantidad-antenas-maq">Cantidad:</label>
+                    <input type="number" id="cantidad-antenas-maq" min="1" value="1" />
+                </div>
+                <div class="form-group">
+                    <label for="ubicacion-antenas-maq">Ubicación:</label>
+                    <select id="ubicacion-antenas-maq">
+                        <option value="azotea">Azotea</option>
+                        <option value="torre">Torre independiente</option>
+                        <option value="fachada">Fachada</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Amplificadores -->
+        <div class="checkbox-group">
+            <label class="checkbox-label">
+                <input type="checkbox" id="incluir-amplificadores-maq" onchange="toggleComponente('amplificadores-config-maq', this.checked)" />
+                Amplificadores
+            </label>
+            <div id="amplificadores-config-maq" class="item-body" style="display: none;">
+                <div class="form-group">
+                    <label for="tipo-amplificadores-maq">Tipo:</label>
+                    <select id="tipo-amplificadores-maq">
+                        <option value="senal">Señal celular</option>
+                        <option value="wifi">WiFi</option>
+                        <option value="rf">RF</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="cantidad-amplificadores-maq">Cantidad estimada:</label>
+                    <input type="number" id="cantidad-amplificadores-maq" min="1" value="2" />
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="step-navigation">
+        <button class="btn btn-secondary" onclick="mostrarTabMaquetacion('infraestructura')">
+            <i class="fas fa-arrow-left"></i> Anterior
+        </button>
+        <button class="btn btn-primary" onclick="mostrarTabMaquetacion('mediciones')">
+            Siguiente <i class="fas fa-arrow-right"></i>
+        </button>
+    </div>
+</div>
+<!-- Pestaña de Mediciones (simplificada) -->
+<div id="tab-mediciones-maq" class="tab-content" style="display: none;">
+    <h3>Configuración de Mediciones</h3>
+    
+    <div class="maquetacion-section">
+        <div class="maquetacion-section-header">
+            <h4 class="maquetacion-section-title">Certificación de Mediciones</h4>
+        </div>
+        
+        <div class="alert alert-info">
+            <p><i class="fas fa-info-circle"></i> La configuración de mediciones se ha simplificado. Se utilizará la certificadora unificada para fibra y coaxial.</p>
+        </div>
+        
+        <div class="checkbox-group">
+            <label class="checkbox-label">
+                <input type="checkbox" id="incluir-certificacion-maq" checked />
+                Incluir certificación de mediciones
+            </label>
+        </div>
+        
+        <div class="form-group">
+            <label for="equipo-certificacion-maq">Equipo de certificación:</label>
+            <input type="text" id="equipo-certificacion-maq" value="Certificadora Unificada FO/Coaxial" readonly />
+        </div>
+        
+        <div class="form-group">
+            <label>Parámetros a certificar:</label>
+            <div class="checkbox-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="param-atenuacion-maq" checked /> Atenuación
+                </label>
+            </div>
+            <div class="checkbox-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="param-continuidad-maq" checked /> Continuidad
+                </label>
+            </div>
+            <div class="checkbox-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="param-potencia-maq" checked /> Potencia óptica/Señal
+                </label>
+            </div>
+        </div>
+        
+        <div class="maquetacion-section-header mt-20">
+            <h4 class="maquetacion-section-title">Registro de Mediciones</h4>
+        </div>
+        
+        <div class="alert alert-info">
+            <p><i class="fas fa-info-circle"></i> El registro de mediciones se realiza en un modal independiente, y los datos se guardarán en una hoja de cálculo separada que se generará al crear la obra.</p>
+        </div>
+        
+        <button class="btn btn-primary" onclick="abrirModalRegistroMediciones()">
+            <i class="fas fa-clipboard-list"></i> Abrir Modal de Registro de Mediciones
+        </button>
+    </div>
+    
+    <div class="step-navigation">
+        <button class="btn btn-secondary" onclick="mostrarTabMaquetacion('red-telecomunicaciones')">
+            <i class="fas fa-arrow-left"></i> Anterior
+        </button>
+        <button class="btn btn-primary" onclick="mostrarTabMaquetacion('sistemas-integrados')">
+            Siguiente <i class="fas fa-arrow-right"></i>
+        </button>
+    </div>
+</div>
+<!-- Pestaña de Sistemas Integrados -->
+<div id="tab-sistemas-integrados-maq" class="tab-content" style="display: none;">
+    <h3>Configuración de Sistemas Integrados</h3>
+    
+    <div class="maquetacion-section">
+        <div class="maquetacion-section-header">
+            <h4 class="maquetacion-section-title">Red de Incendios</h4>
+        </div>
+        <div class="checkbox-group">
+            <label class="checkbox-label">
+                <input type="checkbox" id="incluir-red-incendios-maq" onchange="toggleComponente('red-incendios-config-maq', this.checked)" />
+                Incluir red de incendios
+            </label>
+            <div id="red-incendios-config-maq" class="item-body" style="display: none;">
+                <div class="form-group">
+                    <label for="tipo-deteccion-maq">Sistema de detección:</label>
+                    <select id="tipo-deteccion-maq">
+                        <option value="convencional">Convencional</option>
+                        <option value="direccionable">Direccionable</option>
+                        <option value="analogico">Analógico</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="componentes-incendios-maq">Componentes:</label>
+                    <div class="checkbox-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="componente-detectores-maq" checked /> Detectores de humo
+                        </label>
+                    </div>
+                    <div class="checkbox-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="componente-pulsadores-maq" checked /> Pulsadores manuales
+                        </label>
+                    </div>
+                    <div class="checkbox-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="componente-sirenas-maq" checked /> Sirenas
+                        </label>
+                    </div>
+                    <div class="checkbox-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="componente-central-maq" /> Central de incendios
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="maquetacion-section">
+        <div class="maquetacion-section-header">
+            <h4 class="maquetacion-section-title">Corrientes Débiles</h4>
+        </div>
+        <div class="checkbox-group">
+            <label class="checkbox-label">
+                <input type="checkbox" id="incluir-corrientes-debiles-maq" onchange="toggleComponente('corrientes-debiles-config-maq', this.checked)" />
+                Incluir sistemas de corrientes débiles
+            </label>
+            <div id="corrientes-debiles-config-maq" class="item-body" style="display: none;">
+                <div class="form-group">
+                    <label for="sistemas-corrientes-debiles-maq">Sistemas:</label>
+                    <div class="checkbox-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="sistema-cctv-maq" checked /> CCTV
+                        </label>
+                    </div>
+                    <div class="checkbox-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="sistema-control-acceso-maq" checked /> Control de acceso
+                        </label>
+                    </div>
+                    <div class="checkbox-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="sistema-intrusion-maq" /> Intrusión
+                        </label>
+                    </div>
+                    <div class="checkbox-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="sistema-audio-maq" /> Audio distribuido
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="maquetacion-section">
+        <div class="maquetacion-section-header">
+            <h4 class="maquetacion-section-title">Citofonía</h4>
+        </div>
+        <div class="checkbox-group">
+            <label class="checkbox-label">
+                <input type="checkbox" id="incluir-citofonia-maq" onchange="toggleComponente('citofonia-config-maq', this.checked)" />
+                Incluir sistema de citofonía
+            </label>
+            <div id="citofonia-config-maq" class="item-body" style="display: none;">
+                <div class="form-group">
+                    <label for="tipo-citofonia-maq">Tipo:</label>
+                    <select id="tipo-citofonia-maq">
+                        <option value="analogico">Analógico</option>
+                        <option value="ip">IP</option>
+                        <option value="hibrido">Híbrido</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="integracion-citofonia-maq">Integración:</label>
+                    <select id="integracion-citofonia-maq">
+                        <option value="standalone">Standalone</option>
+                        <option value="cctv">Con CCTV</option>
+                        <option value="control-acceso">Con control de acceso</option>
+                        <option value="completa">Integración completa</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="maquetacion-section">
+        <div class="maquetacion-section-header">
+            <h4 class="maquetacion-section-title">Motores de Acceso</h4>
+        </div>
+        <div class="checkbox-group">
+            <label class="checkbox-label">
+                <input type="checkbox" id="incluir-motores-acceso-maq" onchange="toggleComponente('motores-acceso-config-maq', this.checked)" />
+                Incluir motores de acceso
+            </label>
+            <div id="motores-acceso-config-maq" class="item-body" style="display: none;">
+                <div class="form-group">
+                    <label for="tipo-motores-maq">Tipo:</label>
+                    <select id="tipo-motores-maq">
+                        <option value="correderas">Correderas</option>
+                        <option value="batientes">Batientes</option>
+                        <option value="barreras">Barreras vehiculares</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="cantidad-motores-maq">Cantidad estimada:</label>
+                    <input type="number" id="cantidad-motores-maq" min="1" value="2" />
+                </div>
+                <div class="form-group">
+                    <label for="control-motores-maq">Sistema de control:</label>
+                    <select id="control-motores-maq">
+                        <option value="local">Local</option>
+                        <option value="remoto">Remoto</option>
+                        <option value="mixto">Mixto</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="step-navigation">
+        <button class="btn btn-secondary" onclick="mostrarTabMaquetacion('mediciones')">
+            <i class="fas fa-arrow-left"></i> Anterior
+        </button>
+        <button class="btn btn-primary" onclick="mostrarTabMaquetacion('vista-previa')">
+            Siguiente <i class="fas fa-arrow-right"></i>
+        </button>
+    </div>
+</div>
+<!-- Pestaña de Vista Previa (actualizada con tabla resumen) -->
+<div id="tab-vista-previa-maq" class="tab-content" style="display: none;">
+    <h3>Vista Previa de la Maquetación</h3>
+    <button class="btn btn-primary mb-20" onclick="generarVistaPrevia()">
+        <i class="fas fa-sync-alt"></i> Generar Vista Previa
+    </button>
+    
+    <!-- Vista previa como tabla resumen -->
+    <div class="maquetacion-section">
+        <div class="maquetacion-section-header">
+            <h4 class="maquetacion-section-title">Resumen de Configuración</h4>
+        </div>
+        
+        <div id="vista-previa-resumen-maq" class="table-container">
+            <div class="alert alert-info">
+                Haga clic en "Generar Vista Previa" para visualizar el resumen de configuración.
+            </div>
+        </div>
+    </div>
+    
+    <!-- Opciones para generar hojas de progreso -->
+    <div class="maquetacion-section">
+        <div class="maquetacion-section-header">
+            <h4 class="maquetacion-section-title">Generación de Hojas de Progreso</h4>
+        </div>
+        
+        <div class="alert alert-info mb-20">
+            <p><i class="fas fa-info-circle"></i> Al guardar la maquetación se generará automáticamente la hoja de progreso para cada torre configurada. Esta hoja será utilizada por los trabajadores para reportar avances.</p>
+        </div>
+        
+        <button class="btn btn-secondary mb-20" onclick="mostrarVistaHojaProgreso()">
+            <i class="fas fa-table"></i> Vista previa de Hoja de Progreso
+        </button>
+        
+        <div id="vista-hoja-progreso-maq" style="display: none;">
+            <h5>Vista previa de Hoja de Progreso</h5>
+            <div class="table-container">
+                <table class="resumen-table">
+                    <thead>
+                        <tr>
+                            <th colspan="8" style="text-align: center;">TORRE A</th>
+                        </tr>
+                        <tr>
+                            <th>N° DEPTO</th>
+                            <th>COAXIAL ALAM</th>
+                            <th>COAXIAL INAL</th>
+                            <th>LATERALES F.O</th>
+                            <th>interiores</th>
+                            <th colspan="2">ctr conectada</th>
+                            <th>roseta f.o</th>
+                        </tr>
+                        <tr>
+                            <th></th>
+                            <th></th>
+                            <th></th>
+                            <th></th>
+                            <th></th>
+                            <th>alam</th>
+                            <th>inal</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Piso 1 - Depto 1</td>
+                            <td>✓</td>
+                            <td>✓</td>
+                            <td>✓</td>
+                            <td>✓</td>
+                            <td>✓</td>
+                            <td>✓</td>
+                            <td>✓</td>
+                        </tr>
+                        <tr>
+                            <td>Piso 1 - Depto 2</td>
+                            <td>✓</td>
+                            <td>✓</td>
+                            <td>✓</td>
+                            <td>✓</td>
+                            <td>✓</td>
+                            <td>✓</td>
+                            <td>✓</td>
+                        </tr>
+                        <tr>
+                            <td colspan="8" style="text-align: center; font-style: italic;">Esta es solo una vista previa. La hoja real se generará al guardar la maquetación.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Opciones de exportación -->
+    <div class="maquetacion-section">
+        <div class="maquetacion-section-header">
+            <h4 class="maquetacion-section-title">Exportar Configuración</h4>
+        </div>
+        <div class="form-group">
+            <label for="formato-exportacion-maq">Formato de exportación:</label>
+            <select id="formato-exportacion-maq">
+                <option value="excel">Excel</option>
+                <option value="pdf">PDF</option>
+                <option value="json">JSON</option>
+            </select>
+        </div>
+        <button class="btn btn-secondary" onclick="exportarConfiguracion()">
+            <i class="fas fa-file-export"></i> Exportar
+        </button>
+    </div>
+    
+    <div class="step-navigation">
+        <button class="btn btn-secondary" onclick="mostrarTabMaquetacion('sistemas-integrados')">
+            <i class="fas fa-arrow-left"></i> Anterior
+        </button>
+        <button class="btn btn-success" onclick="guardarMaquetacion()">
+            <i class="fas fa-save"></i> Guardar Maquetación
+        </button>
+    </div>
+</div>

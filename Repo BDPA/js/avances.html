@@ -1,0 +1,2600 @@
+<script>
+//
+//BDPA - Base de Datos de Progreso Automatizado
+//Archivo: js/avances.html
+//Descripción: Gestión específica de avances de obra y tipos de avance
+//Versión: 2.0
+//Autor: Larnet Telecomunicaciones
+//Fecha: 2024
+// Variables globales para gestión de avances
+let avancesCache = new Map();
+let tiposAvanceCache = new Map();
+let avanceActualEditando = null;
+let filtrosAvancesActivos = {};
+let paginacionAvances = {
+    paginaActual: 1,
+    itemsPorPagina: 10,
+    totalItems: 0,
+    totalPaginas: 0
+};
+
+// Estados de avance
+const ESTADOS_AVANCE = {
+    PENDIENTE: 'pendiente',
+    EN_PROGRESO: 'en_progreso',
+    COMPLETADO: 'completado',
+    VERIFICADO: 'verificado',
+    RECHAZADO: 'rechazado'
+};
+
+// Tipos de ubicación para avances
+const TIPOS_UBICACION = {
+    DEPARTAMENTO: 'departamento',
+    ESPACIO_COMUN: 'espacio_comun',
+    AREA_GENERAL: 'area_general'
+};
+
+// Categorías de avance
+const CATEGORIAS_AVANCE = {
+    ALAMBRICO: 'alam',
+    INALAMBRICO: 'inal',
+    FIBRA_OPTICA: 'fo',
+    MEDICIONES: 'mediciones',
+    SISTEMAS: 'sistemas',
+    OTROS: 'otros'
+};
+
+/**
+ * Inicializar módulo de avances
+ */
+function initializeAvancesModule() {
+    console.log('[AVANCES] Inicializando módulo de avances');
+    
+    // Configurar event listeners
+    setupAvancesEventListeners();
+    
+    // Cargar datos iniciales
+    cargarDatosInicialesAvances();
+    
+    console.log('[AVANCES] Módulo de avances inicializado');
+}
+
+/**
+ * Configurar event listeners para avances
+ */
+function setupAvancesEventListeners() {
+    // Selectores de obra para avances
+    const obraAvance = document.getElementById('obra-avance');
+    if (obraAvance) {
+        obraAvance.addEventListener('change', handleObraAvanceChange);
+    }
+    
+    // Selectores de estructura (torre, piso, departamento)
+    const selectoresEstructura = [
+        { id: 'torre-avance', handler: handleTorreAvanceChange },
+        { id: 'piso-avance', handler: handlePisoAvanceChange },
+        { id: 'departamento-avance', handler: handleDepartamentoAvanceChange }
+    ];
+    
+    selectoresEstructura.forEach(({ id, handler }) => {
+        const selector = document.getElementById(id);
+        if (selector) {
+            selector.addEventListener('change', handler);
+        }
+    });
+    
+    // Radio buttons para tipo de avance
+    const tipoAvanceRadios = document.querySelectorAll('input[name="tipo-avance"]');
+    tipoAvanceRadios.forEach(radio => {
+        radio.addEventListener('change', handleTipoAvanceChange);
+    });
+    
+    // Selector de espacio común
+    const espacioComun = document.getElementById('espacio-comun');
+    if (espacioComun) {
+        espacioComun.addEventListener('change', handleEspacioComunChange);
+    }
+    
+    // Filtros de consulta de avances
+    const filtrosConsulta = [
+        'filtro-obra',
+        'filtro-torre', 
+        'filtro-piso',
+        'filtro-depto',
+        'filtro-fecha',
+        'filtro-tipo-avance'
+    ];
+    
+    filtrosConsulta.forEach(filtroId => {
+        const filtro = document.getElementById(filtroId);
+        if (filtro) {
+            filtro.addEventListener('change', handleFiltroAvanceChange);
+        }
+    });
+    
+    // Navegación de pestañas de consulta
+    const tabsConsulta = document.querySelectorAll('[onclick*="mostrarTabAvances"]');
+    tabsConsulta.forEach(tab => {
+        if (!tab.hasEventListener) {
+            tab.addEventListener('click', handleTabAvancesClick);
+            tab.hasEventListener = true;
+        }
+    });
+    
+    // Paginación
+    const btnPaginaAnterior = document.querySelector('[onclick*="cambiarPagina(-1)"]');
+    const btnPaginaSiguiente = document.querySelector('[onclick*="cambiarPagina(1)"]');
+    
+    if (btnPaginaAnterior && !btnPaginaAnterior.hasEventListener) {
+        btnPaginaAnterior.addEventListener('click', () => cambiarPagina(-1));
+        btnPaginaAnterior.hasEventListener = true;
+    }
+    
+    if (btnPaginaSiguiente && !btnPaginaSiguiente.hasEventListener) {
+        btnPaginaSiguiente.addEventListener('click', () => cambiarPagina(1));
+        btnPaginaSiguiente.hasEventListener = true;
+    }
+    
+    // Input de carga de fotos
+    const fotosAvance = document.getElementById('fotos-avance');
+    if (fotosAvance) {
+        fotosAvance.addEventListener('change', handleFotosAvanceChange);
+    }
+}
+
+/**
+ * Cargar datos iniciales para avances
+ */
+async function cargarDatosInicialesAvances() {
+    try {
+        // Cargar tipos de avance disponibles
+        await cargarTiposAvance();
+        
+        console.log('[AVANCES] Datos iniciales cargados');
+    } catch (error) {
+        console.error('[AVANCES] Error cargando datos iniciales:', error);
+        mostrarNotificacion('Error al cargar los datos iniciales de avances', 'error');
+    }
+}
+
+// ==================== GESTIÓN DE TIPOS DE AVANCE ====================
+
+/**
+ * Cargar tipos de avance disponibles
+ */
+async function cargarTiposAvance(filtros = {}) {
+    try {
+        console.log('[AVANCES] Cargando tipos de avance');
+        
+        const response = await apiObtenerTiposAvance(filtros);
+        
+        if (response.error) {
+            throw new Error(response.message || 'Error al obtener tipos de avance');
+        }
+        
+        const tiposAvance = response.datos || [];
+        
+        // Actualizar cache
+        tiposAvanceCache.clear();
+        tiposAvance.forEach(tipo => {
+            tiposAvanceCache.set(tipo.id, tipo);
+        });
+        
+        console.log(`[AVANCES] ${tiposAvance.length} tipos de avance cargados`);
+        return tiposAvance;
+        
+    } catch (error) {
+        console.error('[AVANCES] Error cargando tipos de avance:', error);
+        mostrarNotificacion('Error al cargar los tipos de avance: ' + error.message, 'error');
+        return [];
+    }
+}
+
+/**
+ * Cargar avances específicos para un departamento o espacio común
+ */
+async function cargarAvancesEspecificos(ubicacionId, tipoUbicacion = TIPOS_UBICACION.DEPARTAMENTO) {
+    try {
+        if (!ubicacionId) {
+            limpiarAvancesEspecificos();
+            return [];
+        }
+        
+        console.log('[AVANCES] Cargando avances específicos para:', ubicacionId, tipoUbicacion);
+        
+        // Filtrar tipos de avance según la ubicación
+        const tiposDisponibles = Array.from(tiposAvanceCache.values())
+            .filter(tipo => {
+                // Filtrar según el tipo de ubicación
+                if (tipoUbicacion === TIPOS_UBICACION.ESPACIO_COMUN) {
+                    return tipo.aplicaA === 'espacio_comun' || tipo.aplicaA === 'ambos';
+                } else {
+                    return tipo.aplicaA === 'departamento' || tipo.aplicaA === 'ambos';
+                }
+            })
+            .filter(tipo => tipo.activo !== false);
+        
+        // Mostrar en la interfaz
+        mostrarAvancesEspecificos(tiposDisponibles, ubicacionId, tipoUbicacion);
+        
+        return tiposDisponibles;
+        
+    } catch (error) {
+        console.error('[AVANCES] Error cargando avances específicos:', error);
+        mostrarNotificacion('Error al cargar los avances específicos: ' + error.message, 'error');
+        return [];
+    }
+}
+
+/**
+ * Mostrar avances específicos en la interfaz
+ */
+function mostrarAvancesEspecificos(tiposAvance, ubicacionId, tipoUbicacion) {
+    const container = document.getElementById('avances-especificos');
+    if (!container) return;
+    
+    // Limpiar contenido anterior
+    container.innerHTML = '';
+    
+    if (tiposAvance.length === 0) {
+        container.innerHTML = '<p class="text-muted">No hay tipos de avance disponibles para esta ubicación.</p>';
+        return;
+    }
+    
+    // Agrupar por categoría
+    const avancesPorCategoria = agruparAvancesPorCategoria(tiposAvance);
+    
+    // Crear secciones por categoría
+    Object.entries(avancesPorCategoria).forEach(([categoria, avances]) => {
+        const seccionCategoria = document.createElement('div');
+        seccionCategoria.className = 'avances-categoria mb-20';
+        
+        const tituloCategoria = document.createElement('h4');
+        tituloCategoria.className = 'categoria-titulo';
+        tituloCategoria.innerHTML = `<i class="fas fa-${getIconoCategoria(categoria)}"></i> ${formatearCategoria(categoria)}`;
+        seccionCategoria.appendChild(tituloCategoria);
+        
+        const avancesContainer = document.createElement('div');
+        avancesContainer.className = 'avances-container';
+        
+        // Crear checkboxes para cada avance
+        avances.forEach(avance => {
+            const avanceItem = document.createElement('div');
+            avanceItem.className = 'avance-item';
+            
+            avanceItem.innerHTML = `
+                <label>
+                    <input type="checkbox" 
+                           name="avance-${avance.id}" 
+                           data-id="${avance.id}"
+                           data-categoria="${avance.categoria}"
+                           data-nombre="${avance.nombre}"
+                           value="${avance.id}">
+                    <span class="avance-nombre">${avance.nombre}</span>
+                    ${avance.descripcion ? `<small class="avance-descripcion">${avance.descripcion}</small>` : ''}
+                </label>
+            `;
+            
+            avancesContainer.appendChild(avanceItem);
+        });
+        
+        seccionCategoria.appendChild(avancesContainer);
+        container.appendChild(seccionCategoria);
+    });
+}
+
+/**
+ * Agrupar avances por categoría
+ */
+function agruparAvancesPorCategoria(tiposAvance) {
+    const grupos = {};
+    
+    tiposAvance.forEach(avance => {
+        const categoria = avance.categoria || CATEGORIAS_AVANCE.OTROS;
+        if (!grupos[categoria]) {
+            grupos[categoria] = [];
+        }
+        grupos[categoria].push(avance);
+    });
+    
+    // Ordenar cada grupo por nombre
+    Object.keys(grupos).forEach(categoria => {
+        grupos[categoria].sort((a, b) => a.nombre.localeCompare(b.nombre));
+    });
+    
+    return grupos;
+}
+
+/**
+ * Limpiar avances específicos
+ */
+function limpiarAvancesEspecificos() {
+    const container = document.getElementById('avances-especificos');
+    if (container) {
+        container.innerHTML = '<p class="text-muted">Seleccione una ubicación para ver los avances disponibles.</p>';
+    }
+}
+
+/**
+ * Obtener icono para categoría
+ */
+function getIconoCategoria(categoria) {
+    const iconos = {
+        [CATEGORIAS_AVANCE.ALAMBRICO]: 'plug',
+        [CATEGORIAS_AVANCE.INALAMBRICO]: 'wifi',
+        [CATEGORIAS_AVANCE.FIBRA_OPTICA]: 'network-wired',
+        [CATEGORIAS_AVANCE.MEDICIONES]: 'tachometer-alt',
+        [CATEGORIAS_AVANCE.SISTEMAS]: 'cogs',
+        [CATEGORIAS_AVANCE.OTROS]: 'tools'
+    };
+    
+    return iconos[categoria] || 'check-circle';
+}
+
+/**
+ * Formatear nombre de categoría
+ */
+function formatearCategoria(categoria) {
+    const nombres = {
+        [CATEGORIAS_AVANCE.ALAMBRICO]: 'Alámbrico',
+        [CATEGORIAS_AVANCE.INALAMBRICO]: 'Inalámbrico', 
+        [CATEGORIAS_AVANCE.FIBRA_OPTICA]: 'Fibra Óptica',
+        [CATEGORIAS_AVANCE.MEDICIONES]: 'Mediciones',
+        [CATEGORIAS_AVANCE.SISTEMAS]: 'Sistemas',
+        [CATEGORIAS_AVANCE.OTROS]: 'Otros'
+    };
+    
+    return nombres[categoria] || categoria;
+}
+// ==================== REGISTRO DE AVANCES ====================
+
+/**
+ * Registrar nuevo avance
+ */
+async function registrarAvance() {
+    try {
+        // Validar datos del avance
+        const datosAvance = validarDatosAvance();
+        if (!datosAvance) return;
+        
+        // Mostrar loader
+        mostrarLoaderAvance(true);
+        
+        console.log('[AVANCES] Registrando avance:', datosAvance);
+        
+        // Procesar fotos si existen
+        if (datosAvance.fotos && datosAvance.fotos.length > 0) {
+            datosAvance.fotos = await procesarFotosAvance(datosAvance.fotos);
+        }
+        
+        // Llamar a la API
+        const response = await apiRegistrarAvance(datosAvance);
+        
+        if (response.error) {
+            throw new Error(response.message || 'Error al registrar el avance');
+        }
+        
+        // Mostrar mensaje de éxito
+        mostrarNotificacion('Avance registrado correctamente', 'success');
+        
+        // Limpiar formulario
+        limpiarFormularioAvance();
+        
+        // Actualizar interfaz si estamos en consulta
+        if (document.getElementById('consultar-avances') && !document.getElementById('consultar-avances').classList.contains('hidden')) {
+            await filtrarAvances();
+        }
+        
+        console.log('[AVANCES] Avance registrado exitosamente');
+        
+    } catch (error) {
+        console.error('[AVANCES] Error al registrar avance:', error);
+        mostrarNotificacion('Error al registrar el avance: ' + error.message, 'error');
+    } finally {
+        mostrarLoaderAvance(false);
+    }
+}
+
+/**
+ * Validar datos del avance antes de registrar
+ */
+function validarDatosAvance() {
+    const obraId = document.getElementById('obra-avance').value;
+    const torreId = document.getElementById('torre-avance').value;
+    const pisoId = document.getElementById('piso-avance').value;
+    const tipoAvanceRadio = document.querySelector('input[name="tipo-avance"]:checked');
+    const observaciones = document.getElementById('observaciones').value.trim();
+    
+    // Validaciones básicas
+    if (!obraId) {
+        mostrarNotificacion('Debe seleccionar una obra', 'error');
+        document.getElementById('obra-avance').focus();
+        return null;
+    }
+    
+    if (!torreId) {
+        mostrarNotificacion('Debe seleccionar una torre', 'error');
+        document.getElementById('torre-avance').focus();
+        return null;
+    }
+    
+    if (!pisoId) {
+        mostrarNotificacion('Debe seleccionar un piso', 'error');
+        document.getElementById('piso-avance').focus();
+        return null;
+    }
+    
+    if (!tipoAvanceRadio) {
+        mostrarNotificacion('Debe seleccionar el tipo de avance', 'error');
+        return null;
+    }
+    
+    const tipoAvance = tipoAvanceRadio.value;
+    let ubicacionId = null;
+    let tipoUbicacion = TIPOS_UBICACION.DEPARTAMENTO;
+    
+    // Validar según el tipo de avance
+    if (tipoAvance === 'departamento') {
+        const departamentoId = document.getElementById('departamento-avance').value;
+        if (!departamentoId) {
+            mostrarNotificacion('Debe seleccionar un departamento', 'error');
+            document.getElementById('departamento-avance').focus();
+            return null;
+        }
+        ubicacionId = departamentoId;
+        tipoUbicacion = TIPOS_UBICACION.DEPARTAMENTO;
+    } else if (tipoAvance === 'comun') {
+        const espacioComunId = document.getElementById('espacio-comun').value;
+        if (!espacioComunId) {
+            mostrarNotificacion('Debe seleccionar un espacio común', 'error');
+            document.getElementById('espacio-comun').focus();
+            return null;
+        }
+        ubicacionId = espacioComunId;
+        tipoUbicacion = TIPOS_UBICACION.ESPACIO_COMUN;
+    }
+    
+    // Obtener avances seleccionados
+    const avancesSeleccionados = obtenerAvancesSeleccionados();
+    if (avancesSeleccionados.length === 0) {
+        mostrarNotificacion('Debe seleccionar al menos un avance', 'error');
+        return null;
+    }
+    
+    // Obtener fotos
+    const fotosInput = document.getElementById('fotos-avance');
+    const fotos = fotosInput && fotosInput.files ? Array.from(fotosInput.files) : [];
+    
+    // Validar fotos si son requeridas
+    const configuracion = obtenerConfiguracionAvances();
+    if (configuracion.requiereFotos && fotos.length < configuracion.minFotos) {
+        mostrarNotificacion(`Debe agregar al menos ${configuracion.minFotos} foto(s)`, 'error');
+        return null;
+    }
+    
+    if (fotos.length > configuracion.maxFotos) {
+        mostrarNotificacion(`No puede agregar más de ${configuracion.maxFotos} fotos`, 'error');
+        return null;
+    }
+    
+    // Validar observaciones si son requeridas
+    if (configuracion.requiereObservaciones && observaciones.length < configuracion.minCaracteresObs) {
+        mostrarNotificacion(`Las observaciones deben tener al menos ${configuracion.minCaracteresObs} caracteres`, 'error');
+        document.getElementById('observaciones').focus();
+        return null;
+    }
+    
+    return {
+        obraId,
+        torreId,
+        pisoId,
+        ubicacionId,
+        tipoUbicacion,
+        avances: avancesSeleccionados,
+        observaciones,
+        fotos,
+        fecha: new Date().toISOString()
+    };
+}
+
+/**
+ * Obtener avances seleccionados
+ */
+function obtenerAvancesSeleccionados() {
+    const checkboxes = document.querySelectorAll('#avances-especificos input[type="checkbox"]:checked');
+    const avancesSeleccionados = [];
+    
+    checkboxes.forEach(checkbox => {
+        avancesSeleccionados.push({
+            id: checkbox.dataset.id,
+            nombre: checkbox.dataset.nombre,
+            categoria: checkbox.dataset.categoria
+        });
+    });
+    
+    return avancesSeleccionados;
+}
+
+/**
+ * Obtener configuración de avances
+ */
+function obtenerConfiguracionAvances() {
+    // Configuración por defecto - en implementación real vendría de la configuración del sistema
+    return {
+        requiereFotos: false,
+        minFotos: 0,
+        maxFotos: 5,
+        requiereObservaciones: false,
+        minCaracteresObs: 10,
+        tamanoMaxFoto: 5 * 1024 * 1024 // 5MB
+    };
+}
+
+/**
+ * Procesar fotos del avance
+ */
+async function procesarFotosAvance(fotos) {
+    const fotosProcessdas = [];
+    const configuracion = obtenerConfiguracionAvances();
+    
+    for (const foto of fotos) {
+        // Validar tamaño
+        if (foto.size > configuracion.tamanoMaxFoto) {
+            throw new Error(`La foto ${foto.name} excede el tamaño máximo permitido`);
+        }
+        
+        // Validar tipo
+        if (!foto.type.startsWith('image/')) {
+            throw new Error(`El archivo ${foto.name} no es una imagen válida`);
+        }
+        
+        try {
+            // Convertir a base64 o procesar según necesidad
+            const fotoProcessada = await convertirFotoABase64(foto);
+            
+            fotosProcessdas.push({
+                nombre: foto.name,
+                tipo: foto.type,
+                tamano: foto.size,
+                contenido: fotoProcessada,
+                fechaCaptura: new Date().toISOString()
+            });
+        } catch (error) {
+            console.error('[AVANCES] Error procesando foto:', foto.name, error);
+            throw new Error(`Error procesando la foto ${foto.name}`);
+        }
+    }
+    
+    return fotosProcessdas;
+}
+
+/**
+ * Convertir foto a base64
+ */
+function convertirFotoABase64(foto) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        
+        reader.onload = function(e) {
+            resolve(e.target.result);
+        };
+        
+        reader.onerror = function(error) {
+            reject(error);
+        };
+        
+        reader.readAsDataURL(foto);
+    });
+}
+
+/**
+ * Limpiar formulario de avance
+ */
+function limpiarFormularioAvance() {
+    // Limpiar selectores de estructura
+    document.getElementById('torre-avance').value = '';
+    
+    const pisoSelect = document.getElementById('piso-avance');
+    pisoSelect.innerHTML = '<option value="">Seleccione un piso</option>';
+    
+    const deptoSelect = document.getElementById('departamento-avance');
+    deptoSelect.innerHTML = '<option value="">Seleccione un departamento</option>';
+    
+    const espacioComunSelect = document.getElementById('espacio-comun');
+    if (espacioComunSelect) {
+        espacioComunSelect.value = '';
+    }
+    
+    // Restablecer tipo de avance
+    const tipoAvanceDepartamento = document.querySelector('input[name="tipo-avance"][value="departamento"]');
+    if (tipoAvanceDepartamento) {
+        tipoAvanceDepartamento.checked = true;
+    }
+    
+    const espacioComunContainer = document.getElementById('espacio-comun-container');
+    if (espacioComunContainer) {
+        espacioComunContainer.classList.add('hidden');
+    }
+    
+    // Limpiar avances específicos
+    limpiarAvancesEspecificos();
+    
+    // Limpiar observaciones
+    document.getElementById('observaciones').value = '';
+    
+    // Limpiar fotos
+    const fotosInput = document.getElementById('fotos-avance');
+    if (fotosInput) {
+        fotosInput.value = '';
+    }
+    
+    const fotosPreview = document.getElementById('fotos-preview');
+    if (fotosPreview) {
+        fotosPreview.innerHTML = '';
+    }
+}
+
+// ==================== MANEJO DE EVENTOS ====================
+
+/**
+ * Manejar cambio en obra de avance
+ */
+async function handleObraAvanceChange(event) {
+    const obraId = event.target.value;
+    
+    if (!obraId) {
+        limpiarSelectoresEstructura();
+        return;
+    }
+    
+    try {
+        // Cargar torres de la obra
+        await cargarTorresObra(obraId, 'torre-avance');
+        
+        // Limpiar selectores dependientes
+        limpiarSelectoresEstructuraDependientes();
+        
+    } catch (error) {
+        console.error('[AVANCES] Error al cambiar obra:', error);
+        mostrarNotificacion('Error al cargar las torres de la obra', 'error');
+    }
+}
+
+/**
+ * Manejar cambio en torre de avance
+ */
+async function handleTorreAvanceChange(event) {
+    const torreId = event.target.value;
+    
+    if (!torreId) {
+        const pisoSelect = document.getElementById('piso-avance');
+        pisoSelect.innerHTML = '<option value="">Seleccione un piso</option>';
+        
+        const deptoSelect = document.getElementById('departamento-avance');
+        deptoSelect.innerHTML = '<option value="">Seleccione un departamento</option>';
+        
+        limpiarAvancesEspecificos();
+        return;
+    }
+    
+    try {
+        // Cargar pisos de la torre
+        await cargarPisosPorTorre(torreId);
+        
+        // Limpiar departamentos
+        const deptoSelect = document.getElementById('departamento-avance');
+        deptoSelect.innerHTML = '<option value="">Seleccione un departamento</option>';
+        
+        limpiarAvancesEspecificos();
+        
+    } catch (error) {
+        console.error('[AVANCES] Error al cambiar torre:', error);
+        mostrarNotificacion('Error al cargar los pisos de la torre', 'error');
+    }
+}
+
+/**
+ * Manejar cambio en piso de avance
+ */
+async function handlePisoAvanceChange(event) {
+    const pisoId = event.target.value;
+    
+    if (!pisoId) {
+        const deptoSelect = document.getElementById('departamento-avance');
+        deptoSelect.innerHTML = '<option value="">Seleccione un departamento</option>';
+        
+        limpiarAvancesEspecificos();
+        return;
+    }
+    
+    try {
+        // Cargar departamentos del piso
+        await cargarDepartamentosPorPiso(pisoId);
+        
+        limpiarAvancesEspecificos();
+        
+    } catch (error) {
+        console.error('[AVANCES] Error al cambiar piso:', error);
+        mostrarNotificacion('Error al cargar los departamentos del piso', 'error');
+    }
+}
+
+/**
+ * Manejar cambio en departamento de avance
+ */
+async function handleDepartamentoAvanceChange(event) {
+    const departamentoId = event.target.value;
+    
+    if (!departamentoId) {
+        limpiarAvancesEspecificos();
+        return;
+    }
+    
+    // Solo cargar si el tipo de avance es departamento
+    const tipoAvanceRadio = document.querySelector('input[name="tipo-avance"]:checked');
+    if (tipoAvanceRadio && tipoAvanceRadio.value === 'departamento') {
+        await cargarAvancesEspecificos(departamentoId, TIPOS_UBICACION.DEPARTAMENTO);
+    }
+}
+
+/**
+ * Manejar cambio en tipo de avance (departamento/común)
+ */
+function handleTipoAvanceChange(event) {
+    const tipoAvance = event.target.value;
+    const espacioComunContainer = document.getElementById('espacio-comun-container');
+    
+    if (tipoAvance === 'comun') {
+        // Mostrar selector de espacio común
+        if (espacioComunContainer) {
+            espacioComunContainer.classList.remove('hidden');
+        }
+        
+        // Cargar espacios comunes si hay obra seleccionada
+        const obraId = document.getElementById('obra-avance').value;
+        if (obraId) {
+            cargarEspaciosComunesSelector(obraId);
+        }
+        
+        limpiarAvancesEspecificos();
+    } else {
+        // Ocultar selector de espacio común
+        if (espacioComunContainer) {
+            espacioComunContainer.classList.add('hidden');
+        }
+        
+        // Cargar avances para departamento si está seleccionado
+        const departamentoId = document.getElementById('departamento-avance').value;
+        if (departamentoId) {
+            cargarAvancesEspecificos(departamentoId, TIPOS_UBICACION.DEPARTAMENTO);
+        } else {
+            limpiarAvancesEspecificos();
+        }
+    }
+}
+
+/**
+ * Manejar cambio en espacio común
+ */
+async function handleEspacioComunChange(event) {
+    const espacioComunId = event.target.value;
+    
+    if (!espacioComunId) {
+        limpiarAvancesEspecificos();
+        return;
+    }
+    
+    await cargarAvancesEspecificos(espacioComunId, TIPOS_UBICACION.ESPACIO_COMUN);
+}
+
+/**
+ * Manejar cambio en fotos de avance
+ */
+function handleFotosAvanceChange(event) {
+    const fotos = event.target.files;
+    const previewContainer = document.getElementById('fotos-preview');
+    
+    if (!previewContainer) return;
+    
+    // Limpiar preview anterior
+    previewContainer.innerHTML = '';
+    
+    if (!fotos || fotos.length === 0) return;
+    
+    // Validar configuración
+    const configuracion = obtenerConfiguracionAvances();
+    
+    if (fotos.length > configuracion.maxFotos) {
+        mostrarNotificacion(`Solo puede seleccionar máximo ${configuracion.maxFotos} fotos`, 'warning');
+        event.target.value = '';
+        return;
+    }
+    
+    // Mostrar preview de cada foto
+    Array.from(fotos).forEach((foto, index) => {
+        // Validar tamaño
+        if (foto.size > configuracion.tamanoMaxFoto) {
+            mostrarNotificacion(`La foto ${foto.name} excede el tamaño máximo permitido`, 'error');
+            return;
+        }
+        
+        // Validar tipo
+        if (!foto.type.startsWith('image/')) {
+            mostrarNotificacion(`El archivo ${foto.name} no es una imagen válida`, 'error');
+            return;
+        }
+        
+        // Crear preview
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const fotoPreview = document.createElement('div');
+            fotoPreview.className = 'foto-preview';
+            fotoPreview.innerHTML = `
+                <img src="${e.target.result}" alt="Preview ${index + 1}" class="preview-image">
+                <div class="foto-info">
+                    <small>${foto.name}</small>
+                    <small>${formatearTamanoArchivo(foto.size)}</small>
+                </div>
+            `;
+            
+            previewContainer.appendChild(fotoPreview);
+        };
+        
+        reader.readAsDataURL(foto);
+    });
+}
+
+/**
+ * Formatear tamaño de archivo
+ */
+function formatearTamanoArchivo(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+// ==================== CONSULTA DE AVANCES ====================
+
+/**
+ * Filtrar avances según criterios seleccionados
+ */
+async function filtrarAvances() {
+    try {
+        // Mostrar loader
+        mostrarLoaderConsulta(true);
+        
+        // Obtener filtros activos
+        const filtros = obtenerFiltrosAvancesActivos();
+        
+        console.log('[AVANCES] Filtrando avances con:', filtros);
+        
+        // Llamar a la API
+        const response = await apiObtenerAvances(filtros, {
+            pagina: paginacionAvances.paginaActual,
+            limite: paginacionAvances.itemsPorPagina
+        });
+        
+        if (response.error) {
+            throw new Error(response.message || 'Error al obtener avances');
+        }
+        
+        const datos = response.datos || {};
+        const avances = datos.avances || [];
+        
+        // Actualizar paginación
+        paginacionAvances.totalItems = datos.totalItems || 0;
+        paginacionAvances.totalPaginas = datos.totalPaginas || 1;
+        
+        // Actualizar cache
+        avancesCache.clear();
+        avances.forEach(avance => {
+            avancesCache.set(avance.id, avance);
+        });
+        
+        // Actualizar interfaz
+        actualizarTablaAvances(avances);
+        actualizarPaginacionAvances();
+        
+        console.log(`[AVANCES] ${avances.length} avances cargados`);
+        
+    } catch (error) {
+        console.error('[AVANCES] Error filtrando avances:', error);
+        mostrarNotificacion('Error al cargar los avances: ' + error.message, 'error');
+        
+        // Mostrar tabla vacía en caso de error
+        actualizarTablaAvances([]);
+    } finally {
+        mostrarLoaderConsulta(false);
+    }
+}
+
+/**
+ * Obtener filtros activos
+ */
+function obtenerFiltrosAvancesActivos() {
+    return {
+        obraId: document.getElementById('filtro-obra')?.value || null,
+        torreId: document.getElementById('filtro-torre')?.value || null,
+        pisoId: document.getElementById('filtro-piso')?.value || null,
+        departamentoId: document.getElementById('filtro-depto')?.value || null,
+        fecha: document.getElementById('filtro-fecha')?.value || null,
+        tipoAvance: document.getElementById('filtro-tipo-avance')?.value || null,
+        ...filtrosAvancesActivos
+    };
+}
+
+/**
+ * Actualizar tabla de avances
+ */
+function actualizarTablaAvances(avances) {
+    const tbody = document.getElementById('avances-tbody');
+    if (!tbody) return;
+    
+    tbody.innerHTML = '';
+    
+    if (avances.length === 0) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td colspan="8" class="text-center">No se encontraron avances con los filtros seleccionados</td>';
+        tbody.appendChild(tr);
+        return;
+    }
+    
+    avances.forEach(avance => {
+        const tr = crearFilaTablaAvance(avance);
+        tbody.appendChild(tr);
+    });
+}
+
+/**
+ * Crear fila de tabla para un avance
+ */
+function crearFilaTablaAvance(avance) {
+    const tr = document.createElement('tr');
+    
+    // Formatear avances realizados
+    const avancesTexto = formatearAvancesRealizados(avance.avancesRealizados);
+    
+    // Formatear ubicación
+    const ubicacionTexto = formatearUbicacionAvance(avance);
+    
+    // Formatear fecha
+    const fechaTexto = formatearFechaAvance(avance.fecha);
+    
+    tr.innerHTML = `
+        <td>
+            <div class="obra-info">
+                <strong>${avance.obraNombre}</strong>
+                ${avance.empresaCliente ? `<br><small class="text-muted">${avance.empresaCliente}</small>` : ''}
+            </div>
+        </td>
+        <td>${avance.torreNombre || '-'}</td>
+        <td>${avance.pisoNombre || '-'}</td>
+        <td>${ubicacionTexto}</td>
+        <td>
+            <div class="avances-realizados">
+                ${avancesTexto}
+            </div>
+        </td>
+        <td>${fechaTexto}</td>
+        <td>
+            <div class="usuario-info">
+                <strong>${avance.usuarioNombre}</strong>
+                ${avance.usuarioRol ? `<br><small class="text-muted">${avance.usuarioRol}</small>` : ''}
+            </div>
+        </td>
+        <td>
+            <div class="btn-group-actions">
+                <button class="btn btn-sm btn-info" onclick="verDetalleAvance('${avance.id}')" 
+                        title="Ver detalle">
+                    <i class="fas fa-eye"></i>
+                </button>
+                ${avance.fotos && avance.fotos.length > 0 ? `
+                    <button class="btn btn-sm btn-secondary" onclick="verFotosAvance('${avance.id}')" 
+                            title="Ver fotos (${avance.fotos.length})">
+                        <i class="fas fa-camera"></i>
+                    </button>
+                ` : ''}
+                ${puedeEditarAvance(avance) ? `
+                    <button class="btn btn-sm btn-warning" onclick="editarAvance('${avance.id}')" 
+                            title="Editar">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                ` : ''}
+                ${puedeEliminarAvance(avance) ? `
+                    <button class="btn btn-sm btn-danger" onclick="eliminarAvance('${avance.id}')" 
+                            title="Eliminar">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                ` : ''}
+            </div>
+        </td>
+    `;
+    
+    return tr;
+}
+
+/**
+ * Formatear avances realizados para mostrar
+ */
+function formatearAvancesRealizados(avancesRealizados) {
+    if (!avancesRealizados || avancesRealizados.length === 0) {
+        return '<span class="text-muted">Sin avances específicos</span>';
+    }
+    
+    // Agrupar por categoría
+    const avancesPorCategoria = {};
+    avancesRealizados.forEach(avance => {
+        const categoria = avance.categoria || 'otros';
+        if (!avancesPorCategoria[categoria]) {
+            avancesPorCategoria[categoria] = [];
+        }
+        avancesPorCategoria[categoria].push(avance.nombre);
+    });
+    
+    // Formatear por categoría
+    const categoriasFormateadas = Object.entries(avancesPorCategoria).map(([categoria, avances]) => {
+        const icono = getIconoCategoria(categoria);
+        const nombreCategoria = formatearCategoria(categoria);
+        const avancesTexto = avances.join(', ');
+        
+        return `
+            <div class="categoria-avances">
+                <i class="fas fa-${icono}"></i>
+                <strong>${nombreCategoria}:</strong>
+                <span>${avancesTexto}</span>
+            </div>
+        `;
+    });
+    
+    return categoriasFormateadas.join('');
+}
+
+/**
+ * Formatear ubicación del avance
+ */
+function formatearUbicacionAvance(avance) {
+    if (avance.tipoUbicacion === TIPOS_UBICACION.ESPACIO_COMUN) {
+        return `<span class="badge badge-info">
+            <i class="fas fa-building"></i> ${avance.espacioComunNombre || 'Espacio común'}
+        </span>`;
+    } else {
+        return avance.departamentoNombre || avance.unidadNombre || '-';
+    }
+}
+
+/**
+ * Formatear fecha del avance
+ */
+function formatearFechaAvance(fecha) {
+    if (!fecha) return '-';
+    
+    try {
+        const fechaObj = new Date(fecha);
+        const ahora = new Date();
+        const diferenciaDias = Math.floor((ahora - fechaObj) / (1000 * 60 * 60 * 24));
+        
+        let fechaFormateada = fechaObj.toLocaleDateString('es-CL', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        });
+        
+        let horaFormateada = fechaObj.toLocaleTimeString('es-CL', {
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        
+        let relativoTexto = '';
+        if (diferenciaDias === 0) {
+            relativoTexto = 'Hoy';
+        } else if (diferenciaDias === 1) {
+            relativoTexto = 'Ayer';
+        } else if (diferenciaDias < 7) {
+            relativoTexto = `Hace ${diferenciaDias} días`;
+        }
+        
+        return `
+            <div class="fecha-avance">
+                <div>${fechaFormateada}</div>
+                <small class="text-muted">${horaFormateada}</small>
+                ${relativoTexto ? `<br><small class="text-info">${relativoTexto}</small>` : ''}
+            </div>
+        `;
+    } catch (error) {
+        return 'Fecha inválida';
+    }
+}
+
+/**
+ * Verificar si se puede editar un avance
+ */
+function puedeEditarAvance(avance) {
+    if (!usuarioActual) return false;
+    
+    // Admin y Supervisor pueden editar siempre
+    if (['Admin', 'Supervisor'].includes(usuarioActual.rol)) {
+        return true;
+    }
+    
+    // El usuario que registró el avance puede editarlo
+    if (avance.usuarioId === usuarioActual.id) {
+        // Verificar tiempo límite de edición
+        const configuracion = obtenerConfiguracionAvances();
+        if (configuracion.permitirEdicion) {
+            const fechaAvance = new Date(avance.fecha);
+            const ahora = new Date();
+            const horasTranscurridas = (ahora - fechaAvance) / (1000 * 60 * 60);
+            
+            return horasTranscurridas <= configuracion.tiempoMaxEdicion;
+        }
+    }
+    
+    return false;
+}
+
+/**
+ * Verificar si se puede eliminar un avance
+ */
+function puedeEliminarAvance(avance) {
+    if (!usuarioActual) return false;
+    
+    // Solo Admin puede eliminar
+    return usuarioActual.rol === 'Admin';
+}
+
+/**
+ * Actualizar paginación de avances
+ */
+function actualizarPaginacionAvances() {
+    const paginaActualSpan = document.getElementById('pagina-actual');
+    if (paginaActualSpan) {
+        paginaActualSpan.textContent = `${paginacionAvances.paginaActual} de ${paginacionAvances.totalPaginas}`;
+    }
+    
+    const totalItemsSpan = document.getElementById('total-items-avances');
+    if (totalItemsSpan) {
+        totalItemsSpan.textContent = `${paginacionAvances.totalItems} avances encontrados`;
+    }
+    
+    // Habilitar/deshabilitar botones de paginación
+    const btnAnterior = document.querySelector('[onclick*="cambiarPagina(-1)"]');
+    if (btnAnterior) {
+        btnAnterior.disabled = paginacionAvances.paginaActual <= 1;
+    }
+    
+    const btnSiguiente = document.querySelector('[onclick*="cambiarPagina(1)"]');
+    if (btnSiguiente) {
+        btnSiguiente.disabled = paginacionAvances.paginaActual >= paginacionAvances.totalPaginas;
+    }
+}
+
+/**
+ * Cambiar página de avances
+ */
+function cambiarPagina(delta) {
+    const nuevaPagina = paginacionAvances.paginaActual + delta;
+    
+    if (nuevaPagina < 1 || nuevaPagina > paginacionAvances.totalPaginas) {
+        return;
+    }
+    
+    paginacionAvances.paginaActual = nuevaPagina;
+    filtrarAvances();
+}
+
+/**
+ * Limpiar filtros de avances
+ */
+function limpiarFiltrosAvances() {
+    // Limpiar filtros de interfaz
+    const filtros = [
+        'filtro-obra',
+        'filtro-torre',
+        'filtro-piso', 
+        'filtro-depto',
+        'filtro-fecha',
+        'filtro-tipo-avance'
+    ];
+    
+    filtros.forEach(filtroId => {
+        const filtro = document.getElementById(filtroId);
+        if (filtro) {
+            filtro.value = '';
+        }
+    });
+    
+    // Limpiar selectores dependientes
+    limpiarSelector('filtro-torre', 'Todas las torres');
+    limpiarSelector('filtro-piso', 'Todos los pisos');
+    limpiarSelector('filtro-depto', 'Todos los departamentos');
+    
+    // Limpiar filtros internos
+    filtrosAvancesActivos = {};
+    
+    // Reiniciar paginación
+    paginacionAvances.paginaActual = 1;
+    
+    // Aplicar filtros (vacíos)
+    filtrarAvances();
+}
+
+/**
+ * Manejar cambio en filtros de avances
+ */
+function handleFiltroAvanceChange(event) {
+    const filtroId = event.target.id;
+    const valor = event.target.value;
+    
+    // Manejar filtros especiales que requieren cargar datos dependientes
+    switch (filtroId) {
+        case 'filtro-obra':
+            if (valor) {
+                cargarTorresObra(valor, 'filtro-torre');
+            } else {
+                limpiarSelector('filtro-torre', 'Todas las torres');
+                limpiarSelector('filtro-piso', 'Todos los pisos');
+                limpiarSelector('filtro-depto', 'Todos los departamentos');
+            }
+            break;
+            
+        case 'filtro-torre':
+            if (valor) {
+                cargarPisosPorTorre(valor, 'filtro');
+            } else {
+                limpiarSelector('filtro-piso', 'Todos los pisos');
+                limpiarSelector('filtro-depto', 'Todos los departamentos');
+            }
+            break;
+            
+        case 'filtro-piso':
+            if (valor) {
+                cargarDepartamentosPorPiso(valor, 'filtro');
+            } else {
+                limpiarSelector('filtro-depto', 'Todos los departamentos');
+            }
+            break;
+    }
+    
+    // Aplicar filtros automáticamente después de un pequeño retraso
+    clearTimeout(window.filtroAvancesTimeout);
+    window.filtroAvancesTimeout = setTimeout(() => {
+        paginacionAvances.paginaActual = 1; // Reiniciar a primera página
+        filtrarAvances();
+    }, 500);
+}
+
+// ==================== PESTAÑAS DE CONSULTA ====================
+
+/**
+ * Mostrar pestaña de avances
+ */
+function mostrarTabAvances(tab) {
+    // Ocultar todas las pestañas
+    document.querySelectorAll('#consultar-avances .tab-content').forEach(content => {
+        content.classList.add('hidden');
+    });
+    
+    // Desactivar todos los enlaces
+    document.querySelectorAll('#consultar-avances .nav-link').forEach(link => {
+        link.classList.remove('active');
+    });
+    
+    // Mostrar pestaña seleccionada
+    const tabContent = document.getElementById(`tab-${tab}-avances`);
+    if (tabContent) {
+        tabContent.classList.remove('hidden');
+    }
+    
+    // Activar enlace correspondiente
+    const activeLink = document.querySelector(`#consultar-avances .nav-link[onclick*="${tab}"]`);
+    if (activeLink) {
+        activeLink.classList.add('active');
+    }
+    
+    // Cargar datos según la pestaña
+    switch (tab) {
+        case 'lista':
+            filtrarAvances();
+            break;
+        case 'jerarquia':
+            if (typeof cargarJerarquiaObra === 'function') {
+                const obraId = document.getElementById('jerarquia-obra')?.value;
+                if (obraId) {
+                    cargarJerarquiaObra();
+                }
+            }
+            break;
+        case 'espacios-comunes':
+            if (typeof cargarEspaciosComunes === 'function') {
+                const obraId = document.getElementById('comunes-obra')?.value;
+                if (obraId) {
+                    cargarEspaciosComunes();
+                }
+            }
+            break;
+    }
+}
+
+/**
+ * Manejar clic en pestañas de avances
+ */
+function handleTabAvancesClick(event) {
+    event.preventDefault();
+    
+    // Extraer el tipo de tab del onclick
+    const onclickAttr = event.target.getAttribute('onclick');
+    const match = onclickAttr.match(/mostrarTabAvances\('([^']+)'\)/);
+    
+    if (match) {
+        mostrarTabAvances(match[1]);
+    }
+}
+// ==================== ACCIONES DE AVANCES ====================
+
+/**
+ * Ver detalle de un avance
+ */
+async function verDetalleAvance(avanceId) {
+    try {
+        mostrarLoaderConsulta(true);
+        
+        const response = await apiObtenerDetalleAvance(avanceId);
+        
+        if (response.error) {
+            throw new Error(response.message || 'Error al obtener detalle del avance');
+        }
+        
+        const avance = response.datos;
+        mostrarModalDetalleAvance(avance);
+        
+    } catch (error) {
+        console.error('[AVANCES] Error al ver detalle:', error);
+        mostrarNotificacion('Error al cargar el detalle del avance: ' + error.message, 'error');
+    } finally {
+        mostrarLoaderConsulta(false);
+    }
+}
+
+/**
+ * Mostrar modal de detalle de avance
+ */
+function mostrarModalDetalleAvance(avance) {
+    // Crear modal si no existe
+    let modal = document.getElementById('modal-detalle-avance');
+    if (!modal) {
+        modal = crearModalDetalleAvance();
+        document.body.appendChild(modal);
+    }
+    
+    // Actualizar contenido
+    actualizarContenidoModalDetalleAvance(avance);
+    
+    // Mostrar modal
+    modal.classList.remove('hidden');
+}
+
+/**
+ * Crear modal de detalle de avance
+ */
+function crearModalDetalleAvance() {
+    const modal = document.createElement('div');
+    modal.id = 'modal-detalle-avance';
+    modal.className = 'modal-overlay hidden';
+    
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 900px;">
+            <div class="modal-header">
+                <h3 class="modal-title">
+                    <i class="fas fa-tasks"></i> Detalle de Avance
+                </h3>
+                <button class="modal-close" onclick="cerrarModalDetalleAvance()">&times;</button>
+            </div>
+            <div class="modal-body" id="detalle-avance-contenido">
+                <!-- Contenido dinámico -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="cerrarModalDetalleAvance()">
+                    Cerrar
+                </button>
+                <button class="btn btn-primary" id="btn-editar-avance" style="display: none;" onclick="editarAvanceDesdeDetalle()">
+                    <i class="fas fa-edit"></i> Editar
+                </button>
+            </div>
+        </div>
+    `;
+    
+    return modal;
+}
+
+/**
+ * Actualizar contenido del modal de detalle de avance
+ */
+function actualizarContenidoModalDetalleAvance(avance) {
+    const contenido = document.getElementById('detalle-avance-contenido');
+    if (!contenido) return;
+    
+    const fechaFormateada = formatearFechaCompleta(avance.fecha);
+    const ubicacionTexto = formatearUbicacionAvance(avance);
+    const avancesTexto = formatearAvancesRealizados(avance.avancesRealizados);
+    
+    contenido.innerHTML = `
+        <div class="avance-detalle-grid">
+            <div class="avance-info-basica">
+                <h4><i class="fas fa-info-circle"></i> Información General</h4>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <label>Obra:</label>
+                        <span>${avance.obraNombre}</span>
+                    </div>
+                    <div class="info-item">
+                        <label>Torre:</label>
+                        <span>${avance.torreNombre || 'No especificada'}</span>
+                    </div>
+                    <div class="info-item">
+                        <label>Piso:</label>
+                        <span>${avance.pisoNombre || 'No especificado'}</span>
+                    </div>
+                    <div class="info-item">
+                        <label>Ubicación:</label>
+                        <span>${ubicacionTexto}</span>
+                    </div>
+                    <div class="info-item">
+                        <label>Fecha de registro:</label>
+                        <span>${fechaFormateada}</span>
+                    </div>
+                    <div class="info-item">
+                        <label>Registrado por:</label>
+                        <span>${avance.usuarioNombre} (${avance.usuarioRol || 'Usuario'})</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="avance-trabajos">
+                <h4><i class="fas fa-check-circle"></i> Trabajos Realizados</h4>
+                <div class="avances-detalle">
+                    ${avancesTexto}
+                </div>
+            </div>
+            
+            ${avance.observaciones ? `
+                <div class="avance-observaciones">
+                    <h4><i class="fas fa-comment"></i> Observaciones</h4>
+                    <div class="observaciones-texto">
+                        ${avance.observaciones.replace(/\n/g, '<br>')}
+                    </div>
+                </div>
+            ` : ''}
+            
+            ${avance.fotos && avance.fotos.length > 0 ? `
+                <div class="avance-fotos">
+                    <h4><i class="fas fa-camera"></i> Fotografías (${avance.fotos.length})</h4>
+                    <div class="fotos-galeria">
+                        ${generarGaleriaFotos(avance.fotos)}
+                    </div>
+                </div>
+            ` : ''}
+            
+            ${avance.historialCambios && avance.historialCambios.length > 0 ? `
+                <div class="avance-historial">
+                    <h4><i class="fas fa-history"></i> Historial de Cambios</h4>
+                    <div class="historial-lista">
+                        ${generarHistorialCambios(avance.historialCambios)}
+                    </div>
+                </div>
+            ` : ''}
+        </div>
+    `;
+    
+    // Configurar botón de editar
+    const btnEditar = document.getElementById('btn-editar-avance');
+    if (btnEditar) {
+        if (puedeEditarAvance(avance)) {
+            btnEditar.style.display = 'inline-block';
+            btnEditar.dataset.avanceId = avance.id;
+        } else {
+            btnEditar.style.display = 'none';
+        }
+    }
+}
+
+/**
+ * Generar galería de fotos
+ */
+function generarGaleriaFotos(fotos) {
+    return fotos.map((foto, index) => `
+        <div class="foto-item" onclick="abrirFotoCompleta('${foto.url}', '${foto.nombre || `Foto ${index + 1}`}')">
+            <img src="${foto.urlThumbnail || foto.url}" 
+                 alt="${foto.nombre || `Foto ${index + 1}`}" 
+                 class="foto-thumbnail">
+            <div class="foto-overlay">
+                <i class="fas fa-search-plus"></i>
+            </div>
+            ${foto.nombre ? `<div class="foto-nombre">${foto.nombre}</div>` : ''}
+        </div>
+    `).join('');
+}
+
+/**
+ * Generar historial de cambios
+ */
+function generarHistorialCambios(historial) {
+    return historial.map(cambio => `
+        <div class="historial-item">
+            <div class="historial-fecha">
+                ${formatearFechaCompleta(cambio.fecha)}
+            </div>
+            <div class="historial-usuario">
+                ${cambio.usuarioNombre} (${cambio.usuarioRol})
+            </div>
+            <div class="historial-accion">
+                ${cambio.accion}
+            </div>
+            ${cambio.detalles ? `
+                <div class="historial-detalles">
+                    ${cambio.detalles}
+                </div>
+            ` : ''}
+        </div>
+    `).join('');
+}
+
+/**
+ * Cerrar modal de detalle de avance
+ */
+function cerrarModalDetalleAvance() {
+    const modal = document.getElementById('modal-detalle-avance');
+    if (modal) {
+        modal.classList.add('hidden');
+    }
+}
+
+/**
+ * Ver fotos de un avance
+ */
+async function verFotosAvance(avanceId) {
+    try {
+        const avance = avancesCache.get(avanceId);
+        if (!avance || !avance.fotos || avance.fotos.length === 0) {
+            mostrarNotificacion('Este avance no tiene fotos asociadas', 'info');
+            return;
+        }
+        
+        mostrarGaleriaFotos(avance.fotos, `Fotos del avance - ${avance.obraNombre}`);
+        
+    } catch (error) {
+        console.error('[AVANCES] Error al ver fotos:', error);
+        mostrarNotificacion('Error al cargar las fotos del avance', 'error');
+    }
+}
+
+/**
+ * Editar avance
+ */
+async function editarAvance(avanceId) {
+    try {
+        const avance = avancesCache.get(avanceId);
+        if (!avance) {
+            throw new Error('Avance no encontrado');
+        }
+        
+        if (!puedeEditarAvance(avance)) {
+            mostrarNotificacion('No tiene permisos para editar este avance', 'error');
+            return;
+        }
+        
+        // Cambiar a sección de registro de avance
+        mostrarSeccion('registrar-avance');
+        
+        // Cargar datos del avance en el formulario
+        await cargarAvanceEnFormulario(avance);
+        
+        // Marcar como editando
+        avanceActualEditando = avanceId;
+        
+        mostrarNotificacion('Avance cargado para edición', 'info');
+        
+    } catch (error) {
+        console.error('[AVANCES] Error al editar avance:', error);
+        mostrarNotificacion('Error al cargar el avance para edición: ' + error.message, 'error');
+    }
+}
+
+/**
+ * Cargar avance en formulario para edición
+ */
+async function cargarAvanceEnFormulario(avance) {
+    try {
+        // Cargar obra
+        document.getElementById('obra-avance').value = avance.obraId;
+        await handleObraAvanceChange({ target: { value: avance.obraId } });
+        
+        // Esperar un poco para que se carguen las torres
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Cargar torre
+        if (avance.torreId) {
+            document.getElementById('torre-avance').value = avance.torreId;
+            await handleTorreAvanceChange({ target: { value: avance.torreId } });
+            
+            // Esperar un poco para que se carguen los pisos
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+        
+        // Cargar piso
+        if (avance.pisoId) {
+            document.getElementById('piso-avance').value = avance.pisoId;
+            await handlePisoAvanceChange({ target: { value: avance.pisoId } });
+            
+            // Esperar un poco para que se carguen los departamentos
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+        
+        // Configurar tipo de avance
+        if (avance.tipoUbicacion === TIPOS_UBICACION.ESPACIO_COMUN) {
+            const radioComun = document.querySelector('input[name="tipo-avance"][value="comun"]');
+            if (radioComun) {
+                radioComun.checked = true;
+                handleTipoAvanceChange({ target: { value: 'comun' } });
+                
+                // Cargar espacio común
+                if (avance.espacioComunId) {
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    document.getElementById('espacio-comun').value = avance.espacioComunId;
+                    await handleEspacioComunChange({ target: { value: avance.espacioComunId } });
+                }
+            }
+        } else {
+            const radioDepartamento = document.querySelector('input[name="tipo-avance"][value="departamento"]');
+            if (radioDepartamento) {
+                radioDepartamento.checked = true;
+                handleTipoAvanceChange({ target: { value: 'departamento' } });
+                
+                // Cargar departamento
+                if (avance.departamentoId) {
+                    document.getElementById('departamento-avance').value = avance.departamentoId;
+                    await handleDepartamentoAvanceChange({ target: { value: avance.departamentoId } });
+                }
+            }
+        }
+        
+        // Esperar a que se carguen los avances específicos
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Marcar avances realizados
+        if (avance.avancesRealizados) {
+            avance.avancesRealizados.forEach(avanceRealizado => {
+                const checkbox = document.querySelector(`input[data-id="${avanceRealizado.id}"]`);
+                if (checkbox) {
+                    checkbox.checked = true;
+                }
+            });
+        }
+        
+        // Cargar observaciones
+        if (avance.observaciones) {
+            document.getElementById('observaciones').value = avance.observaciones;
+        }
+        
+        // Nota: Las fotos no se pueden pre-cargar en un input file por seguridad
+        
+    } catch (error) {
+        console.error('[AVANCES] Error cargando avance en formulario:', error);
+        throw error;
+    }
+}
+
+/**
+ * Editar avance desde el modal de detalle
+ */
+function editarAvanceDesdeDetalle() {
+    const btnEditar = document.getElementById('btn-editar-avance');
+    if (btnEditar && btnEditar.dataset.avanceId) {
+        cerrarModalDetalleAvance();
+        editarAvance(btnEditar.dataset.avanceId);
+    }
+}
+
+/**
+ * Eliminar avance
+ */
+async function eliminarAvance(avanceId) {
+    try {
+        const avance = avancesCache.get(avanceId);
+        if (!avance) {
+            throw new Error('Avance no encontrado');
+        }
+        
+        if (!puedeEliminarAvance(avance)) {
+            mostrarNotificacion('No tiene permisos para eliminar este avance', 'error');
+            return;
+        }
+        
+        // Confirmar eliminación
+        const mensaje = `¿Está seguro de eliminar este avance?\n\n` +
+                       `Obra: ${avance.obraNombre}\n` +
+                       `Ubicación: ${formatearUbicacionAvance(avance).replace(/<[^>]*>/g, '')}\n` +
+                       `Fecha: ${formatearFechaCompleta(avance.fecha)}\n\n` +
+                       'Esta acción no se puede deshacer.';
+        
+        if (!confirm(mensaje)) {
+            return;
+        }
+        
+        mostrarLoaderConsulta(true);
+        
+        // Llamar a la API (función ficticia por ahora)
+        const response = await apiEliminarAvance(avanceId);
+        
+        if (response.error) {
+            throw new Error(response.message || 'Error al eliminar el avance');
+        }
+        
+        // Remover del cache
+        avancesCache.delete(avanceId);
+        
+        // Recargar lista
+        await filtrarAvances();
+        
+        mostrarNotificacion('Avance eliminado correctamente', 'success');
+        
+    } catch (error) {
+        console.error('[AVANCES] Error al eliminar avance:', error);
+        mostrarNotificacion('Error al eliminar el avance: ' + error.message, 'error');
+    } finally {
+        mostrarLoaderConsulta(false);
+    }
+}
+
+// ==================== FUNCIONES AUXILIARES ====================
+
+/**
+ * Cargar espacios comunes para selector
+ */
+async function cargarEspaciosComunesSelector(obraId) {
+    try {
+        const response = await apiObtenerEspaciosComunes(obraId);
+        
+        if (response.error) {
+            throw new Error(response.message || 'Error al obtener espacios comunes');
+        }
+        
+        const espaciosComunes = response.datos || [];
+        
+        // Actualizar selector
+        const selector = document.getElementById('espacio-comun');
+        if (selector) {
+            limpiarSelector('espacio-comun', 'Seleccione un espacio común');
+            
+            espaciosComunes.forEach(espacio => {
+                const option = document.createElement('option');
+                option.value = espacio.id;
+                option.textContent = espacio.nombre;
+                selector.appendChild(option);
+            });
+        }
+        
+        return espaciosComunes;
+        
+    } catch (error) {
+        console.error('[AVANCES] Error cargando espacios comunes:', error);
+        mostrarNotificacion('Error al cargar espacios comunes: ' + error.message, 'error');
+        return [];
+    }
+}
+
+/**
+ * Limpiar selectores de estructura
+ */
+function limpiarSelectoresEstructura() {
+    limpiarSelector('torre-avance', 'Seleccione una torre');
+    limpiarSelectoresEstructuraDependientes();
+}
+
+/**
+ * Limpiar selectores dependientes de estructura
+ */
+function limpiarSelectoresEstructuraDependientes() {
+    limpiarSelector('piso-avance', 'Seleccione un piso');
+    limpiarSelector('departamento-avance', 'Seleccione un departamento');
+    limpiarAvancesEspecificos();
+}
+
+/**
+ * Formatear fecha completa
+ */
+function formatearFechaCompleta(fecha) {
+    if (!fecha) return 'Fecha no disponible';
+    
+    try {
+        const fechaObj = new Date(fecha);
+        return fechaObj.toLocaleString('es-CL', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    } catch (error) {
+        return 'Fecha inválida';
+    }
+}
+
+/**
+ * Mostrar/ocultar loaders
+ */
+function mostrarLoaderAvance(mostrar) {
+    const loader = document.getElementById('avance-loader');
+    if (loader) {
+        if (mostrar) {
+            loader.classList.remove('hidden');
+        } else {
+            loader.classList.add('hidden');
+        }
+    }
+}
+
+function mostrarLoaderConsulta(mostrar) {
+    const loader = document.getElementById('consulta-loader');
+    if (loader) {
+        if (mostrar) {
+            loader.classList.remove('hidden');
+        } else {
+            loader.classList.add('hidden');
+        }
+    }
+}
+
+/**
+ * Abrir foto en tamaño completo
+ */
+function abrirFotoCompleta(url, nombre) {
+    // Crear modal para foto completa
+    let modal = document.getElementById('modal-foto-completa');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'modal-foto-completa';
+        modal.className = 'modal-overlay';
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width: 90%; max-height: 90%;">
+                <div class="modal-header">
+                    <h3 class="modal-title" id="foto-titulo"></h3>
+                    <button class="modal-close" onclick="cerrarFotoCompleta()">&times;</button>
+                </div>
+                <div class="modal-body" style="text-align: center;">
+                    <img id="foto-completa" style="max-width: 100%; max-height: 70vh;" alt="">
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+    
+    // Actualizar contenido
+    document.getElementById('foto-titulo').textContent = nombre;
+    document.getElementById('foto-completa').src = url;
+    
+    // Mostrar modal
+    modal.classList.remove('hidden');
+}
+
+/**
+ * Cerrar foto completa
+ */
+function cerrarFotoCompleta() {
+    const modal = document.getElementById('modal-foto-completa');
+    if (modal) {
+        modal.classList.add('hidden');
+    }
+}
+
+/**
+ * Mostrar galería de fotos
+ */
+function mostrarGaleriaFotos(fotos, titulo) {
+    // Implementar galería de fotos más elaborada si es necesario
+    // Por ahora, mostrar la primera foto
+    if (fotos && fotos.length > 0) {
+        abrirFotoCompleta(fotos[0].url, titulo || fotos[0].nombre || 'Foto');
+    }
+}
+
+// ==================== INICIALIZACIÓN ====================
+
+/**
+ * Inicializar cuando el DOM esté listo
+ */
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeAvancesModule);
+} else {
+    initializeAvancesModule();
+}
+
+// ==================== EXPORTAR FUNCIONES GLOBALES ====================
+
+// Hacer disponibles las funciones principales globalmente
+window.registrarAvance = registrarAvance;
+window.filtrarAvances = filtrarAvances;
+window.limpiarFiltrosAvances = limpiarFiltrosAvances;
+window.mostrarTabAvances = mostrarTabAvances;
+window.cambiarPagina = cambiarPagina;
+
+window.verDetalleAvance = verDetalleAvance;
+window.cerrarModalDetalleAvance = cerrarModalDetalleAvance;
+window.editarAvanceDesdeDetalle = editarAvanceDesdeDetalle;
+window.verFotosAvance = verFotosAvance;
+window.editarAvance = editarAvance;
+window.eliminarAvance = eliminarAvance;
+
+window.cargarAvancesEspecificos = cargarAvancesEspecificos;
+window.cargarEspaciosComunesSelector = cargarEspaciosComunesSelector;
+
+window.abrirFotoCompleta = abrirFotoCompleta;
+window.cerrarFotoCompleta = cerrarFotoCompleta;
+
+// Funciones de manejo de eventos
+window.handleObraAvanceChange = handleObraAvanceChange;
+window.handleTorreAvanceChange = handleTorreAvanceChange;
+window.handlePisoAvanceChange = handlePisoAvanceChange;
+window.handleDepartamentoAvanceChange = handleDepartamentoAvanceChange;
+window.handleTipoAvanceChange = handleTipoAvanceChange;
+window.handleEspacioComunChange = handleEspacioComunChange;
+window.handleFotosAvanceChange = handleFotosAvanceChange;
+
+// Constantes disponibles globalmente
+window.ESTADOS_AVANCE = ESTADOS_AVANCE;
+window.TIPOS_UBICACION = TIPOS_UBICACION;
+window.CATEGORIAS_AVANCE = CATEGORIAS_AVANCE;
+
+console.log('[AVANCES] Archivo js/avances.html cargado completamente');
+// ==================== FUNCIONES DE CÁMARA PARA AVANCES ====================
+
+// Variables globales para manejo de cámara
+let cameraStream = null;
+let cameraDevices = [];
+let currentCameraIndex = 0;
+let fotosCapturadas = [];
+let cameraInitialized = false;
+
+/**
+ * Iniciar cámara del dispositivo
+ */
+async function iniciarCamara() {
+    try {
+        mostrarEstadoCamara('loading');
+        document.getElementById('camera-status').textContent = 'Iniciando cámara...';
+        
+        // Obtener dispositivos de cámara disponibles
+        await obtenerDispositivosCamara();
+        
+        // Configuración de cámara
+        const constraints = {
+            video: {
+                width: { ideal: 1920, max: 1920 },
+                height: { ideal: 1080, max: 1080 },
+                facingMode: cameraDevices.length > 1 ? 'environment' : 'user', // Cámara trasera preferida en móviles
+                deviceId: cameraDevices[currentCameraIndex]?.deviceId
+            },
+            audio: false
+        };
+        
+        // Solicitar acceso a la cámara
+        cameraStream = await navigator.mediaDevices.getUserMedia(constraints);
+        
+        // Configurar video element
+        const video = document.getElementById('camera-video');
+        video.srcObject = cameraStream;
+        
+        // Esperar a que el video esté listo
+        await new Promise((resolve) => {
+            video.onloadedmetadata = () => {
+                video.play();
+                resolve();
+            };
+        });
+        
+        // Configurar canvas con las dimensiones del video
+        const canvas = document.getElementById('camera-canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        
+        // Mostrar controles de cámara
+        mostrarEstadoCamara('active');
+        document.getElementById('camera-status').textContent = 'Cámara lista - Presiona capturar para tomar la foto';
+        
+        // Mostrar/ocultar botón de cambiar cámara
+        const btnCambiarCamara = document.getElementById('btn-cambiar-camara');
+        if (btnCambiarCamara) {
+            btnCambiarCamara.style.display = cameraDevices.length > 1 ? 'inline-block' : 'none';
+        }
+        
+        cameraInitialized = true;
+        
+        console.log('[CAMERA] Cámara iniciada exitosamente');
+        
+    } catch (error) {
+        console.error('[CAMERA] Error iniciando cámara:', error);
+        manejarErrorCamara(error);
+    }
+}
+
+/**
+ * Obtener dispositivos de cámara disponibles
+ */
+async function obtenerDispositivosCamara() {
+    try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        cameraDevices = devices.filter(device => device.kind === 'videoinput');
+        
+        console.log(`[CAMERA] ${cameraDevices.length} dispositivos de cámara encontrados`);
+        
+        if (cameraDevices.length === 0) {
+            throw new Error('No se encontraron cámaras en el dispositivo');
+        }
+        
+    } catch (error) {
+        console.error('[CAMERA] Error obteniendo dispositivos:', error);
+        throw new Error('No se pudo acceder a los dispositivos de cámara');
+    }
+}
+
+/**
+ * Capturar foto desde el video stream
+ */
+function capturarFoto() {
+    try {
+        if (!cameraInitialized || !cameraStream) {
+            throw new Error('La cámara no está inicializada');
+        }
+        
+        const video = document.getElementById('camera-video');
+        const canvas = document.getElementById('camera-canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Configurar canvas con dimensiones optimizadas
+        const aspectRatio = video.videoWidth / video.videoHeight;
+        const maxWidth = 1920;
+        const maxHeight = 1080;
+        
+        let width = video.videoWidth;
+        let height = video.videoHeight;
+        
+        if (width > maxWidth) {
+            width = maxWidth;
+            height = width / aspectRatio;
+        }
+        
+        if (height > maxHeight) {
+            height = maxHeight;
+            width = height * aspectRatio;
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        
+        // Dibujar frame actual del video en el canvas
+        ctx.drawImage(video, 0, 0, width, height);
+        
+        // Convertir a base64
+        const fotoDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        
+        // Mostrar foto capturada
+        const imgCapturada = document.getElementById('captured-photo');
+        imgCapturada.src = fotoDataUrl;
+        
+        // Cambiar a estado de foto capturada
+        mostrarEstadoCamara('captured');
+        
+        // Guardar foto temporalmente
+        window.fotoTemporal = {
+            dataUrl: fotoDataUrl,
+            timestamp: new Date().toISOString(),
+            width: width,
+            height: height
+        };
+        
+        console.log('[CAMERA] Foto capturada exitosamente');
+        
+        // Efecto visual de captura
+        mostrarEfectoCaptura();
+        
+    } catch (error) {
+        console.error('[CAMERA] Error capturando foto:', error);
+        mostrarNotificacion('Error al capturar la foto: ' + error.message, 'error');
+    }
+}
+
+/**
+ * Mostrar efecto visual de captura
+ */
+function mostrarEfectoCaptura() {
+    const video = document.getElementById('camera-video');
+    if (!video) return;
+    
+    // Crear overlay de flash
+    const flash = document.createElement('div');
+    flash.style.cssText = `
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(255, 255, 255, 0.8);
+        z-index: 1000;
+        pointer-events: none;
+        opacity: 1;
+        transition: opacity 0.3s ease;
+    `;
+    
+    video.parentNode.appendChild(flash);
+    
+    // Fade out del flash
+    setTimeout(() => {
+        flash.style.opacity = '0';
+        setTimeout(() => {
+            if (flash.parentNode) {
+                flash.parentNode.removeChild(flash);
+            }
+        }, 300);
+    }, 100);
+    
+    // Sonido de captura (opcional)
+    try {
+        // Crear audio context para sonido de captura
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+        oscillator.frequency.exponentialRampToValueAtTime(400, audioContext.currentTime + 0.1);
+        
+        gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+        
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + 0.1);
+    } catch (e) {
+        // Sonido no es crítico, continuar sin él
+    }
+}
+
+/**
+ * Guardar foto capturada en la lista
+ */
+function guardarFotoCapturada() {
+    try {
+        if (!window.fotoTemporal) {
+            throw new Error('No hay foto temporal para guardar');
+        }
+        
+        const foto = window.fotoTemporal;
+        
+        // Generar ID único para la foto
+        const fotoId = 'foto_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        
+        // Crear objeto de foto
+        const fotoObj = {
+            id: fotoId,
+            dataUrl: foto.dataUrl,
+            timestamp: foto.timestamp,
+            width: foto.width,
+            height: foto.height,
+            size: Math.round(foto.dataUrl.length * 0.75), // Estimación del tamaño
+            nombre: `Avance_${new Date().toLocaleDateString('es-CL').replace(/\//g, '-')}_${fotosCapturadas.length + 1}.jpg`
+        };
+        
+        // Agregar a la lista de fotos
+        fotosCapturadas.push(fotoObj);
+        
+        // Actualizar interfaz
+        actualizarListaFotos();
+        
+        // Volver al estado inicial para capturar más fotos
+        mostrarEstadoCamara('initial');
+        
+        // Limpiar foto temporal
+        window.fotoTemporal = null;
+        
+        mostrarNotificacion('Foto guardada correctamente', 'success');
+        
+        console.log('[CAMERA] Foto guardada en lista:', fotoObj.nombre);
+        
+    } catch (error) {
+        console.error('[CAMERA] Error guardando foto:', error);
+        mostrarNotificacion('Error al guardar la foto: ' + error.message, 'error');
+    }
+}
+
+/**
+ * Tomar otra foto (volver al modo de cámara)
+ */
+function tomarOtraFoto() {
+    window.fotoTemporal = null;
+    mostrarEstadoCamara('active');
+    document.getElementById('camera-status').textContent = 'Cámara lista - Presiona capturar para tomar otra foto';
+}
+
+/**
+ * Cancelar captura actual
+ */
+function cancelarCaptura() {
+    window.fotoTemporal = null;
+    mostrarEstadoCamara('initial');
+}
+
+/**
+ * Detener cámara y volver al estado inicial
+ */
+function detenerCamara() {
+    try {
+        // Detener stream de cámara
+        if (cameraStream) {
+            cameraStream.getTracks().forEach(track => {
+                track.stop();
+            });
+            cameraStream = null;
+        }
+        
+        // Limpiar video element
+        const video = document.getElementById('camera-video');
+        if (video) {
+            video.srcObject = null;
+        }
+        
+        // Volver al estado inicial
+        mostrarEstadoCamara('initial');
+        
+        // Reset variables
+        cameraInitialized = false;
+        window.fotoTemporal = null;
+        
+        console.log('[CAMERA] Cámara detenida');
+        
+    } catch (error) {
+        console.error('[CAMERA] Error deteniendo cámara:', error);
+    }
+}
+
+/**
+ * Cambiar entre cámaras disponibles
+ */
+async function cambiarCamara() {
+    try {
+        if (cameraDevices.length <= 1) {
+            mostrarNotificacion('Solo hay una cámara disponible', 'info');
+            return;
+        }
+        
+        // Cambiar al siguiente dispositivo
+        currentCameraIndex = (currentCameraIndex + 1) % cameraDevices.length;
+        
+        // Detener cámara actual
+        if (cameraStream) {
+            cameraStream.getTracks().forEach(track => track.stop());
+        }
+        
+        // Reiniciar con nuevo dispositivo
+        await iniciarCamara();
+        
+        const nombreCamara = cameraDevices[currentCameraIndex].label || 
+                            `Cámara ${currentCameraIndex + 1}`;
+        mostrarNotificacion(`Cambiado a: ${nombreCamara}`, 'info');
+        
+    } catch (error) {
+        console.error('[CAMERA] Error cambiando cámara:', error);
+        mostrarNotificacion('Error al cambiar de cámara: ' + error.message, 'error');
+    }
+}
+
+/**
+ * Seleccionar archivo desde dispositivo
+ */
+function seleccionarArchivo() {
+    const fileInput = document.getElementById('file-input-fotos');
+    if (fileInput) {
+        fileInput.click();
+    }
+}
+
+/**
+ * Procesar archivo seleccionado
+ */
+function procesarArchivoSeleccionado(input) {
+    const files = input.files;
+    if (!files || files.length === 0) return;
+    
+    Array.from(files).forEach((file, index) => {
+        procesarArchivoImagen(file, index);
+    });
+    
+    // Limpiar input
+    input.value = '';
+}
+
+/**
+ * Procesar archivo de imagen individual
+ */
+function procesarArchivoImagen(file, index) {
+    // Validar tipo de archivo
+    if (!file.type.startsWith('image/')) {
+        mostrarNotificacion(`${file.name} no es una imagen válida`, 'error');
+        return;
+    }
+    
+    // Validar tamaño (máximo 10MB)
+    const maxSize = 10 * 1024 * 1024;
+    if (file.size > maxSize) {
+        mostrarNotificacion(`${file.name} excede el tamaño máximo permitido (10MB)`, 'error');
+        return;
+    }
+    
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const fotoId = 'archivo_' + Date.now() + '_' + index + '_' + Math.random().toString(36).substr(2, 9);
+        
+        const fotoObj = {
+            id: fotoId,
+            dataUrl: e.target.result,
+            timestamp: new Date().toISOString(),
+            size: file.size,
+            nombre: file.name,
+            origen: 'archivo'
+        };
+        
+        fotosCapturadas.push(fotoObj);
+        actualizarListaFotos();
+        
+        mostrarNotificacion(`${file.name} agregado correctamente`, 'success');
+    };
+    
+    reader.onerror = function() {
+        mostrarNotificacion(`Error al leer ${file.name}`, 'error');
+    };
+    
+    reader.readAsDataURL(file);
+}
+
+/**
+ * Reintentar acceso a cámara
+ */
+function reintentarCamara() {
+    mostrarEstadoCamara('initial');
+    setTimeout(() => {
+        iniciarCamara();
+    }, 500);
+}
+
+/**
+ * Mostrar estado de la cámara
+ */
+function mostrarEstadoCamara(estado) {
+    const estados = ['initial', 'loading', 'active', 'captured', 'error'];
+    
+    estados.forEach(est => {
+        const elemento = document.getElementById(`camera-${est}`);
+        if (elemento) {
+            if (est === estado) {
+                elemento.classList.remove('hidden');
+            } else {
+                elemento.classList.add('hidden');
+            }
+        }
+    });
+}
+
+/**
+ * Manejar errores de cámara
+ */
+function manejarErrorCamara(error) {
+    console.error('[CAMERA] Error de cámara:', error);
+    
+    let mensajeError = 'Error desconocido al acceder a la cámara';
+    
+    if (error.name === 'NotAllowedError') {
+        mensajeError = 'Acceso a la cámara denegado. Por favor, permite el acceso en la configuración del navegador.';
+    } else if (error.name === 'NotFoundError') {
+        mensajeError = 'No se encontró ninguna cámara en el dispositivo.';
+    } else if (error.name === 'NotSupportedError') {
+        mensajeError = 'La cámara no es compatible con este navegador.';
+    } else if (error.name === 'NotReadableError') {
+        mensajeError = 'La cámara está siendo utilizada por otra aplicación.';
+    } else if (error.message) {
+        mensajeError = error.message;
+    }
+    
+    // Mostrar estado de error
+    mostrarEstadoCamara('error');
+    document.getElementById('error-message').textContent = mensajeError;
+    
+    // Detener cualquier stream activo
+    detenerCamara();
+}
+
+/**
+ * Actualizar lista de fotos capturadas
+ */
+function actualizarListaFotos() {
+    const listaContainer = document.getElementById('lista-fotos');
+    const contadorFotos = document.getElementById('contador-fotos');
+    const fotosGuardadas = document.getElementById('fotos-guardadas');
+    
+    if (!listaContainer) return;
+    
+    // Actualizar contador
+    if (contadorFotos) {
+        contadorFotos.textContent = fotosCapturadas.length;
+    }
+    
+    // Mostrar/ocultar sección de fotos
+    if (fotosGuardadas) {
+        if (fotosCapturadas.length > 0) {
+            fotosGuardadas.classList.remove('hidden');
+        } else {
+            fotosGuardadas.classList.add('hidden');
+        }
+    }
+    
+    // Limpiar lista actual
+    listaContainer.innerHTML = '';
+    
+    // Agregar cada foto
+    fotosCapturadas.forEach((foto, index) => {
+        const fotoElement = crearElementoFoto(foto, index);
+        listaContainer.appendChild(fotoElement);
+    });
+}
+
+/**
+ * Crear elemento HTML para una foto
+ */
+function crearElementoFoto(foto, index) {
+    const fotoDiv = document.createElement('div');
+    fotoDiv.className = 'foto-item';
+    fotoDiv.innerHTML = `
+        <div class="foto-preview">
+            <img src="${foto.dataUrl}" alt="${foto.nombre}" class="foto-thumbnail">
+            <div class="foto-overlay">
+                <button class="btn-foto-action" onclick="verFotoCompleta('${foto.id}')" title="Ver completa">
+                    <i class="fas fa-search-plus"></i>
+                </button>
+                <button class="btn-foto-action btn-eliminar" onclick="eliminarFoto('${foto.id}')" title="Eliminar">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        </div>
+        <div class="foto-info">
+            <div class="foto-nombre">${foto.nombre}</div>
+            <div class="foto-detalles">
+                <small>${formatearTamanoArchivo(foto.size)}</small>
+                ${foto.width && foto.height ? `<small>${foto.width}x${foto.height}</small>` : ''}
+            </div>
+            <div class="foto-timestamp">
+                <small>${new Date(foto.timestamp).toLocaleString('es-CL')}</small>
+            </div>
+        </div>
+    `;
+    
+    return fotoDiv;
+}
+
+/**
+ * Ver foto completa
+ */
+function verFotoCompleta(fotoId) {
+    const foto = fotosCapturadas.find(f => f.id === fotoId);
+    if (foto) {
+        abrirFotoCompleta(foto.dataUrl, foto.nombre);
+    }
+}
+
+/**
+ * Eliminar foto de la lista
+ */
+function eliminarFoto(fotoId) {
+    const index = fotosCapturadas.findIndex(f => f.id === fotoId);
+    if (index > -1) {
+        if (confirm('¿Estás seguro de eliminar esta foto?')) {
+            fotosCapturadas.splice(index, 1);
+            actualizarListaFotos();
+            mostrarNotificacion('Foto eliminada', 'info');
+        }
+    }
+}
+
+/**
+ * Obtener fotos para enviar al servidor
+ */
+function obtenerFotosParaEnvio() {
+    return fotosCapturadas.map(foto => ({
+        nombre: foto.nombre,
+        dataUrl: foto.dataUrl,
+        timestamp: foto.timestamp,
+        size: foto.size,
+        width: foto.width,
+        height: foto.height
+    }));
+}
+
+/**
+ * Limpiar todas las fotos capturadas
+ */
+function limpiarFotosCapturadas() {
+    fotosCapturadas = [];
+    actualizarListaFotos();
+    window.fotoTemporal = null;
+}
+
+// ==================== INTEGRACIÓN CON FORMULARIO DE AVANCE ====================
+
+/**
+ * Modificar la función de validación para incluir fotos de cámara
+ */
+const validarDatosAvanceOriginal = window.validarDatosAvance;
+window.validarDatosAvance = function() {
+    const datosAvance = validarDatosAvanceOriginal.call(this);
+    if (!datosAvance) return null;
+    
+    // Agregar fotos capturadas
+    const fotosCapturadas = obtenerFotosParaEnvio();
+    datosAvance.fotos = fotosCapturadas;
+    
+    return datosAvance;
+};
+
+/**
+ * Modificar la función de limpiar formulario para incluir fotos
+ */
+const limpiarFormularioAvanceOriginal = window.limpiarFormularioAvance;
+window.limpiarFormularioAvance = function() {
+    limpiarFormularioAvanceOriginal.call(this);
+    
+    // Limpiar fotos capturadas
+    limpiarFotosCapturadas();
+    
+    // Detener cámara si está activa
+    detenerCamara();
+};
+
+// ==================== EVENT LISTENERS ====================
+
+// Cerrar cámara al cerrar modal
+document.addEventListener('DOMContentLoaded', function() {
+    const modalRegistrarAvance = document.getElementById('modal-registrar-avance');
+    if (modalRegistrarAvance) {
+        const observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                    if (modalRegistrarAvance.classList.contains('hidden')) {
+                        detenerCamara();
+                        limpiarFotosCapturadas();
+                    }
+                }
+            });
+        });
+        
+        observer.observe(modalRegistrarAvance, { attributes: true });
+    }
+});
+
+// ==================== EXPORTAR FUNCIONES ====================
+
+// Hacer funciones disponibles globalmente
+window.iniciarCamara = iniciarCamara;
+window.capturarFoto = capturarFoto;
+window.guardarFotoCapturada = guardarFotoCapturada;
+window.tomarOtraFoto = tomarOtraFoto;
+window.cancelarCaptura = cancelarCaptura;
+window.detenerCamara = detenerCamara;
+window.cambiarCamara = cambiarCamara;
+window.seleccionarArchivo = seleccionarArchivo;
+window.procesarArchivoSeleccionado = procesarArchivoSeleccionado;
+window.reintentarCamara = reintentarCamara;
+window.verFotoCompleta = verFotoCompleta;
+window.eliminarFoto = eliminarFoto;
+
+console.log('[CAMERA] Funciones de cámara cargadas correctamente');
+</script>

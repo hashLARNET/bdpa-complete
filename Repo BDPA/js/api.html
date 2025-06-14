@@ -1,0 +1,1485 @@
+<script>
+//BDPA - Base de Datos de Progreso Automatizado
+//Archivo: js/api.html
+//Descripción: Gestión de comunicación con la API y funciones de backend
+//Versión: 2.0
+//Autor: Larnet Telecomunicaciones
+//Fecha: 2025
+
+// Configuración global de la API
+const API_CONFIG = {
+    baseUrl: 'https://script.google.com/macros/s/AKfycbznW8BbpJFn7jIkDfrKp97VIdxcvNlf-ofv1SPk8p8w4f_1iwRNJSlcJO0TWbmHLP2K/exec',
+    timeout: 30000, // 30 segundos
+    retryAttempts: 3,
+    retryDelay: 1000 // 1 segundo
+};
+
+// Estado de la conexión
+let connectionState = {
+    isOnline: true,
+    lastPing: null,
+    retryCount: 0
+};
+
+// Cache para respuestas de API
+const apiCache = new Map();
+const cacheExpiration = 5 * 60 * 1000; // 5 minutos
+
+// Cola de peticiones para modo offline
+let offlineQueue = [];
+
+/**
+ * Función principal para llamadas a la API
+ * @param {string} accion - Acción a ejecutar en el backend
+ * @param {object} datos - Datos a enviar
+ * @param {object} opciones - Opciones adicionales
+ * @returns {Promise} Respuesta de la API
+ */
+async function callAPI(accion, datos = {}, opciones = {}) {
+    const requestId = generateRequestId();
+    const startTime = Date.now();
+    
+    try {
+        // Logging de la petición
+        console.log(`[API] ${requestId} - Iniciando petición: ${accion}`, datos);
+        
+        // Verificar si hay cache válido
+        if (opciones.useCache !== false) {
+            const cachedResponse = getCachedResponse(accion, datos);
+            if (cachedResponse) {
+                console.log(`[API] ${requestId} - Respuesta desde cache`);
+                return cachedResponse;
+            }
+        }
+        
+        // Verificar conectividad
+        if (!connectionState.isOnline && !opciones.forceOnline) {
+            return handleOfflineRequest(accion, datos, opciones);
+        }
+        
+        // Preparar la petición
+        const requestData = {
+            action: accion,
+            data: datos,
+            timestamp: Date.now(),
+            sessionToken: tokenSesion,
+            requestId: requestId
+        };
+        
+        // Realizar la petición con reintentos
+        const response = await makeRequestWithRetry(requestData, opciones);
+        
+        // Procesar la respuesta
+        const processedResponse = processAPIResponse(response, accion);
+        
+        // Guardar en cache si es apropiado
+        if (shouldCacheResponse(accion, processedResponse)) {
+            setCachedResponse(accion, datos, processedResponse);
+        }
+        
+        // Logging del éxito
+        const duration = Date.now() - startTime;
+        console.log(`[API] ${requestId} - Completada en ${duration}ms`);
+        
+        return processedResponse;
+        
+    } catch (error) {
+        const duration = Date.now() - startTime;
+        console.error(`[API] ${requestId} - Error después de ${duration}ms:`, error);
+        
+        // Manejar diferentes tipos de errores
+        return handleAPIError(error, accion, datos, opciones);
+    }
+}
+
+/**
+ * Realizar petición con reintentos automáticos
+ */
+async function makeRequestWithRetry(requestData, opciones = {}) {
+    let lastError = null;
+    const maxRetries = opciones.maxRetries || API_CONFIG.retryAttempts;
+    
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+            if (attempt > 0) {
+                console.log(`[API] Reintento ${attempt}/${maxRetries}`);
+                await delay(API_CONFIG.retryDelay * attempt);
+            }
+            
+            const response = await makeHTTPRequest(requestData, opciones);
+            
+            // Reset contador de reintentos en caso de éxito
+            connectionState.retryCount = 0;
+            connectionState.isOnline = true;
+            connectionState.lastPing = Date.now();
+            
+            return response;
+            
+        } catch (error) {
+            lastError = error;
+            
+            // Si es un error que no debe reintentarse, lanzar inmediatamente
+            if (isNonRetryableError(error)) {
+                throw error;
+            }
+            
+            // Actualizar estado de conexión
+            if (attempt === maxRetries) {
+                connectionState.isOnline = false;
+                connectionState.retryCount++;
+            }
+        }
+    }
+    
+    throw lastError;
+}
+
+/**
+ * Realizar petición HTTP real
+ */
+async function makeHTTPRequest(requestData, opciones = {}) {
+    const timeout = opciones.timeout || API_CONFIG.timeout;
+    
+    // Para Google Apps Script
+    if (typeof google !== 'undefined' && google.script && google.script.run) {
+        return await new Promise((resolve, reject) => {
+            const timeoutId = setTimeout(() => {
+                reject(new Error('Request timeout'));
+            }, timeout);
+            
+            google.script.run
+                .withSuccessHandler(response => {
+                    clearTimeout(timeoutId);
+                    resolve(response);
+                })
+                .withFailureHandler(error => {
+                    clearTimeout(timeoutId);
+                    reject(new Error(error.message || 'Google Script error'));
+                })
+                .procesarAPI(requestData.action, requestData.data, requestData.sessionToken);
+        });
+    }
+    
+    // Para peticiones HTTP normales (fallback)
+    const response = await fetch(API_CONFIG.baseUrl, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestData),
+        signal: AbortSignal.timeout(timeout)
+    });
+    
+    if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    return await response.json();
+}
+/**
+ * Procesar respuesta de la API
+ */
+function processAPIResponse(response, accion) {
+    // Validar estructura de respuesta
+    if (typeof response !== 'object' || response === null) {
+        throw new Error('Respuesta inválida del servidor');
+    }
+    
+    // Manejar errores del servidor
+    if (response.error) {
+        const error = new Error(response.message || 'Error del servidor');
+        error.code = response.code || 'SERVER_ERROR';
+        error.details = response.details || {};
+        throw error;
+    }
+    
+    // Validar token de sesión si es necesario
+    if (response.sessionExpired) {
+        handleSessionExpired();
+        throw new Error('Sesión expirada');
+    }
+    
+    // Actualizar token si viene uno nuevo
+    if (response.newToken) {
+        tokenSesion = response.newToken;
+        localStorage.setItem('bdpa_session_token', tokenSesion);
+    }
+    
+    return response;
+}
+
+/**
+ * Manejar errores de API
+ */
+function handleAPIError(error, accion, datos, opciones) {
+    console.error(`[API] Error en ${accion}:`, error);
+    
+    // Errores de conectividad
+    if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+        connectionState.isOnline = false;
+        return handleOfflineRequest(accion, datos, opciones);
+    }
+    
+    // Timeout
+    if (error.name === 'AbortError' || error.message.includes('timeout')) {
+        return {
+            success: false,
+            error: true,
+            message: 'La petición ha tardado demasiado. Intente nuevamente.',
+            code: 'TIMEOUT'
+        };
+    }
+    
+    // Error de sesión
+    if (error.message.includes('Sesión expirada')) {
+        return {
+            success: false,
+            error: true,
+            message: 'Su sesión ha expirado. Por favor, inicie sesión nuevamente.',
+            code: 'SESSION_EXPIRED'
+        };
+    }
+    
+    // Error genérico
+    return {
+        success: false,
+        error: true,
+        message: error.message || 'Error desconocido',
+        code: error.code || 'UNKNOWN_ERROR',
+        details: error.details || {}
+    };
+}
+
+/**
+ * Manejar peticiones offline
+ */
+function handleOfflineRequest(accion, datos, opciones) {
+    console.log(`[API] Modo offline - Encolando petición: ${accion}`);
+    
+    // Acciones que se pueden ejecutar offline con datos del cache
+    const offlineActions = ['obtenerObras', 'obtenerMateriales', 'obtenerUsuarios'];
+    
+    if (offlineActions.includes(accion)) {
+        const cachedResponse = getCachedResponse(accion, datos, true); // Permitir cache expirado
+        if (cachedResponse) {
+            return {
+                ...cachedResponse,
+                fromCache: true,
+                offline: true
+            };
+        }
+    }
+    
+    // Encolar para cuando vuelva la conexión
+    if (opciones.queueOffline !== false) {
+        offlineQueue.push({
+            accion,
+            datos,
+            opciones,
+            timestamp: Date.now(),
+            id: generateRequestId()
+        });
+    }
+    
+    return {
+        success: false,
+        error: true,
+        message: 'Sin conexión. La petición se procesará cuando se restablezca la conexión.',
+        code: 'OFFLINE',
+        queued: opciones.queueOffline !== false
+    };
+}
+
+/**
+ * Gestión de cache
+ */
+function getCachedResponse(accion, datos, allowExpired = false) {
+    const cacheKey = generateCacheKey(accion, datos);
+    const cached = apiCache.get(cacheKey);
+    
+    if (!cached) return null;
+    
+    const isExpired = Date.now() - cached.timestamp > cacheExpiration;
+    
+    if (isExpired && !allowExpired) {
+        apiCache.delete(cacheKey);
+        return null;
+    }
+    
+    return {
+        ...cached.data,
+        fromCache: true,
+        expired: isExpired
+    };
+}
+
+function setCachedResponse(accion, datos, response) {
+    const cacheKey = generateCacheKey(accion, datos);
+    apiCache.set(cacheKey, {
+        data: response,
+        timestamp: Date.now()
+    });
+    
+    // Limpiar cache viejo periódicamente
+    if (apiCache.size > 100) {
+        cleanupCache();
+    }
+}
+
+function shouldCacheResponse(accion, response) {
+    // No cachear errores
+    if (response.error) return false;
+    
+    // Acciones que se pueden cachear
+    const cacheableActions = [
+        'obtenerObras',
+        'obtenerMateriales', 
+        'obtenerCategorias',
+        'obtenerUsuarios',
+        'obtenerTiposAvance'
+    ];
+    
+    return cacheableActions.includes(accion);
+}
+
+function cleanupCache() {
+    const now = Date.now();
+    for (const [key, value] of apiCache.entries()) {
+        if (now - value.timestamp > cacheExpiration) {
+            apiCache.delete(key);
+        }
+    }
+}
+
+/**
+ * Utilidades
+ */
+function generateRequestId() {
+    return 'req_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+}
+
+function generateCacheKey(accion, datos) {
+    return accion + '_' + JSON.stringify(datos);
+}
+
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function isNonRetryableError(error) {
+    const nonRetryableCodes = ['INVALID_CREDENTIALS', 'PERMISSION_DENIED', 'VALIDATION_ERROR'];
+    return nonRetryableCodes.includes(error.code);
+}
+
+/**
+ * Manejar sesión expirada
+ */
+function handleSessionExpired() {
+    console.log('[API] Sesión expirada - Redirigiendo al login');
+    
+    // Limpiar datos de sesión
+    usuarioActual = null;
+    tokenSesion = null;
+    localStorage.removeItem('bdpa_session_token');
+    localStorage.removeItem('bdpa_user_data');
+    
+    // Mostrar pantalla de login
+    document.getElementById('main-menu-container').classList.add('hidden');
+    document.getElementById('login-container').classList.remove('hidden');
+    
+    // Ocultar todas las demás secciones
+    const secciones = document.querySelectorAll('.container:not(#login-container)');
+    secciones.forEach(seccion => seccion.classList.add('hidden'));
+    
+    mostrarNotificacion('Su sesión ha expirado. Por favor, inicie sesión nuevamente.', 'warning');
+}
+/**
+ * FUNCIONES DE API ESPECÍFICAS POR MÓDULO
+ */
+
+// ==================== AUTENTICACIÓN ====================
+
+/**
+ * Iniciar sesión
+ */
+async function apiIniciarSesion(credenciales) {
+    try {
+        const response = await callAPI('iniciarSesion', credenciales, {
+            useCache: false,
+            timeout: 10000
+        });
+        
+        if (response.success) {
+            // Guardar datos de sesión
+            tokenSesion = response.token;
+            usuarioActual = response.usuario;
+            
+            localStorage.setItem('bdpa_session_token', tokenSesion);
+            localStorage.setItem('bdpa_user_data', JSON.stringify(usuarioActual));
+            
+            // Inicializar datos del usuario
+            await initializeUserData();
+        }
+        
+        return response;
+    } catch (error) {
+        return handleAPIError(error, 'iniciarSesion', credenciales);
+    }
+}
+
+/**
+ * Cerrar sesión
+ */
+async function apiCerrarSesion() {
+    try {
+        const response = await callAPI('cerrarSesion', {}, {
+            useCache: false
+        });
+        
+        // Limpiar datos locales independientemente de la respuesta
+        usuarioActual = null;
+        tokenSesion = null;
+        localStorage.removeItem('bdpa_session_token');
+        localStorage.removeItem('bdpa_user_data');
+        
+        // Limpiar cache
+        apiCache.clear();
+        offlineQueue = [];
+        
+        return response.success ? response : { success: true };
+    } catch (error) {
+        // Incluso si hay error, limpiar sesión local
+        usuarioActual = null;
+        tokenSesion = null;
+        localStorage.clear();
+        return { success: true };
+    }
+}
+
+/**
+ * Cambiar contraseña
+ */
+async function apiCambiarContrasena(datosContrasena) {
+    return await callAPI('cambiarContrasena', datosContrasena, {
+        useCache: false
+    });
+}
+
+/**
+ * Verificar sesión
+ */
+async function apiVerificarSesion() {
+    try {
+        const response = await callAPI('verificarSesion', {}, {
+            useCache: false,
+            timeout: 5000
+        });
+        
+        if (!response.success && response.code === 'SESSION_EXPIRED') {
+            handleSessionExpired();
+        }
+        
+        return response;
+    } catch (error) {
+        return handleAPIError(error, 'verificarSesion', {});
+    }
+}
+
+// ==================== OBRAS ====================
+
+/**
+ * Obtener obras
+ */
+async function apiObtenerObras(filtros = {}) {
+    return await callAPI('obtenerObras', { filtros }, {
+        useCache: true
+    });
+}
+
+/**
+ * Guardar obra
+ */
+async function apiGuardarObra(obra) {
+    const response = await callAPI('guardarObra', obra, {
+        useCache: false
+    });
+    
+    // Limpiar cache relacionado
+    if (response.success) {
+        invalidateCache(['obtenerObras']);
+    }
+    
+    return response;
+}
+
+/**
+ * Eliminar obra
+ */
+async function apiEliminarObra(obraId) {
+    const response = await callAPI('eliminarObra', { id: obraId }, {
+        useCache: false
+    });
+    
+    if (response.success) {
+        invalidateCache(['obtenerObras']);
+    }
+    
+    return response;
+}
+
+/**
+ * Obtener estructura de obra (torres, pisos, departamentos)
+ */
+async function apiObtenerEstructuraObra(obraId) {
+    return await callAPI('obtenerEstructuraObra', { obraId }, {
+        useCache: true
+    });
+}
+
+/**
+ * Obtener torres de obra
+ */
+async function apiObtenerTorresObra(obraId) {
+    return await callAPI('obtenerTorresObra', { obraId }, {
+        useCache: true
+    });
+}
+
+/**
+ * Obtener pisos de torre
+ */
+async function apiObtenerPisosTorre(torreId) {
+    return await callAPI('obtenerPisosTorre', { torreId }, {
+        useCache: true
+    });
+}
+
+/**
+ * Obtener departamentos de piso
+ */
+async function apiObtenerDepartamentosPiso(pisoId) {
+    return await callAPI('obtenerDepartamentosPiso', { pisoId }, {
+        useCache: true
+    });
+}
+
+// ==================== AVANCES ====================
+
+/**
+ * Obtener tipos de avance
+ */
+async function apiObtenerTiposAvance(filtros = {}) {
+    return await callAPI('obtenerTiposAvance', { filtros }, {
+        useCache: true
+    });
+}
+
+/**
+ * Registrar avance
+ */
+async function apiRegistrarAvance(avance) {
+    const response = await callAPI('registrarAvance', avance, {
+        useCache: false
+    });
+    
+    if (response.success) {
+        invalidateCache(['obtenerAvances', 'obtenerJerarquiaObra']);
+    }
+    
+    return response;
+}
+
+/**
+ * Obtener avances
+ */
+async function apiObtenerAvances(filtros = {}, paginacion = {}) {
+    return await callAPI('obtenerAvances', { 
+        filtros, 
+        paginacion 
+    }, {
+        useCache: filtros.tiempo !== 'hoy' // No cachear consultas de hoy
+    });
+}
+
+/**
+ * Obtener detalle de avance
+ */
+async function apiObtenerDetalleAvance(avanceId) {
+    return await callAPI('obtenerDetalleAvance', { id: avanceId }, {
+        useCache: true
+    });
+}
+
+/**
+ * Obtener jerarquía de obra
+ */
+async function apiObtenerJerarquiaObra(obraId) {
+    return await callAPI('obtenerJerarquiaObra', { obraId }, {
+        useCache: true
+    });
+}
+
+/**
+ * Obtener espacios comunes
+ */
+async function apiObtenerEspaciosComunes(obraId) {
+    return await callAPI('obtenerEspaciosComunes', { obraId }, {
+        useCache: true
+    });
+}
+
+// ==================== INVENTARIO ====================
+
+/**
+ * Obtener materiales
+ */
+async function apiObtenerMateriales(filtros = {}) {
+    return await callAPI('obtenerMateriales', { filtros }, {
+        useCache: true
+    });
+}
+
+/**
+ * Guardar material
+ */
+async function apiGuardarMaterial(material) {
+    const response = await callAPI('guardarMaterial', material, {
+        useCache: false
+    });
+    
+    if (response.success) {
+        invalidateCache(['obtenerMateriales']);
+    }
+    
+    return response;
+}
+
+/**
+ * Eliminar material
+ */
+async function apiEliminarMaterial(materialId) {
+    const response = await callAPI('eliminarMaterial', { materialId }, {
+        useCache: false
+    });
+    
+    if (response.success) {
+        invalidateCache(['obtenerMateriales']);
+    }
+    
+    return response;
+}
+
+/**
+ * Registrar entrada de material
+ */
+async function apiRegistrarEntradaMaterial(entrada) {
+    const response = await callAPI('registrarEntradaMaterial', entrada, {
+        useCache: false
+    });
+    
+    if (response.success) {
+        invalidateCache(['obtenerMateriales', 'obtenerMovimientosInventario']);
+    }
+    
+    return response;
+}
+
+/**
+ * Registrar salida de material
+ */
+async function apiRegistrarSalidaMaterial(salida) {
+    const response = await callAPI('registrarSalidaMaterial', salida, {
+        useCache: false
+    });
+    
+    if (response.success) {
+        invalidateCache(['obtenerMateriales', 'obtenerMovimientosInventario']);
+    }
+    
+    return response;
+}
+
+/**
+ * Obtener movimientos de inventario
+ */
+async function apiObtenerMovimientosInventario(filtros = {}) {
+    return await callAPI('obtenerMovimientosInventario', { filtros }, {
+        useCache: filtros.fechaDesde ? true : false
+    });
+}
+
+/**
+ * Obtener categorías
+ */
+async function apiObtenerCategorias() {
+    return await callAPI('obtenerCategorias', {}, {
+        useCache: true
+    });
+}
+
+/**
+ * Guardar categoría
+ */
+async function apiGuardarCategoria(categoria) {
+    const response = await callAPI('guardarCategoria', categoria, {
+        useCache: false
+    });
+    
+    if (response.success) {
+        invalidateCache(['obtenerCategorias']);
+    }
+    
+    return response;
+}
+// ==================== USUARIOS ====================
+
+/**
+ * Obtener usuarios
+ */
+async function apiObtenerUsuarios(filtros = {}) {
+    return await callAPI('obtenerUsuarios', { filtros }, {
+        useCache: true
+    });
+}
+
+/**
+ * Guardar usuario
+ */
+async function apiGuardarUsuario(usuario) {
+    const response = await callAPI('guardarUsuario', usuario, {
+        useCache: false
+    });
+    
+    if (response.success) {
+        invalidateCache(['obtenerUsuarios']);
+    }
+    
+    return response;
+}
+
+/**
+ * Eliminar usuario
+ */
+async function apiEliminarUsuario(usuarioId) {
+    const response = await callAPI('eliminarUsuario', { id: usuarioId }, {
+        useCache: false
+    });
+    
+    if (response.success) {
+        invalidateCache(['obtenerUsuarios']);
+    }
+    
+    return response;
+}
+
+// ==================== REPORTES ====================
+
+/**
+ * Generar reporte de avances
+ */
+async function apiGenerarReporteAvances(filtros = {}) {
+    return await callAPI('generarReporteAvances', { filtros }, {
+        useCache: false,
+        timeout: 60000 // 1 minuto para reportes
+    });
+}
+
+/**
+ * Exportar reporte de avances
+ */
+async function apiExportarReporteAvances(filtros = {}, formato = 'excel') {
+    return await callAPI('exportarReporteAvances', { filtros, formato }, {
+        useCache: false,
+        timeout: 120000 // 2 minutos para exportaciones
+    });
+}
+
+/**
+ * Enviar reporte por correo
+ */
+async function apiEnviarReporteAvancesPorCorreo(filtros = {}, email) {
+    return await callAPI('enviarReporteAvancesPorCorreo', { filtros, email }, {
+        useCache: false,
+        timeout: 60000
+    });
+}
+
+/**
+ * Generar reporte de inventario
+ */
+async function apiGenerarReporteInventario(filtros = {}) {
+    return await callAPI('generarReporteInventario', { filtros }, {
+        useCache: false,
+        timeout: 60000
+    });
+}
+
+/**
+ * Exportar reporte de inventario
+ */
+async function apiExportarReporteInventario(filtros = {}, formato = 'excel') {
+    return await callAPI('exportarReporteInventario', { filtros, formato }, {
+        useCache: false,
+        timeout: 120000
+    });
+}
+
+/**
+ * Obtener EDT de obra
+ */
+async function apiObtenerEDTObra(obraId) {
+    return await callAPI('obtenerEDTObra', { obraId }, {
+        useCache: true,
+        timeout: 45000
+    });
+}
+
+/**
+ * Exportar EDT
+ */
+async function apiExportarEDTObra(obraId, vistaTipo = 'completa') {
+    return await callAPI('exportarEDTObra', { obraId, vistaTipo }, {
+        useCache: false,
+        timeout: 120000
+    });
+}
+
+// ==================== TRANSFERENCIAS ====================
+
+/**
+ * Obtener materiales disponibles en obra
+ */
+async function apiObtenerMaterialesDisponiblesObra(obraId) {
+    return await callAPI('obtenerMaterialesDisponiblesObra', { obraId }, {
+        useCache: false // Stock puede cambiar rápidamente
+    });
+}
+
+/**
+ * Registrar transferencia
+ */
+async function apiRegistrarTransferencia(transferencia) {
+    const response = await callAPI('registrarTransferencia', transferencia, {
+        useCache: false
+    });
+    
+    if (response.success) {
+        invalidateCache(['obtenerMaterialesDisponiblesObra', 'obtenerTransferencias', 'obtenerMateriales']);
+    }
+    
+    return response;
+}
+
+/**
+ * Obtener transferencias
+ */
+async function apiObtenerTransferencias(filtros = {}) {
+    return await callAPI('obtenerTransferencias', { filtros }, {
+        useCache: true
+    });
+}
+
+/**
+ * Obtener detalle de transferencia
+ */
+async function apiObtenerDetalleTransferencia(transferenceId) {
+    return await callAPI('obtenerDetalleTransferencia', { id: transferenceId }, {
+        useCache: true
+    });
+}
+
+// ==================== DOCUMENTACIÓN ====================
+
+/**
+ * Obtener documentos de obra
+ */
+async function apiObtenerDocumentosObra(obraId) {
+    return await callAPI('obtenerDocumentosObra', { obraId }, {
+        useCache: true
+    });
+}
+
+/**
+ * Subir documento
+ */
+async function apiSubirDocumento(documento) {
+    const response = await callAPI('subirDocumento', documento, {
+        useCache: false,
+        timeout: 300000 // 5 minutos para uploads
+    });
+    
+    if (response.success) {
+        invalidateCache(['obtenerDocumentosObra']);
+    }
+    
+    return response;
+}
+
+/**
+ * Eliminar documento
+ */
+async function apiEliminarDocumento(documentoId) {
+    const response = await callAPI('eliminarDocumento', { id: documentoId }, {
+        useCache: false
+    });
+    
+    if (response.success) {
+        invalidateCache(['obtenerDocumentosObra']);
+    }
+    
+    return response;
+}
+
+/**
+ * Obtener URL de documento
+ */
+async function apiObtenerUrlDocumento(documentoId) {
+    return await callAPI('obtenerUrlDocumento', { id: documentoId }, {
+        useCache: false
+    });
+}
+
+/**
+ * Obtener URL de descarga de documento
+ */
+async function apiObtenerUrlDescargaDocumento(documentoId) {
+    return await callAPI('obtenerUrlDescargaDocumento', { id: documentoId }, {
+        useCache: false
+    });
+}
+
+// ==================== PLANIFICACIÓN Y METAS ====================
+
+/**
+ * Obtener metas de obra
+ */
+async function apiObtenerMetasObra(obraId) {
+    return await callAPI('obtenerMetasObra', { obraId }, {
+        useCache: true
+    });
+}
+
+/**
+ * Guardar meta
+ */
+async function apiGuardarMeta(meta) {
+    const response = await callAPI('guardarMeta', meta, {
+        useCache: false
+    });
+    
+    if (response.success) {
+        invalidateCache(['obtenerMetasObra']);
+    }
+    
+    return response;
+}
+
+/**
+ * Obtener meta específica
+ */
+async function apiObtenerMeta(metaId) {
+    return await callAPI('obtenerMeta', { id: metaId }, {
+        useCache: true
+    });
+}
+
+/**
+ * Actualizar avance de meta
+ */
+async function apiActualizarAvanceMeta(metaId, avance) {
+    const response = await callAPI('actualizarAvanceMeta', { id: metaId, avance }, {
+        useCache: false
+    });
+    
+    if (response.success) {
+        invalidateCache(['obtenerMetasObra', 'obtenerMeta']);
+    }
+    
+    return response;
+}
+
+/**
+ * Eliminar meta
+ */
+async function apiEliminarMeta(metaId) {
+    const response = await callAPI('eliminarMeta', { id: metaId }, {
+        useCache: false
+    });
+    
+    if (response.success) {
+        invalidateCache(['obtenerMetasObra']);
+    }
+    
+    return response;
+}
+
+// ==================== COBRANZAS ====================
+
+/**
+ * Obtener resumen de cobranza
+ */
+async function apiObtenerResumenCobranza(obraId) {
+    return await callAPI('obtenerResumenCobranza', { obraId }, {
+        useCache: false // Los datos de cobranza deben estar siempre actualizados
+    });
+}
+
+/**
+ * Obtener historial de cobranzas
+ */
+async function apiObtenerHistorialCobranzas(obraId) {
+    return await callAPI('obtenerHistorialCobranzas', { obraId }, {
+        useCache: true
+    });
+}
+
+/**
+ * Registrar cobranza
+ */
+async function apiRegistrarCobranza(cobranza) {
+    const response = await callAPI('registrarCobranza', cobranza, {
+        useCache: false
+    });
+    
+    if (response.success) {
+        invalidateCache(['obtenerResumenCobranza', 'obtenerHistorialCobranzas']);
+    }
+    
+    return response;
+}
+
+/**
+ * Obtener detalle de cobranza
+ */
+async function apiObtenerDetalleCobranza(cobranzaId) {
+    return await callAPI('obtenerDetalleCobranza', { id: cobranzaId }, {
+        useCache: true
+    });
+}
+
+/**
+ * Eliminar cobranza
+ */
+async function apiEliminarCobranza(cobranzaId) {
+    const response = await callAPI('eliminarCobranza', { id: cobranzaId }, {
+        useCache: false
+    });
+    
+    if (response.success) {
+        invalidateCache(['obtenerResumenCobranza', 'obtenerHistorialCobranzas']);
+    }
+    
+    return response;
+}
+
+/**
+ * Exportar resumen de cobranza
+ */
+async function apiExportarResumenCobranza(obraId) {
+    return await callAPI('exportarResumenCobranza', { obraId }, {
+        useCache: false,
+        timeout: 60000
+    });
+}
+// ==================== CONFIGURACIÓN ====================
+
+/**
+ * Obtener configuración general
+ */
+async function apiObtenerConfiguracionGeneral() {
+    return await callAPI('obtenerConfiguracionGeneral', {}, {
+        useCache: true
+    });
+}
+
+/**
+ * Guardar configuración general
+ */
+async function apiGuardarConfiguracionGeneral(configuracion) {
+    const response = await callAPI('guardarConfiguracionGeneral', configuracion, {
+        useCache: false
+    });
+    
+    if (response.success) {
+        invalidateCache(['obtenerConfiguracionGeneral']);
+    }
+    
+    return response;
+}
+
+/**
+ * Obtener configuración de avances
+ */
+async function apiObtenerConfiguracionAvances() {
+    return await callAPI('obtenerConfiguracionAvances', {}, {
+        useCache: true
+    });
+}
+
+/**
+ * Guardar configuración de avances
+ */
+async function apiGuardarConfiguracionAvances(configuracion) {
+    const response = await callAPI('guardarConfiguracionAvances', configuracion, {
+        useCache: false
+    });
+    
+    if (response.success) {
+        invalidateCache(['obtenerConfiguracionAvances']);
+    }
+    
+    return response;
+}
+
+/**
+ * Obtener configuración de notificaciones
+ */
+async function apiObtenerConfiguracionNotificaciones() {
+    return await callAPI('obtenerConfiguracionNotificaciones', {}, {
+        useCache: true
+    });
+}
+
+/**
+ * Guardar configuración de notificaciones
+ */
+async function apiGuardarConfiguracionNotificaciones(configuracion) {
+    const response = await callAPI('guardarConfiguracionNotificaciones', configuracion, {
+        useCache: false
+    });
+    
+    if (response.success) {
+        invalidateCache(['obtenerConfiguracionNotificaciones']);
+    }
+    
+    return response;
+}
+
+/**
+ * Obtener configuración de backup
+ */
+async function apiObtenerConfiguracionBackup() {
+    return await callAPI('obtenerConfiguracionBackup', {}, {
+        useCache: true
+    });
+}
+
+/**
+ * Guardar configuración de backup
+ */
+async function apiGuardarConfiguracionBackup(configuracion) {
+    const response = await callAPI('guardarConfiguracionBackup', configuracion, {
+        useCache: false
+    });
+    
+    if (response.success) {
+        invalidateCache(['obtenerConfiguracionBackup']);
+    }
+    
+    return response;
+}
+
+// ==================== BACKUP ====================
+
+/**
+ * Realizar backup manual
+ */
+async function apiRealizarBackupManual() {
+    return await callAPI('realizarBackupManual', {}, {
+        useCache: false,
+        timeout: 300000 // 5 minutos para backups
+    });
+}
+
+/**
+ * Obtener URL de descarga de backup
+ */
+async function apiObtenerUrlDescargaBackup(backupId) {
+    return await callAPI('obtenerUrlDescargaBackup', { id: backupId }, {
+        useCache: false
+    });
+}
+
+/**
+ * Restaurar backup
+ */
+async function apiRestaurarBackup(backupId) {
+    return await callAPI('restaurarBackup', { id: backupId }, {
+        useCache: false,
+        timeout: 600000 // 10 minutos para restauraciones
+    });
+}
+
+/**
+ * Eliminar backup
+ */
+async function apiEliminarBackup(backupId) {
+    const response = await callAPI('eliminarBackup', { id: backupId }, {
+        useCache: false
+    });
+    
+    if (response.success) {
+        invalidateCache(['obtenerConfiguracionBackup']);
+    }
+    
+    return response;
+}
+
+// ==================== GESTIÓN DE TIPOS DE AVANCE ====================
+
+/**
+ * Obtener tipos de avance para gestión
+ */
+async function apiObtenerTiposAvanceGestion() {
+    return await callAPI('obtenerTiposAvanceGestion', {}, {
+        useCache: true
+    });
+}
+
+/**
+ * Guardar tipo de avance
+ */
+async function apiGuardarTipoAvance(tipoAvance) {
+    const response = await callAPI('guardarTipoAvance', tipoAvance, {
+        useCache: false
+    });
+    
+    if (response.success) {
+        invalidateCache(['obtenerTiposAvanceGestion', 'obtenerTiposAvance']);
+    }
+    
+    return response;
+}
+
+/**
+ * Obtener tipo de avance específico
+ */
+async function apiObtenerTipoAvance(tipoId) {
+    return await callAPI('obtenerTipoAvance', { id: tipoId }, {
+        useCache: true
+    });
+}
+
+/**
+ * Eliminar tipo de avance
+ */
+async function apiEliminarTipoAvance(tipoId) {
+    const response = await callAPI('eliminarTipoAvance', { id: tipoId }, {
+        useCache: false
+    });
+    
+    if (response.success) {
+        invalidateCache(['obtenerTiposAvanceGestion', 'obtenerTiposAvance']);
+    }
+    
+    return response;
+}
+
+// ==================== FUNCIONES DE UTILIDAD ====================
+
+/**
+ * Invalidar cache específico
+ */
+function invalidateCache(acciones) {
+    if (Array.isArray(acciones)) {
+        acciones.forEach(accion => {
+            for (const [key] of apiCache.entries()) {
+                if (key.startsWith(accion + '_')) {
+                    apiCache.delete(key);
+                }
+            }
+        });
+    } else {
+        for (const [key] of apiCache.entries()) {
+            if (key.startsWith(acciones + '_')) {
+                apiCache.delete(key);
+            }
+        }
+    }
+}
+
+/**
+ * Limpiar todo el cache
+ */
+function clearAllCache() {
+    apiCache.clear();
+    console.log('[API] Cache completamente limpiado');
+}
+
+/**
+ * Inicializar datos del usuario
+ */
+async function initializeUserData() {
+    try {
+        // Cargar datos básicos que el usuario necesitará
+        const promises = [
+            apiObtenerObras(),
+            apiObtenerCategorias(),
+            apiObtenerTiposAvance()
+        ];
+        
+        // Solo para administradores y supervisores
+        if (usuarioActual && ['Admin', 'Supervisor'].includes(usuarioActual.rol)) {
+            promises.push(apiObtenerUsuarios());
+        }
+        
+        await Promise.all(promises);
+        console.log('[API] Datos del usuario inicializados');
+    } catch (error) {
+        console.warn('[API] Error al inicializar datos del usuario:', error);
+    }
+}
+
+/**
+ * Procesar cola offline
+ */
+async function processOfflineQueue() {
+    if (!connectionState.isOnline || offlineQueue.length === 0) {
+        return;
+    }
+    
+    console.log(`[API] Procesando ${offlineQueue.length} peticiones pendientes`);
+    
+    const queue = [...offlineQueue];
+    offlineQueue = [];
+    
+    for (const request of queue) {
+        try {
+            const response = await callAPI(request.accion, request.datos, {
+                ...request.opciones,
+                queueOffline: false // Evitar bucle infinito
+            });
+            
+            console.log(`[API] Petición offline procesada: ${request.accion}`);
+            
+            // Notificar al usuario si es necesario
+            if (response.success) {
+                mostrarNotificacion(`Petición pendiente procesada: ${request.accion}`, 'success');
+            }
+        } catch (error) {
+            console.error(`[API] Error procesando petición offline: ${request.accion}`, error);
+            
+            // Reencolar si el error no es crítico
+            if (!isNonRetryableError(error)) {
+                offlineQueue.push(request);
+            }
+        }
+        
+        // Pequeña pausa entre peticiones para no sobrecargar
+        await delay(100);
+    }
+}
+
+/**
+ * Monitor de conectividad
+ */
+function startConnectivityMonitor() {
+    // Verificar conectividad cada 30 segundos
+    setInterval(async () => {
+        try {
+            const response = await fetch('/ping', { 
+                method: 'HEAD',
+                cache: 'no-cache'
+            });
+            
+            const wasOffline = !connectionState.isOnline;
+            connectionState.isOnline = response.ok;
+            connectionState.lastPing = Date.now();
+            
+            // Si acabamos de reconectarnos, procesar cola offline
+            if (wasOffline && connectionState.isOnline) {
+                console.log('[API] Conectividad restaurada');
+                mostrarNotificacion('Conexión restaurada. Procesando peticiones pendientes...', 'info');
+                await processOfflineQueue();
+            }
+        } catch (error) {
+            const wasOnline = connectionState.isOnline;
+            connectionState.isOnline = false;
+            
+            if (wasOnline) {
+                console.log('[API] Conexión perdida');
+                mostrarNotificacion('Conexión perdida. Las peticiones se procesarán cuando se restaure.', 'warning');
+            }
+        }
+    }, 30000);
+    
+    // También escuchar eventos de conectividad del navegador
+    window.addEventListener('online', () => {
+        console.log('[API] Evento online detectado');
+        connectionState.isOnline = true;
+        processOfflineQueue();
+    });
+    
+    window.addEventListener('offline', () => {
+        console.log('[API] Evento offline detectado');
+        connectionState.isOnline = false;
+    });
+}
+
+/**
+ * Obtener estadísticas de la API
+ */
+function getAPIStats() {
+    return {
+        cacheSize: apiCache.size,
+        offlineQueueLength: offlineQueue.length,
+        isOnline: connectionState.isOnline,
+        lastPing: connectionState.lastPing,
+        retryCount: connectionState.retryCount
+    };
+}
+
+// ==================== INICIALIZACIÓN ====================
+
+/**
+ * Inicializar módulo de API
+ */
+function initializeAPI() {
+    console.log('[API] Inicializando módulo de API');
+    
+    // Recuperar token de sesión si existe
+    const savedToken = localStorage.getItem('bdpa_session_token');
+    const savedUser = localStorage.getItem('bdpa_user_data');
+    
+    if (savedToken && savedUser) {
+        try {
+            tokenSesion = savedToken;
+            usuarioActual = JSON.parse(savedUser);
+            console.log('[API] Sesión recuperada desde localStorage');
+        } catch (error) {
+            console.warn('[API] Error al recuperar sesión:', error);
+            localStorage.removeItem('bdpa_session_token');
+            localStorage.removeItem('bdpa_user_data');
+        }
+    }
+    
+    // Iniciar monitor de conectividad
+    startConnectivityMonitor();
+    
+    // Verificar sesión actual si existe
+    if (tokenSesion) {
+        apiVerificarSesion().catch(error => {
+            console.warn('[API] Error verificando sesión:', error);
+        });
+    }
+    
+    console.log('[API] Módulo de API inicializado correctamente');
+}
+
+// Inicializar cuando se carga el DOM
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeAPI);
+} else {
+    initializeAPI();
+}
+
+// ==================== EXPORTAR FUNCIONES GLOBALES ====================
+
+// Hacer disponibles las funciones principales globalmente
+window.callAPI = callAPI;
+window.getAPIStats = getAPIStats;
+window.clearAllCache = clearAllCache;
+window.processOfflineQueue = processOfflineQueue;
+
+console.log('[API] Archivo js/api.html cargado completamente');
+</script>

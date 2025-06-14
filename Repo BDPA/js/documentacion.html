@@ -1,0 +1,740 @@
+<script>
+// ============================================================================
+// BDPA - js/documentacion.html - Sistema de Gestión Documental
+// ============================================================================
+
+// Variables globales del módulo
+let documentosData = [];
+let documentoEditando = null;
+let uploadingFile = false;
+let currentFilter = {
+    tipo: '',
+    obra: '',
+    busqueda: ''
+};
+
+// Tipos de documentos permitidos
+const TIPOS_DOCUMENTO = {
+    PLANO: 'plano',
+    MEMORIA: 'memoria',
+    MANUAL: 'manual',
+    CERTIFICADO: 'certificado',
+    INFORME: 'informe',
+    OTRO: 'otro'
+};
+
+// Extensiones permitidas
+const EXTENSIONES_PERMITIDAS = [
+    '.pdf', '.doc', '.docx', '.xls', '.xlsx', 
+    '.jpg', '.jpeg', '.png', '.dwg', '.dxf'
+];
+
+// Tamaño máximo de archivo (10MB)
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+
+// ============================================================================
+// FUNCIONES PRINCIPALES
+// ============================================================================
+
+/**
+ * Inicializar módulo de documentación
+ */
+function initializeDocumentacionModule() {
+    console.log('[DOCUMENTACION] Inicializando módulo de documentación');
+    
+    // Configurar event listeners
+    setupDocumentacionEventListeners();
+    
+    // Cargar datos iniciales si estamos en la sección
+    const seccionActiva = document.querySelector('#documentacion:not(.hidden)');
+    if (seccionActiva) {
+        cargarDocumentos();
+    }
+    
+    console.log('[DOCUMENTACION] Módulo inicializado');
+}
+
+/**
+ * Configurar event listeners
+ */
+function setupDocumentacionEventListeners() {
+    // Input de archivo
+    const inputArchivo = document.getElementById('doc-archivo');
+    if (inputArchivo) {
+        inputArchivo.addEventListener('change', handleArchivoSeleccionado);
+    }
+    
+    // Filtros
+    const filtroTipo = document.getElementById('filtro-tipo-doc');
+    if (filtroTipo) {
+        filtroTipo.addEventListener('change', filtrarDocumentos);
+    }
+    
+    const filtroObra = document.getElementById('filtro-obra-doc');
+    if (filtroObra) {
+        filtroObra.addEventListener('change', filtrarDocumentos);
+    }
+    
+    const buscarDoc = document.getElementById('buscar-doc');
+    if (buscarDoc) {
+        buscarDoc.addEventListener('keyup', debounce(filtrarDocumentos, 300));
+    }
+}
+
+/**
+ * Cargar documentos
+ */
+async function cargarDocumentos() {
+    try {
+        mostrarLoaderDocumentos(true);
+        
+        const response = await callAPI('obtenerDocumentos', currentFilter);
+        
+        if (!response.success) {
+            throw new Error(response.message || 'Error al cargar documentos');
+        }
+        
+        documentosData = response.datos || [];
+        mostrarTablaDocumentos();
+        
+        // Cargar obras para el filtro si no están cargadas
+        if (!document.getElementById('filtro-obra-doc').options.length > 1) {
+            await cargarObrasParaDocumentos();
+        }
+        
+    } catch (error) {
+        console.error('[DOCUMENTACION] Error cargando documentos:', error);
+        mostrarNotificacion('Error al cargar documentos: ' + error.message, 'error');
+    } finally {
+        mostrarLoaderDocumentos(false);
+    }
+}
+
+/**
+ * Mostrar formulario de documento
+ */
+function mostrarFormularioDocumento() {
+    documentoEditando = null;
+    limpiarFormularioDocumento();
+    document.getElementById('formulario-documento').classList.remove('hidden');
+    
+    // Cargar obras si no están cargadas
+    if (!document.getElementById('doc-obra').options.length > 1) {
+        cargarObrasParaDocumentos();
+    }
+}
+
+/**
+ * Cancelar edición de documento
+ */
+function cancelarDocumento() {
+    if (uploadingFile) {
+        if (!confirm('Hay una carga en progreso. ¿Desea cancelar?')) {
+            return;
+        }
+    }
+    
+    documentoEditando = null;
+    uploadingFile = false;
+    limpiarFormularioDocumento();
+    document.getElementById('formulario-documento').classList.add('hidden');
+}
+
+/**
+ * Limpiar formulario
+ */
+function limpiarFormularioDocumento() {
+    document.getElementById('doc-nombre').value = '';
+    document.getElementById('doc-tipo').value = 'plano';
+    document.getElementById('doc-obra').value = '';
+    document.getElementById('doc-archivo').value = '';
+    document.getElementById('doc-descripcion').value = '';
+    
+    // Limpiar preview si existe
+    const preview = document.getElementById('archivo-preview');
+    if (preview) {
+        preview.innerHTML = '';
+    }
+}
+
+/**
+ * Manejar archivo seleccionado
+ */
+function handleArchivoSeleccionado(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    // Validar extensión
+    const extension = '.' + file.name.split('.').pop().toLowerCase();
+    if (!EXTENSIONES_PERMITIDAS.includes(extension)) {
+        mostrarNotificacion(`Tipo de archivo no permitido. Extensiones permitidas: ${EXTENSIONES_PERMITIDAS.join(', ')}`, 'error');
+        event.target.value = '';
+        return;
+    }
+    
+    // Validar tamaño
+    if (file.size > MAX_FILE_SIZE) {
+        mostrarNotificacion('El archivo excede el tamaño máximo permitido (10MB)', 'error');
+        event.target.value = '';
+        return;
+    }
+    
+    // Mostrar preview
+    mostrarPreviewArchivo(file);
+    
+    // Auto-completar nombre si está vacío
+    if (!document.getElementById('doc-nombre').value) {
+        const nombreSinExtension = file.name.substring(0, file.name.lastIndexOf('.'));
+        document.getElementById('doc-nombre').value = nombreSinExtension;
+    }
+}
+
+/**
+ * Mostrar preview del archivo
+ */
+function mostrarPreviewArchivo(file) {
+    let preview = document.getElementById('archivo-preview');
+    if (!preview) {
+        preview = document.createElement('div');
+        preview.id = 'archivo-preview';
+        preview.className = 'archivo-preview mt-10';
+        document.getElementById('doc-archivo').parentElement.appendChild(preview);
+    }
+    
+    const fileInfo = `
+        <div class="file-preview-info">
+            <i class="fas fa-file-${getFileIcon(file.name)}"></i>
+            <div>
+                <strong>${file.name}</strong><br>
+                <small>Tamaño: ${formatFileSize(file.size)}</small>
+            </div>
+        </div>
+    `;
+    
+    preview.innerHTML = fileInfo;
+}
+
+/**
+ * Guardar documento
+ */
+async function guardarDocumento() {
+    try {
+        // Validar formulario
+        const nombre = document.getElementById('doc-nombre').value.trim();
+        const tipo = document.getElementById('doc-tipo').value;
+        const obraId = document.getElementById('doc-obra').value;
+        const descripcion = document.getElementById('doc-descripcion').value.trim();
+        const archivoInput = document.getElementById('doc-archivo');
+        
+        if (!nombre) {
+            mostrarNotificacion('El nombre del documento es requerido', 'error');
+            return;
+        }
+        
+        if (!documentoEditando && !archivoInput.files[0]) {
+            mostrarNotificacion('Debe seleccionar un archivo', 'error');
+            return;
+        }
+        
+        mostrarLoaderDocumentos(true);
+        uploadingFile = true;
+        
+        // Preparar datos
+        const datosDocumento = {
+            id: documentoEditando?.id,
+            nombre,
+            tipo,
+            obraId: obraId || null,
+            descripcion,
+            fecha: new Date().toISOString()
+        };
+        
+        // Si hay archivo nuevo, convertir a base64
+        if (archivoInput.files[0]) {
+            const file = archivoInput.files[0];
+            const base64 = await fileToBase64(file);
+            
+            datosDocumento.archivo = {
+                nombre: file.name,
+                tipo: file.type,
+                tamaño: file.size,
+                datos: base64
+            };
+        }
+        
+        // Guardar documento
+        const response = await callAPI('guardarDocumento', datosDocumento);
+        
+        if (!response.success) {
+            throw new Error(response.message || 'Error al guardar documento');
+        }
+        
+        mostrarNotificacion('Documento guardado correctamente', 'success');
+        cancelarDocumento();
+        cargarDocumentos();
+        
+    } catch (error) {
+        console.error('[DOCUMENTACION] Error guardando documento:', error);
+        mostrarNotificacion('Error al guardar documento: ' + error.message, 'error');
+    } finally {
+        mostrarLoaderDocumentos(false);
+        uploadingFile = false;
+    }
+}
+
+/**
+ * Mostrar tabla de documentos
+ */
+function mostrarTablaDocumentos() {
+    const tbody = document.getElementById('documentos-tbody');
+    if (!tbody) return;
+    
+    tbody.innerHTML = '';
+    
+    if (documentosData.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" class="text-center">No hay documentos registrados</td>
+            </tr>
+        `;
+        return;
+    }
+    
+    documentosData.forEach(doc => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>
+                <div class="doc-name">
+                    <i class="fas fa-file-${getFileIcon(doc.nombreArchivo)}"></i>
+                    ${doc.nombre}
+                </div>
+            </td>
+            <td><span class="badge badge-${getTipoBadgeClass(doc.tipo)}">${getTipoLabel(doc.tipo)}</span></td>
+            <td>${doc.obraNombre || 'General'}</td>
+            <td>${formatearFecha(doc.fecha)}</td>
+            <td>${doc.usuarioNombre || 'Sistema'}</td>
+            <td>
+                <button class="btn btn-sm btn-info" onclick="verDocumento('${doc.id}')" title="Ver documento">
+                    <i class="fas fa-eye"></i>
+                </button>
+                <button class="btn btn-sm btn-success" onclick="descargarDocumento('${doc.id}')" title="Descargar">
+                    <i class="fas fa-download"></i>
+                </button>
+                ${usuarioActual?.rol === 'Admin' ? `
+                    <button class="btn btn-sm btn-warning" onclick="editarDocumento('${doc.id}')" title="Editar">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-sm btn-danger" onclick="eliminarDocumento('${doc.id}')" title="Eliminar">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                ` : ''}
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+/**
+ * Ver documento
+ */
+async function verDocumento(id) {
+    try {
+        mostrarLoaderDocumentos(true);
+        
+        const response = await callAPI('obtenerUrlDocumento', { id });
+        
+        if (!response.success) {
+            throw new Error(response.message || 'Error al obtener documento');
+        }
+        
+        // Abrir en nueva pestaña
+        window.open(response.url, '_blank');
+        
+    } catch (error) {
+        console.error('[DOCUMENTACION] Error viendo documento:', error);
+        mostrarNotificacion('Error al abrir documento: ' + error.message, 'error');
+    } finally {
+        mostrarLoaderDocumentos(false);
+    }
+}
+
+/**
+ * Descargar documento
+ */
+async function descargarDocumento(id) {
+    try {
+        mostrarLoaderDocumentos(true);
+        
+        const response = await callAPI('descargarDocumento', { id });
+        
+        if (!response.success) {
+            throw new Error(response.message || 'Error al descargar documento');
+        }
+        
+        // Crear enlace de descarga
+        const link = document.createElement('a');
+        link.href = response.url;
+        link.download = response.nombreArchivo;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        mostrarNotificacion('Descarga iniciada', 'success');
+        
+    } catch (error) {
+        console.error('[DOCUMENTACION] Error descargando documento:', error);
+        mostrarNotificacion('Error al descargar documento: ' + error.message, 'error');
+    } finally {
+        mostrarLoaderDocumentos(false);
+    }
+}
+
+/**
+ * Editar documento
+ */
+async function editarDocumento(id) {
+    try {
+        const documento = documentosData.find(d => d.id === id);
+        if (!documento) {
+            mostrarNotificacion('Documento no encontrado', 'error');
+            return;
+        }
+        
+        documentoEditando = documento;
+        
+        // Cargar datos en el formulario
+        document.getElementById('doc-nombre').value = documento.nombre;
+        document.getElementById('doc-tipo').value = documento.tipo;
+        document.getElementById('doc-obra').value = documento.obraId || '';
+        document.getElementById('doc-descripcion').value = documento.descripcion || '';
+        
+        // Mostrar info del archivo actual
+        const preview = document.getElementById('archivo-preview');
+        if (preview) {
+            preview.innerHTML = `
+                <div class="file-preview-info">
+                    <i class="fas fa-file-${getFileIcon(documento.nombreArchivo)}"></i>
+                    <div>
+                        <strong>Archivo actual: ${documento.nombreArchivo}</strong><br>
+                        <small>Seleccione un nuevo archivo para reemplazar</small>
+                    </div>
+                </div>
+            `;
+        }
+        
+        document.getElementById('formulario-documento').classList.remove('hidden');
+        
+    } catch (error) {
+        console.error('[DOCUMENTACION] Error editando documento:', error);
+        mostrarNotificacion('Error al editar documento: ' + error.message, 'error');
+    }
+}
+
+/**
+ * Eliminar documento
+ */
+async function eliminarDocumento(id) {
+    if (!confirm('¿Está seguro de eliminar este documento? Esta acción no se puede deshacer.')) {
+        return;
+    }
+    
+    try {
+        mostrarLoaderDocumentos(true);
+        
+        const response = await callAPI('eliminarDocumento', { id });
+        
+        if (!response.success) {
+            throw new Error(response.message || 'Error al eliminar documento');
+        }
+        
+        mostrarNotificacion('Documento eliminado correctamente', 'success');
+        cargarDocumentos();
+        
+    } catch (error) {
+        console.error('[DOCUMENTACION] Error eliminando documento:', error);
+        mostrarNotificacion('Error al eliminar documento: ' + error.message, 'error');
+    } finally {
+        mostrarLoaderDocumentos(false);
+    }
+}
+
+/**
+ * Filtrar documentos
+ */
+function filtrarDocumentos() {
+    currentFilter = {
+        tipo: document.getElementById('filtro-tipo-doc').value,
+        obra: document.getElementById('filtro-obra-doc').value,
+        busqueda: document.getElementById('buscar-doc').value
+    };
+    
+    cargarDocumentos();
+}
+
+/**
+ * Cargar obras para selectores
+ */
+async function cargarObrasParaDocumentos() {
+    try {
+        const response = await callAPI('obtenerObras', { activas: true });
+        
+        if (!response.success) return;
+        
+        const obras = response.datos || [];
+        
+        // Actualizar selector de formulario
+        const selectorFormulario = document.getElementById('doc-obra');
+        if (selectorFormulario) {
+            selectorFormulario.innerHTML = '<option value="">General (sin obra específica)</option>';
+            obras.forEach(obra => {
+                const option = document.createElement('option');
+                option.value = obra.id;
+                option.textContent = obra.nombre;
+                selectorFormulario.appendChild(option);
+            });
+        }
+        
+        // Actualizar selector de filtro
+        const selectorFiltro = document.getElementById('filtro-obra-doc');
+        if (selectorFiltro) {
+            selectorFiltro.innerHTML = '<option value="">Todas las obras</option>';
+            obras.forEach(obra => {
+                const option = document.createElement('option');
+                option.value = obra.id;
+                option.textContent = obra.nombre;
+                selectorFiltro.appendChild(option);
+            });
+        }
+        
+    } catch (error) {
+        console.error('[DOCUMENTACION] Error cargando obras:', error);
+    }
+}
+
+// ============================================================================
+// FUNCIONES AUXILIARES
+// ============================================================================
+
+/**
+ * Convertir archivo a base64
+ */
+function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = error => reject(error);
+    });
+}
+
+/**
+ * Obtener icono según tipo de archivo
+ */
+function getFileIcon(filename) {
+    if (!filename) return 'alt';
+    
+    const ext = filename.split('.').pop().toLowerCase();
+    const iconMap = {
+        'pdf': 'pdf',
+        'doc': 'word',
+        'docx': 'word',
+        'xls': 'excel',
+        'xlsx': 'excel',
+        'jpg': 'image',
+        'jpeg': 'image',
+        'png': 'image',
+        'dwg': 'draw',
+        'dxf': 'draw'
+    };
+    
+    return iconMap[ext] || 'alt';
+}
+
+/**
+ * Obtener clase de badge según tipo
+ */
+function getTipoBadgeClass(tipo) {
+    const classMap = {
+        'plano': 'primary',
+        'memoria': 'info',
+        'manual': 'success',
+        'certificado': 'warning',
+        'informe': 'secondary',
+        'otro': 'light'
+    };
+    
+    return classMap[tipo] || 'secondary';
+}
+
+/**
+ * Obtener label de tipo
+ */
+function getTipoLabel(tipo) {
+    const labelMap = {
+        'plano': 'Plano',
+        'memoria': 'Memoria Técnica',
+        'manual': 'Manual',
+        'certificado': 'Certificado',
+        'informe': 'Informe',
+        'otro': 'Otro'
+    };
+    
+    return labelMap[tipo] || tipo;
+}
+
+/**
+ * Formatear tamaño de archivo
+ */
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+/**
+ * Mostrar/ocultar loader
+ */
+function mostrarLoaderDocumentos(mostrar) {
+    const loader = document.getElementById('documentos-loader');
+    if (loader) {
+        if (mostrar) {
+            loader.classList.remove('hidden');
+        } else {
+            loader.classList.add('hidden');
+        }
+    }
+}
+
+/**
+ * Debounce para búsqueda
+ */
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+// ============================================================================
+// FUNCIONES DE VISTA PREVIA
+// ============================================================================
+
+/**
+ * Crear modal de vista previa si no existe
+ */
+function createPreviewModal() {
+    if (document.getElementById('modal-preview-documento')) return;
+    
+    const modal = document.createElement('div');
+    modal.id = 'modal-preview-documento';
+    modal.className = 'modal-overlay hidden';
+    modal.innerHTML = `
+        <div class="modal-content" style="width: 90%; max-width: 1200px; height: 90%;">
+            <div class="modal-header">
+                <h3 class="modal-title">Vista Previa del Documento</h3>
+                <button class="modal-close" onclick="cerrarPreviewDocumento()">&times;</button>
+            </div>
+            <div class="modal-body" style="height: calc(100% - 120px); padding: 0;">
+                <iframe id="preview-iframe" style="width: 100%; height: 100%; border: none;"></iframe>
+                <div id="preview-image" style="width: 100%; height: 100%; display: none; text-align: center; overflow: auto;">
+                    <img id="preview-img" style="max-width: 100%; height: auto;">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="cerrarPreviewDocumento()">Cerrar</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+}
+
+/**
+ * Mostrar vista previa
+ */
+async function mostrarPreviewDocumento(id) {
+    createPreviewModal();
+    
+    try {
+        const response = await callAPI('obtenerUrlDocumento', { id, preview: true });
+        
+        if (!response.success) {
+            throw new Error(response.message || 'Error al obtener vista previa');
+        }
+        
+        const modal = document.getElementById('modal-preview-documento');
+        const iframe = document.getElementById('preview-iframe');
+        const imageContainer = document.getElementById('preview-image');
+        const img = document.getElementById('preview-img');
+        
+        // Determinar tipo de preview
+        const doc = documentosData.find(d => d.id === id);
+        const esImagen = ['.jpg', '.jpeg', '.png'].some(ext => 
+            doc.nombreArchivo.toLowerCase().endsWith(ext)
+        );
+        
+        if (esImagen) {
+            iframe.style.display = 'none';
+            imageContainer.style.display = 'block';
+            img.src = response.url;
+        } else {
+            iframe.style.display = 'block';
+            imageContainer.style.display = 'none';
+            iframe.src = response.url;
+        }
+        
+        modal.classList.remove('hidden');
+        
+    } catch (error) {
+        console.error('[DOCUMENTACION] Error mostrando preview:', error);
+        mostrarNotificacion('Error al mostrar vista previa: ' + error.message, 'error');
+    }
+}
+
+/**
+ * Cerrar vista previa
+ */
+function cerrarPreviewDocumento() {
+    const modal = document.getElementById('modal-preview-documento');
+    if (modal) {
+        modal.classList.add('hidden');
+        document.getElementById('preview-iframe').src = '';
+        document.getElementById('preview-img').src = '';
+    }
+}
+
+// ============================================================================
+// INICIALIZACIÓN
+// ============================================================================
+
+// Inicializar cuando el DOM esté listo
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeDocumentacionModule);
+} else {
+    initializeDocumentacionModule();
+}
+
+// Exportar funciones globales
+window.cargarDocumentos = cargarDocumentos;
+window.mostrarFormularioDocumento = mostrarFormularioDocumento;
+window.cancelarDocumento = cancelarDocumento;
+window.guardarDocumento = guardarDocumento;
+window.verDocumento = verDocumento;
+window.descargarDocumento = descargarDocumento;
+window.editarDocumento = editarDocumento;
+window.eliminarDocumento = eliminarDocumento;
+window.filtrarDocumentos = filtrarDocumentos;
+window.mostrarPreviewDocumento = mostrarPreviewDocumento;
+window.cerrarPreviewDocumento = cerrarPreviewDocumento;
+
+console.log('[DOCUMENTACION] Archivo js/documentacion.html cargado completamente');
+</script>

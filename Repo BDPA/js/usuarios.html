@@ -1,0 +1,1097 @@
+<script>
+// ============================================================================
+// BDPA - js/usuarios.html - PARTE 1: Funciones principales de usuarios
+// ============================================================================
+// Variables globales para usuarios
+let usuariosData = [];
+let rolesDisponibles = ['Admin', 'Supervisor', 'Técnico', 'Ayudante'];
+
+// Función para cargar usuarios
+async function cargarUsuarios() {
+    try {
+        const response = await callAPI('obtenerUsuarios');
+        if (response.error) {
+            mostrarNotificacion("Error al cargar los usuarios.", "error");
+            return;
+        }
+        
+        usuariosData = response.datos;
+        
+        // Actualizar tabla de usuarios
+        const tbody = document.getElementById('usuarios-tbody');
+        tbody.innerHTML = '';
+        
+        usuariosData.forEach(usuario => {
+            const tr = document.createElement('tr');
+            
+            // Determinar clase badge según el rol
+            let badgeClass = 'primary'; // Por defecto
+            if (usuario.rol === 'Admin') {
+                badgeClass = 'danger';
+            } else if (usuario.rol === 'Supervisor') {
+                badgeClass = 'warning';
+            } else if (usuario.rol === 'Técnico') {
+                badgeClass = 'success';
+            } else if (usuario.rol === 'Ayudante') {
+                badgeClass = 'info';
+            }
+            
+            // Determinar estado del usuario
+            let estadoUsuario = 'Activo';
+            let estadoClass = 'success';
+            if (usuario.bloqueado) {
+                estadoUsuario = 'Bloqueado';
+                estadoClass = 'danger';
+            } else if (usuario.inactivo) {
+                estadoUsuario = 'Inactivo';
+                estadoClass = 'warning';
+            }
+            
+            tr.innerHTML = `
+                <td>
+                    <div class="user-info">
+                        <strong>${usuario.nombre} ${usuario.apellido}</strong>
+                        <div class="user-meta">
+                            <small>ID: ${usuario.id}</small>
+                        </div>
+                    </div>
+                </td>
+                <td>${usuario.usuario}</td>
+                <td><span class="badge badge-${badgeClass}">${usuario.rol}</span></td>
+                <td>${usuario.email || '-'}</td>
+                <td><span class="badge badge-${estadoClass}">${estadoUsuario}</span></td>
+                <td>${usuario.ultimoAcceso ? new Date(usuario.ultimoAcceso).toLocaleString() : 'Nunca'}</td>
+                <td>
+                    <div class="btn-group">
+                        <button class="btn btn-sm btn-primary" onclick="editarUsuario('${usuario.id}')" title="Editar usuario">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn btn-sm btn-info" onclick="verPerfilUsuario('${usuario.id}')" title="Ver perfil">
+                            <i class="fas fa-user"></i>
+                        </button>
+                        <button class="btn btn-sm btn-warning" onclick="resetearContrasenaUsuario('${usuario.id}')" title="Resetear contraseña">
+                            <i class="fas fa-key"></i>
+                        </button>
+                        ${usuario.bloqueado ? 
+                            `<button class="btn btn-sm btn-success" onclick="desbloquearUsuario('${usuario.id}')" title="Desbloquear">
+                                <i class="fas fa-unlock"></i>
+                            </button>` :
+                            `<button class="btn btn-sm btn-secondary" onclick="bloquearUsuario('${usuario.id}')" title="Bloquear">
+                                <i class="fas fa-lock"></i>
+                            </button>`
+                        }
+                        <button class="btn btn-sm btn-danger" onclick="eliminarUsuario('${usuario.id}')" title="Eliminar usuario">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </td>
+            `;
+            
+            tbody.appendChild(tr);
+        });
+        
+        // Actualizar estadísticas de usuarios
+        actualizarEstadisticasUsuarios();
+        
+    } catch (error) {
+        mostrarNotificacion("Error al cargar los usuarios.", "error");
+    }
+}
+
+// Función para actualizar estadísticas de usuarios
+function actualizarEstadisticasUsuarios() {
+    const stats = {
+        total: usuariosData.length,
+        activos: usuariosData.filter(u => !u.bloqueado && !u.inactivo).length,
+        bloqueados: usuariosData.filter(u => u.bloqueado).length,
+        inactivos: usuariosData.filter(u => u.inactivo).length,
+        porRol: {}
+    };
+    
+    // Contar por rol
+    rolesDisponibles.forEach(rol => {
+        stats.porRol[rol] = usuariosData.filter(u => u.rol === rol).length;
+    });
+    
+    // Actualizar elementos en la interfaz si existen
+    const elemStats = {
+        'total-usuarios': stats.total,
+        'usuarios-activos': stats.activos,
+        'usuarios-bloqueados': stats.bloqueados,
+        'usuarios-inactivos': stats.inactivos
+    };
+    
+    Object.keys(elemStats).forEach(id => {
+        const elem = document.getElementById(id);
+        if (elem) {
+            elem.textContent = elemStats[id];
+        }
+    });
+    
+    // Actualizar gráfico de roles si existe
+    actualizarGraficoRoles(stats.porRol);
+    
+    return stats;
+}
+
+// Función para actualizar gráfico de roles (placeholder)
+function actualizarGraficoRoles(datosRoles) {
+    const container = document.getElementById('grafico-roles');
+    if (!container) return;
+    
+    let html = '<div class="roles-stats">';
+    
+    Object.keys(datosRoles).forEach(rol => {
+        const cantidad = datosRoles[rol];
+        const porcentaje = usuariosData.length > 0 ? Math.round((cantidad / usuariosData.length) * 100) : 0;
+        
+        let colorClass = 'primary';
+        if (rol === 'Admin') colorClass = 'danger';
+        else if (rol === 'Supervisor') colorClass = 'warning';
+        else if (rol === 'Técnico') colorClass = 'success';
+        else if (rol === 'Ayudante') colorClass = 'info';
+        
+        html += `
+            <div class="role-stat">
+                <div class="role-info">
+                    <span class="badge badge-${colorClass}">${rol}</span>
+                    <span class="role-count">${cantidad} usuarios (${porcentaje}%)</span>
+                </div>
+                <div class="progress-bar-container">
+                    <div class="progress-bar bg-${colorClass}" style="width: ${porcentaje}%;"></div>
+                </div>
+            </div>
+        `;
+    });
+    
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+// Función para mostrar el formulario de usuario
+function mostrarFormularioUsuario() {
+    // Limpiar formulario
+    document.getElementById('usuario-id').value = '';
+    document.getElementById('nombre-usuario').value = '';
+    document.getElementById('apellido-usuario').value = '';
+    document.getElementById('username-usuario').value = '';
+    document.getElementById('contrasena-usuario').value = '';
+    document.getElementById('confirmar-contrasena-usuario').value = '';
+    document.getElementById('rol-usuario').value = 'Técnico';
+    document.getElementById('email-usuario').value = '';
+    document.getElementById('telefono-usuario').value = '';
+    document.getElementById('activo-usuario').checked = true;
+    document.getElementById('requiere-cambio-contrasena').checked = true;
+    
+    // Mostrar información sobre contraseña
+    document.getElementById('contrasena-info').classList.add('hidden');
+    
+    // Limpiar errores
+    limpiarErroresFormulario();
+    
+    // Mostrar formulario
+    document.getElementById('formulario-usuario').classList.remove('hidden');
+    
+    // Enfocar primer campo
+    document.getElementById('nombre-usuario').focus();
+}
+
+// Función para cancelar la edición de usuario
+function cancelarEdicionUsuario() {
+    document.getElementById('formulario-usuario').classList.add('hidden');
+    limpiarErroresFormulario();
+}
+
+// Función para limpiar errores del formulario
+function limpiarErroresFormulario() {
+    const errores = document.querySelectorAll('.error-message');
+    errores.forEach(error => error.remove());
+    
+    const campos = document.querySelectorAll('.form-error');
+    campos.forEach(campo => campo.classList.remove('form-error'));
+}
+
+// Función para mostrar error en campo específico
+function mostrarErrorCampo(campoId, mensaje) {
+    const campo = document.getElementById(campoId);
+    if (!campo) return;
+    
+    // Limpiar error anterior
+    const errorAnterior = campo.parentNode.querySelector('.error-message');
+    if (errorAnterior) {
+        errorAnterior.remove();
+    }
+    
+    // Agregar clase de error
+    campo.classList.add('form-error');
+    
+    // Crear mensaje de error
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'error-message';
+    errorDiv.textContent = mensaje;
+    errorDiv.style.color = 'var(--danger-color)';
+    errorDiv.style.fontSize = '14px';
+    errorDiv.style.marginTop = '5px';
+    
+    // Insertar después del campo
+    campo.parentNode.appendChild(errorDiv);
+}
+// ============================================================================
+// BDPA - js/usuarios.html - PARTE 2: Validación y guardado de usuarios
+// ============================================================================
+
+// Función para validar formulario de usuario
+function validarFormularioUsuario() {
+    let esValido = true;
+    
+    // Limpiar errores anteriores
+    limpiarErroresFormulario();
+    
+    // Validar nombre
+    const nombre = document.getElementById('nombre-usuario').value.trim();
+    if (!nombre) {
+        mostrarErrorCampo('nombre-usuario', 'El nombre es obligatorio');
+        esValido = false;
+    } else if (nombre.length < 2) {
+        mostrarErrorCampo('nombre-usuario', 'El nombre debe tener al menos 2 caracteres');
+        esValido = false;
+    }
+    
+    // Validar apellido
+    const apellido = document.getElementById('apellido-usuario').value.trim();
+    if (!apellido) {
+        mostrarErrorCampo('apellido-usuario', 'El apellido es obligatorio');
+        esValido = false;
+    } else if (apellido.length < 2) {
+        mostrarErrorCampo('apellido-usuario', 'El apellido debe tener al menos 2 caracteres');
+        esValido = false;
+    }
+    
+    // Validar nombre de usuario
+    const username = document.getElementById('username-usuario').value.trim();
+    if (!username) {
+        mostrarErrorCampo('username-usuario', 'El nombre de usuario es obligatorio');
+        esValido = false;
+    } else if (username.length < 3) {
+        mostrarErrorCampo('username-usuario', 'El nombre de usuario debe tener al menos 3 caracteres');
+        esValido = false;
+    } else if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+        mostrarErrorCampo('username-usuario', 'El nombre de usuario solo puede contener letras, números y guiones bajos');
+        esValido = false;
+    }
+    
+    // Validar contraseña (solo para usuarios nuevos o si se está cambiando)
+    const usuarioId = document.getElementById('usuario-id').value;
+    const contrasena = document.getElementById('contrasena-usuario').value;
+    const confirmarContrasena = document.getElementById('confirmar-contrasena-usuario').value;
+    
+    if (!usuarioId || contrasena) { // Usuario nuevo o cambio de contraseña
+        if (!contrasena) {
+            mostrarErrorCampo('contrasena-usuario', 'La contraseña es obligatoria');
+            esValido = false;
+        } else if (contrasena.length < 8) {
+            mostrarErrorCampo('contrasena-usuario', 'La contraseña debe tener al menos 8 caracteres');
+            esValido = false;
+        } else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(contrasena)) {
+            mostrarErrorCampo('contrasena-usuario', 'La contraseña debe contener al menos una mayúscula, una minúscula y un número');
+            esValido = false;
+        }
+        
+        // Validar confirmación de contraseña
+        if (contrasena !== confirmarContrasena) {
+            mostrarErrorCampo('confirmar-contrasena-usuario', 'Las contraseñas no coinciden');
+            esValido = false;
+        }
+    }
+    
+    // Validar email si se proporciona
+    const email = document.getElementById('email-usuario').value.trim();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        mostrarErrorCampo('email-usuario', 'Ingrese un email válido');
+        esValido = false;
+    }
+    
+    // Validar teléfono si se proporciona
+    const telefono = document.getElementById('telefono-usuario').value.trim();
+    if (telefono && !/^[\d\s\+\-\(\)]+$/.test(telefono)) {
+        mostrarErrorCampo('telefono-usuario', 'Ingrese un teléfono válido');
+        esValido = false;
+    }
+    
+    return esValido;
+}
+
+// Función para validar username único
+async function validarUsernameUnico() {
+    const username = document.getElementById('username-usuario').value.trim();
+    const usuarioId = document.getElementById('usuario-id').value;
+    
+    if (!username) return;
+    
+    try {
+        const response = await callAPI('validarUsernameUnico', { username, usuarioId });
+        
+        if (!response.success) {
+            mostrarErrorCampo('username-usuario', 'Este nombre de usuario ya está en uso');
+            return false;
+        }
+        
+        return true;
+    } catch (error) {
+        console.error("Error al validar username:", error);
+        return true; // En caso de error, permitir continuar
+    }
+}
+
+// Función para validar email único
+async function validarEmailUnico() {
+    const email = document.getElementById('email-usuario').value.trim();
+    const usuarioId = document.getElementById('usuario-id').value;
+    
+    if (!email) return true;
+    
+    try {
+        const response = await callAPI('validarEmailUnico', { email, usuarioId });
+        
+        if (!response.success) {
+            mostrarErrorCampo('email-usuario', 'Este email ya está registrado');
+            return false;
+        }
+        
+        return true;
+    } catch (error) {
+        console.error("Error al validar email:", error);
+        return true; // En caso de error, permitir continuar
+    }
+}
+
+// Función para guardar un usuario
+async function guardarUsuario() {
+    // Validar formulario
+    if (!validarFormularioUsuario()) {
+        mostrarNotificacion("Por favor corrija los errores en el formulario", "error");
+        return;
+    }
+    
+    // Validar unicidad de username y email
+    const usernameValido = await validarUsernameUnico();
+    const emailValido = await validarEmailUnico();
+    
+    if (!usernameValido || !emailValido) {
+        return;
+    }
+    
+    const usuarioId = document.getElementById('usuario-id').value;
+    const nombre = document.getElementById('nombre-usuario').value.trim();
+    const apellido = document.getElementById('apellido-usuario').value.trim();
+    const username = document.getElementById('username-usuario').value.trim();
+    const contrasena = document.getElementById('contrasena-usuario').value;
+    const rol = document.getElementById('rol-usuario').value;
+    const email = document.getElementById('email-usuario').value.trim();
+    const telefono = document.getElementById('telefono-usuario').value.trim();
+    const activo = document.getElementById('activo-usuario').checked;
+    const requiereCambioContrasena = document.getElementById('requiere-cambio-contrasena').checked;
+    
+    const usuario = {
+        id: usuarioId,
+        nombre,
+        apellido,
+        usuario: username,
+        contrasena,
+        rol,
+        email,
+        telefono,
+        activo,
+        requiereCambioContrasena
+    };
+    
+    try {
+        document.getElementById('usuarios-loader').classList.remove('hidden');
+        
+        const response = await callAPI('guardarUsuario', usuario);
+        
+        document.getElementById('usuarios-loader').classList.add('hidden');
+        
+        if (response.success) {
+            mostrarNotificacion("Usuario guardado correctamente", "success");
+            cancelarEdicionUsuario();
+            await cargarUsuarios();
+        } else {
+            mostrarNotificacion(response.message || "Error al guardar el usuario", "error");
+        }
+    } catch (error) {
+        document.getElementById('usuarios-loader').classList.add('hidden');
+        mostrarNotificacion("Error al guardar el usuario", "error");
+    }
+}
+
+// Función para editar un usuario
+function editarUsuario(id) {
+    const usuario = usuariosData.find(u => u.id === id);
+    if (!usuario) {
+        mostrarNotificacion("Usuario no encontrado", "error");
+        return;
+    }
+    
+    document.getElementById('usuario-id').value = usuario.id;
+    document.getElementById('nombre-usuario').value = usuario.nombre;
+    document.getElementById('apellido-usuario').value = usuario.apellido;
+    document.getElementById('username-usuario').value = usuario.usuario;
+    document.getElementById('contrasena-usuario').value = '';
+    document.getElementById('confirmar-contrasena-usuario').value = '';
+    document.getElementById('rol-usuario').value = usuario.rol;
+    document.getElementById('email-usuario').value = usuario.email || '';
+    document.getElementById('telefono-usuario').value = usuario.telefono || '';
+    document.getElementById('activo-usuario').checked = usuario.activo !== false;
+    document.getElementById('requiere-cambio-contrasena').checked = usuario.requiereCambioContrasena || false;
+    
+    // Mostrar información sobre contraseña
+    document.getElementById('contrasena-info').classList.remove('hidden');
+    
+    // Mostrar formulario
+    document.getElementById('formulario-usuario').classList.remove('hidden');
+    
+    // Enfocar primer campo
+    document.getElementById('nombre-usuario').focus();
+}
+
+// Función para eliminar un usuario
+async function eliminarUsuario(id) {
+    // No permitir eliminar al usuario actual
+    if (usuarioActual && usuarioActual.id === id) {
+        mostrarNotificacion("No puede eliminar su propio usuario", "error");
+        return;
+    }
+    
+    const usuario = usuariosData.find(u => u.id === id);
+    if (!usuario) {
+        mostrarNotificacion("Usuario no encontrado", "error");
+        return;
+    }
+    
+    if (!confirm(`¿Está seguro de eliminar al usuario "${usuario.nombre} ${usuario.apellido}"? Esta acción no se puede deshacer.`)) {
+        return;
+    }
+    
+    try {
+        document.getElementById('usuarios-loader').classList.remove('hidden');
+        
+        const response = await callAPI('eliminarUsuario', { id });
+        
+        document.getElementById('usuarios-loader').classList.add('hidden');
+        
+        if (response.success) {
+            mostrarNotificacion("Usuario eliminado correctamente", "success");
+            await cargarUsuarios();
+        } else {
+            mostrarNotificacion(response.message || "Error al eliminar el usuario", "error");
+        }
+    } catch (error) {
+        document.getElementById('usuarios-loader').classList.add('hidden');
+        mostrarNotificacion("Error al eliminar el usuario", "error");
+    }
+}
+
+// Función para generar contraseña aleatoria
+function generarContrasenaAleatoria() {
+    const longitud = 12;
+    const caracteres = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+    let contrasena = '';
+    
+    // Asegurar que tenga al menos un carácter de cada tipo
+    contrasena += 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[Math.floor(Math.random() * 26)]; // Mayúscula
+    contrasena += 'abcdefghijklmnopqrstuvwxyz'[Math.floor(Math.random() * 26)]; // Minúscula
+    contrasena += '0123456789'[Math.floor(Math.random() * 10)]; // Número
+    contrasena += '!@#$%^&*'[Math.floor(Math.random() * 8)]; // Símbolo
+    
+    // Completar la longitud deseada
+    for (let i = 4; i < longitud; i++) {
+        contrasena += caracteres[Math.floor(Math.random() * caracteres.length)];
+    }
+    
+    // Mezclar los caracteres
+    contrasena = contrasena.split('').sort(() => Math.random() - 0.5).join('');
+    
+    return contrasena;
+}
+
+// Función para mostrar/generar contraseña
+function mostrarGenerarContrasena() {
+    const contrasenaGenerada = generarContrasenaAleatoria();
+    
+    document.getElementById('contrasena-usuario').value = contrasenaGenerada;
+    document.getElementById('confirmar-contrasena-usuario').value = contrasenaGenerada;
+    
+    // Mostrar la contraseña temporalmente
+    document.getElementById('contrasena-usuario').type = 'text';
+    document.getElementById('confirmar-contrasena-usuario').type = 'text';
+    
+    setTimeout(() => {
+        document.getElementById('contrasena-usuario').type = 'password';
+        document.getElementById('confirmar-contrasena-usuario').type = 'password';
+    }, 3000);
+    
+    mostrarNotificacion(`Contraseña generada: ${contrasenaGenerada}`, "info");
+}
+
+// Función para mostrar/ocultar contraseña
+function toggleMostrarContrasena(campoId) {
+    const campo = document.getElementById(campoId);
+    const boton = document.querySelector(`[onclick="toggleMostrarContrasena('${campoId}')"]`);
+    
+    if (campo.type === 'password') {
+        campo.type = 'text';
+        if (boton) boton.innerHTML = '<i class="fas fa-eye-slash"></i>';
+    } else {
+        campo.type = 'password';
+        if (boton) boton.innerHTML = '<i class="fas fa-eye"></i>';
+    }
+}
+// ============================================================================
+// BDPA - js/usuarios.html - PARTE 3: Gestión de estado de usuarios
+// ============================================================================
+
+// Función para bloquear usuario
+async function bloquearUsuario(id) {
+    // No permitir bloquear al usuario actual
+    if (usuarioActual && usuarioActual.id === id) {
+        mostrarNotificacion("No puede bloquear su propio usuario", "error");
+        return;
+    }
+    
+    const usuario = usuariosData.find(u => u.id === id);
+    if (!usuario) {
+        mostrarNotificacion("Usuario no encontrado", "error");
+        return;
+    }
+    
+    const motivo = prompt(`¿Por qué desea bloquear al usuario "${usuario.nombre} ${usuario.apellido}"?`);
+    if (motivo === null) return; // Cancelado
+    
+    try {
+        document.getElementById('usuarios-loader').classList.remove('hidden');
+        
+        const response = await callAPI('bloquearUsuario', { 
+            id, 
+            motivo: motivo || 'Sin motivo especificado'
+        });
+        
+        document.getElementById('usuarios-loader').classList.add('hidden');
+        
+        if (response.success) {
+            mostrarNotificacion("Usuario bloqueado correctamente", "success");
+            await cargarUsuarios();
+        } else {
+            mostrarNotificacion(response.message || "Error al bloquear el usuario", "error");
+        }
+    } catch (error) {
+        document.getElementById('usuarios-loader').classList.add('hidden');
+        mostrarNotificacion("Error al bloquear el usuario", "error");
+    }
+}
+
+// Función para desbloquear usuario
+async function desbloquearUsuario(id) {
+    const usuario = usuariosData.find(u => u.id === id);
+    if (!usuario) {
+        mostrarNotificacion("Usuario no encontrado", "error");
+        return;
+    }
+    
+    if (!confirm(`¿Está seguro de desbloquear al usuario "${usuario.nombre} ${usuario.apellido}"?`)) {
+        return;
+    }
+    
+    try {
+        document.getElementById('usuarios-loader').classList.remove('hidden');
+        
+        const response = await callAPI('desbloquearUsuario', { id });
+        
+        document.getElementById('usuarios-loader').classList.add('hidden');
+        
+        if (response.success) {
+            mostrarNotificacion("Usuario desbloqueado correctamente", "success");
+            await cargarUsuarios();
+        } else {
+            mostrarNotificacion(response.message || "Error al desbloquear el usuario", "error");
+        }
+    } catch (error) {
+        document.getElementById('usuarios-loader').classList.add('hidden');
+        mostrarNotificacion("Error al desbloquear el usuario", "error");
+    }
+}
+
+// Función para resetear contraseña de usuario
+async function resetearContrasenaUsuario(id) {
+    const usuario = usuariosData.find(u => u.id === id);
+    if (!usuario) {
+        mostrarNotificacion("Usuario no encontrado", "error");
+        return;
+    }
+    
+    if (!confirm(`¿Está seguro de resetear la contraseña del usuario "${usuario.nombre} ${usuario.apellido}"? Se generará una nueva contraseña temporal.`)) {
+        return;
+    }
+    
+    try {
+        document.getElementById('usuarios-loader').classList.remove('hidden');
+        
+        const response = await callAPI('resetearContrasenaUsuario', { id });
+        
+        document.getElementById('usuarios-loader').classList.add('hidden');
+        
+        if (response.success) {
+            const nuevaContrasena = response.nuevaContrasena;
+            
+            // Mostrar modal con la nueva contraseña
+            mostrarModalNuevaContrasena(usuario, nuevaContrasena);
+            
+            mostrarNotificacion("Contraseña reseteada correctamente", "success");
+            await cargarUsuarios();
+        } else {
+            mostrarNotificacion(response.message || "Error al resetear la contraseña", "error");
+        }
+    } catch (error) {
+        document.getElementById('usuarios-loader').classList.add('hidden');
+        mostrarNotificacion("Error al resetear la contraseña", "error");
+    }
+}
+
+// Función para mostrar modal con nueva contraseña
+function mostrarModalNuevaContrasena(usuario, nuevaContrasena) {
+    // Crear modal si no existe
+    if (!document.getElementById('modal-nueva-contrasena')) {
+        const modal = document.createElement('div');
+        modal.id = 'modal-nueva-contrasena';
+        modal.className = 'modal-overlay hidden';
+        
+        modal.innerHTML = `
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 class="modal-title"><i class="fas fa-key"></i> Nueva Contraseña Generada</h3>
+                    <button class="modal-close" onclick="cerrarModalNuevaContrasena()">&times;</button>
+                </div>
+                <div class="modal-body" id="nueva-contrasena-contenido">
+                    <!-- El contenido se cargará dinámicamente -->
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="copiarNuevaContrasena()">
+                        <i class="fas fa-copy"></i> Copiar Contraseña
+                    </button>
+                    <button class="btn btn-primary" onclick="cerrarModalNuevaContrasena()">Cerrar</button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+    }
+    
+    // Actualizar contenido
+    const contenido = document.getElementById('nueva-contrasena-contenido');
+    contenido.innerHTML = `
+        <div class="alert alert-warning">
+            <p><i class="fas fa-exclamation-triangle"></i> <strong>¡IMPORTANTE!</strong> Guarde esta contraseña de forma segura. No se mostrará nuevamente.</p>
+        </div>
+        <div class="password-info">
+            <p><strong>Usuario:</strong> ${usuario.nombre} ${usuario.apellido} (${usuario.usuario})</p>
+            <p><strong>Nueva contraseña temporal:</strong></p>
+            <div class="password-display">
+                <input type="text" id="nueva-contrasena-valor" value="${nuevaContrasena}" readonly style="font-family: monospace; font-size: 18px; text-align: center; background: #f8f9fa;">
+            </div>
+            <p class="mt-10"><small>El usuario deberá cambiar esta contraseña en su próximo inicio de sesión.</small></p>
+        </div>
+    `;
+    
+    // Mostrar modal
+    document.getElementById('modal-nueva-contrasena').classList.remove('hidden');
+}
+
+// Función para cerrar modal de nueva contraseña
+function cerrarModalNuevaContrasena() {
+    document.getElementById('modal-nueva-contrasena').classList.add('hidden');
+}
+
+// Función para copiar nueva contraseña
+function copiarNuevaContrasena() {
+    const campoContrasena = document.getElementById('nueva-contrasena-valor');
+    if (!campoContrasena) return;
+    
+    campoContrasena.select();
+    document.execCommand('copy');
+    
+    mostrarNotificacion("Contraseña copiada al portapapeles", "success");
+}
+
+// Función para ver perfil completo del usuario
+async function verPerfilUsuario(id) {
+    const usuario = usuariosData.find(u => u.id === id);
+    if (!usuario) {
+        mostrarNotificacion("Usuario no encontrado", "error");
+        return;
+    }
+    
+    try {
+        // Obtener información adicional del usuario
+        const response = await callAPI('obtenerPerfilCompleto', { id });
+        
+        if (response.error) {
+            mostrarNotificacion("Error al cargar el perfil del usuario", "error");
+            return;
+        }
+        
+        const perfilCompleto = response.datos;
+        mostrarModalPerfilUsuario(perfilCompleto);
+        
+    } catch (error) {
+        mostrarNotificacion("Error al cargar el perfil del usuario", "error");
+    }
+}
+
+// Función para mostrar modal de perfil de usuario
+function mostrarModalPerfilUsuario(perfil) {
+    // Crear modal si no existe
+    if (!document.getElementById('modal-perfil-usuario')) {
+        const modal = document.createElement('div');
+        modal.id = 'modal-perfil-usuario';
+        modal.className = 'modal-overlay hidden';
+        
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width: 800px;">
+                <div class="modal-header">
+                    <h3 class="modal-title"><i class="fas fa-user"></i> Perfil de Usuario</h3>
+                    <button class="modal-close" onclick="cerrarModalPerfilUsuario()">&times;</button>
+                </div>
+                <div class="modal-body" id="perfil-usuario-contenido">
+                    <!-- El contenido se cargará dinámicamente -->
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="exportarPerfilUsuario()">
+                        <i class="fas fa-file-export"></i> Exportar
+                    </button>
+                    <button class="btn btn-primary" onclick="cerrarModalPerfilUsuario()">Cerrar</button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+    }
+    
+    // Determinar estado y badge
+    let estadoUsuario = 'Activo';
+    let estadoClass = 'success';
+    if (perfil.bloqueado) {
+        estadoUsuario = 'Bloqueado';
+        estadoClass = 'danger';
+    } else if (perfil.inactivo) {
+        estadoUsuario = 'Inactivo';
+        estadoClass = 'warning';
+    }
+    
+    // Determinar badge de rol
+    let rolClass = 'primary';
+    if (perfil.rol === 'Admin') rolClass = 'danger';
+    else if (perfil.rol === 'Supervisor') rolClass = 'warning';
+    else if (perfil.rol === 'Técnico') rolClass = 'success';
+    else if (perfil.rol === 'Ayudante') rolClass = 'info';
+    
+    // Actualizar contenido
+    const contenido = document.getElementById('perfil-usuario-contenido');
+    contenido.innerHTML = `
+        <div class="user-profile">
+            <div class="profile-header">
+                <div class="profile-avatar">
+                    <i class="fas fa-user-circle" style="font-size: 80px; color: var(--primary-color);"></i>
+                </div>
+                <div class="profile-info">
+                    <h4>${perfil.nombre} ${perfil.apellido}</h4>
+                    <p class="profile-username">@${perfil.usuario}</p>
+                    <span class="badge badge-${rolClass}">${perfil.rol}</span>
+                    <span class="badge badge-${estadoClass}">${estadoUsuario}</span>
+                </div>
+            </div>
+            
+            <div class="profile-details">
+                <div class="detail-section">
+                    <h5><i class="fas fa-info-circle"></i> Información Personal</h5>
+                    <div class="detail-grid">
+                        <div class="detail-item">
+                            <strong>Email:</strong> ${perfil.email || 'No especificado'}
+                        </div>
+                        <div class="detail-item">
+                            <strong>Teléfono:</strong> ${perfil.telefono || 'No especificado'}
+                        </div>
+                        <div class="detail-item">
+                            <strong>Fecha de creación:</strong> ${perfil.fechaCreacion ? new Date(perfil.fechaCreacion).toLocaleDateString() : 'No disponible'}
+                        </div>
+                        <div class="detail-item">
+                            <strong>Último acceso:</strong> ${perfil.ultimoAcceso ? new Date(perfil.ultimoAcceso).toLocaleString() : 'Nunca'}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="detail-section">
+                    <h5><i class="fas fa-chart-line"></i> Actividad Reciente</h5>
+                    <div class="activity-stats">
+                        <div class="stat-item">
+                            <span class="stat-number">${perfil.avancesRegistrados || 0}</span>
+                            <span class="stat-label">Avances registrados</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-number">${perfil.ultimosIniciosSesion || 0}</span>
+                            <span class="stat-label">Inicios de sesión (30 días)</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-number">${perfil.documentosSubidos || 0}</span>
+                            <span class="stat-label">Documentos subidos</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-number">${perfil.reportesGenerados || 0}</span>
+                            <span class="stat-label">Reportes generados</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="detail-section">
+                    <h5><i class="fas fa-cogs"></i> Configuración</h5>
+                    <div class="config-list">
+                        <div class="config-item">
+                            <span>Requiere cambio de contraseña:</span>
+                            <span class="badge badge-${perfil.requiereCambioContrasena ? 'warning' : 'success'}">
+                                ${perfil.requiereCambioContrasena ? 'Sí' : 'No'}
+                            </span>
+                        </div>
+                        <div class="config-item">
+                            <span>Notificaciones por email:</span>
+                            <span class="badge badge-${perfil.notificacionesEmail ? 'success' : 'secondary'}">
+                                ${perfil.notificacionesEmail ? 'Activadas' : 'Desactivadas'}
+                            </span>
+                        </div>
+                        <div class="config-item">
+                            <span>Último cambio de contraseña:</span>
+                            <span>${perfil.ultimoCambioContrasena ? new Date(perfil.ultimoCambioContrasena).toLocaleDateString() : 'No disponible'}</span>
+                        </div>
+                    </div>
+                </div>
+                
+                ${perfil.historialBloqueos && perfil.historialBloqueos.length > 0 ? `
+                <div class="detail-section">
+                    <h5><i class="fas fa-history"></i> Historial de Bloqueos</h5>
+                    <div class="history-list">
+                        ${perfil.historialBloqueos.map(bloqueo => `
+                            <div class="history-item">
+                                <div class="history-date">${new Date(bloqueo.fecha).toLocaleString()}</div>
+                                <div class="history-action">
+                                    <span class="badge badge-${bloqueo.accion === 'bloqueado' ? 'danger' : 'success'}">
+                                        ${bloqueo.accion}
+                                    </span>
+                                    ${bloqueo.motivo ? `- ${bloqueo.motivo}` : ''}
+                                </div>
+                                <div class="history-user">Por: ${bloqueo.usuarioAccion}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+                ` : ''}
+            </div>
+        </div>
+    `;
+    
+    // Almacenar datos del perfil para exportación
+    window.perfilActualExportar = perfil;
+    
+    // Mostrar modal
+    document.getElementById('modal-perfil-usuario').classList.remove('hidden');
+}
+
+// Función para cerrar modal de perfil
+function cerrarModalPerfilUsuario() {
+    document.getElementById('modal-perfil-usuario').classList.add('hidden');
+}
+
+// Función para exportar perfil de usuario
+function exportarPerfilUsuario() {
+    if (!window.perfilActualExportar) {
+        mostrarNotificacion("No hay datos de perfil para exportar", "error");
+        return;
+    }
+    
+    const perfil = window.perfilActualExportar;
+    
+    // Crear contenido CSV
+    let csvContent = "data:text/csv;charset=utf-8,";
+    csvContent += "Campo,Valor\n";
+    csvContent += `Nombre,"${perfil.nombre}"\n`;
+    csvContent += `Apellido,"${perfil.apellido}"\n`;
+    csvContent += `Usuario,"${perfil.usuario}"\n`;
+    csvContent += `Email,"${perfil.email || 'No especificado'}"\n`;
+    csvContent += `Teléfono,"${perfil.telefono || 'No especificado'}"\n`;
+    csvContent += `Rol,"${perfil.rol}"\n`;
+    csvContent += `Estado,"${perfil.bloqueado ? 'Bloqueado' : (perfil.inactivo ? 'Inactivo' : 'Activo')}"\n`;
+    csvContent += `Fecha creación,"${perfil.fechaCreacion ? new Date(perfil.fechaCreacion).toLocaleString() : 'No disponible'}"\n`;
+    csvContent += `Último acceso,"${perfil.ultimoAcceso ? new Date(perfil.ultimoAcceso).toLocaleString() : 'Nunca'}"\n`;
+    csvContent += `Avances registrados,"${perfil.avancesRegistrados || 0}"\n`;
+    csvContent += `Inicios sesión (30 días),"${perfil.ultimosIniciosSesion || 0}"\n`;
+    csvContent += `Documentos subidos,"${perfil.documentosSubidos || 0}"\n`;
+    csvContent += `Reportes generados,"${perfil.reportesGenerados || 0}"\n`;
+    
+    // Crear y descargar archivo
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `perfil_${perfil.usuario}_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    mostrarNotificacion("Perfil exportado correctamente", "success");
+}
+// ============================================================================
+// BDPA - js/usuarios.html - PARTE 4 FINAL: Filtros, búsqueda e importación
+// ============================================================================
+
+// Función para filtrar usuarios
+function filtrarUsuarios() {
+    const busqueda = document.getElementById('buscar-usuario').value.toLowerCase();
+    const rolFiltro = document.getElementById('filtro-rol').value;
+    const estadoFiltro = document.getElementById('filtro-estado').value;
+    
+    const usuariosFiltrados = usuariosData.filter(usuario => {
+        const coincideBusqueda = !busqueda || 
+            usuario.nombre.toLowerCase().includes(busqueda) ||
+            usuario.apellido.toLowerCase().includes(busqueda) ||
+            usuario.usuario.toLowerCase().includes(busqueda) ||
+            (usuario.email && usuario.email.toLowerCase().includes(busqueda));
+        
+        const coincidenRol = !rolFiltro || usuario.rol === rolFiltro;
+        
+        let coincidenEstado = true;
+        if (estadoFiltro === 'activo') {
+            coincidenEstado = !usuario.bloqueado && !usuario.inactivo;
+        } else if (estadoFiltro === 'bloqueado') {
+            coincidenEstado = usuario.bloqueado;
+        } else if (estadoFiltro === 'inactivo') {
+            coincidenEstado = usuario.inactivo;
+        }
+        
+        return coincideBusqueda && coincidenRol && coincidenEstado;
+    });
+    
+    actualizarTablaUsuarios(usuariosFiltrados);
+}
+
+// Función para actualizar tabla con usuarios filtrados
+function actualizarTablaUsuarios(usuarios) {
+    const tbody = document.getElementById('usuarios-tbody');
+    tbody.innerHTML = '';
+    
+    usuarios.forEach(usuario => {
+        // Reutilizar lógica de cargarUsuarios() para consistencia
+        const tr = document.createElement('tr');
+        let badgeClass = usuario.rol === 'Admin' ? 'danger' : 
+                        usuario.rol === 'Supervisor' ? 'warning' :
+                        usuario.rol === 'Técnico' ? 'success' : 'info';
+        
+        let estadoClass = usuario.bloqueado ? 'danger' : 
+                         usuario.inactivo ? 'warning' : 'success';
+        let estadoTexto = usuario.bloqueado ? 'Bloqueado' :
+                         usuario.inactivo ? 'Inactivo' : 'Activo';
+        
+        tr.innerHTML = `
+            <td><strong>${usuario.nombre} ${usuario.apellido}</strong><br><small>ID: ${usuario.id}</small></td>
+            <td>${usuario.usuario}</td>
+            <td><span class="badge badge-${badgeClass}">${usuario.rol}</span></td>
+            <td>${usuario.email || '-'}</td>
+            <td><span class="badge badge-${estadoClass}">${estadoTexto}</span></td>
+            <td>${usuario.ultimoAcceso ? new Date(usuario.ultimoAcceso).toLocaleString() : 'Nunca'}</td>
+            <td>
+                <button class="btn btn-sm btn-primary" onclick="editarUsuario('${usuario.id}')"><i class="fas fa-edit"></i></button>
+                <button class="btn btn-sm btn-info" onclick="verPerfilUsuario('${usuario.id}')"><i class="fas fa-user"></i></button>
+                <button class="btn btn-sm btn-warning" onclick="resetearContrasenaUsuario('${usuario.id}')"><i class="fas fa-key"></i></button>
+                <button class="btn btn-sm btn-${usuario.bloqueado ? 'success' : 'secondary'}" onclick="${usuario.bloqueado ? 'desbloquearUsuario' : 'bloquearUsuario'}('${usuario.id}')">
+                    <i class="fas fa-${usuario.bloqueado ? 'unlock' : 'lock'}"></i>
+                </button>
+                <button class="btn btn-sm btn-danger" onclick="eliminarUsuario('${usuario.id}')"><i class="fas fa-trash"></i></button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+// Función para limpiar filtros
+function limpiarFiltrosUsuarios() {
+    document.getElementById('buscar-usuario').value = '';
+    document.getElementById('filtro-rol').value = '';
+    document.getElementById('filtro-estado').value = '';
+    actualizarTablaUsuarios(usuariosData);
+}
+
+// Función para exportar usuarios
+async function exportarUsuarios() {
+    try {
+        const response = await callAPI('exportarUsuarios');
+        if (response.success) {
+            const link = document.createElement('a');
+            link.href = response.urlArchivo;
+            link.download = `usuarios_${new Date().toISOString().split('T')[0]}.xlsx`;
+            link.click();
+            mostrarNotificacion("Usuarios exportados correctamente", "success");
+        }
+    } catch (error) {
+        mostrarNotificacion("Error al exportar usuarios", "error");
+    }
+}
+
+// Inicialización del módulo de usuarios
+function inicializarUsuarios() {
+    // Event listeners
+    const buscarInput = document.getElementById('buscar-usuario');
+    if (buscarInput) {
+        buscarInput.addEventListener('input', filtrarUsuarios);
+    }
+    
+    const filtroRol = document.getElementById('filtro-rol');
+    if (filtroRol) {
+        filtroRol.addEventListener('change', filtrarUsuarios);
+    }
+    
+    const filtroEstado = document.getElementById('filtro-estado');
+    if (filtroEstado) {
+        filtroEstado.addEventListener('change', filtrarUsuarios);
+    }
+    
+    // Validación en tiempo real de username
+    const usernameInput = document.getElementById('username-usuario');
+    if (usernameInput) {
+        usernameInput.addEventListener('blur', validarUsernameUnico);
+    }
+    
+    const emailInput = document.getElementById('email-usuario');
+    if (emailInput) {
+        emailInput.addEventListener('blur', validarEmailUnico);
+    }
+    
+    console.log("Módulo de usuarios inicializado");
+}
+
+// Auto-inicialización
+document.addEventListener('DOMContentLoaded', function() {
+    if (document.getElementById('gestion-usuarios')) {
+        inicializarUsuarios();
+    }
+});
+
+// Exportar funciones globalmente
+window.usuariosFunctions = {
+    cargarUsuarios,
+    mostrarFormularioUsuario,
+    guardarUsuario,
+    editarUsuario,
+    eliminarUsuario,
+    bloquearUsuario,
+    desbloquearUsuario,
+    resetearContrasenaUsuario,
+    filtrarUsuarios,
+    exportarUsuarios,
+    inicializarUsuarios
+};
+</script>

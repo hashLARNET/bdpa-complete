@@ -1,0 +1,2277 @@
+<script>
+// ============================================================================
+// BDPA - js/maquetacion.html - Sistema Completo de Maquetación de Obras
+// ============================================================================
+// Variables globales para maquetación (compatibles con el código existente)
+if (typeof window.shaftsPorTorrePiso === 'undefined') {
+    window.shaftsPorTorrePiso = [];
+}
+if (typeof window.dispositivosPorShaft === 'undefined') {
+    window.dispositivosPorShaft = [];
+}
+if (typeof window.maquetacionModificada === 'undefined') {
+    window.maquetacionModificada = false;
+}
+if (typeof window.maquetacionObraId === 'undefined') {
+    window.maquetacionObraId = null;
+}
+
+// Variables adicionales específicas para maquetación
+let configuracionPisosPorTorre = {};
+let espaciosComunesPorObra = [];
+
+// ============================================================================
+// FUNCIONES DE NAVEGACIÓN Y CONTROL PRINCIPAL
+// ============================================================================
+
+// Función de navegación entre pestañas del modal (compatible con el HTML existente)
+function mostrarTabMaquetacion(tabId) {
+    // Ocultar todas las pestañas
+    document.querySelectorAll('#modal-maquetacion .tab-content').forEach(tab => {
+        tab.style.display = 'none';
+    });
+    
+    // Desactivar todas las pestañas
+    document.querySelectorAll('#modal-maquetacion .nav-link').forEach(link => {
+        link.classList.remove('active');
+    });
+    
+    // Mostrar la pestaña seleccionada
+    const tabElement = document.getElementById('tab-' + tabId);
+    if (tabElement) {
+        tabElement.style.display = 'block';
+    }
+    
+    // Marcar la pestaña activa
+    const linkElement = document.querySelector('#modal-maquetacion .nav-link[onclick="mostrarTabMaquetacion(\'' + tabId + '\')"]');
+    if (linkElement) {
+        linkElement.classList.add('active');
+    }
+    
+    // Ejecutar inicializaciones específicas por pestaña
+    switch(tabId) {
+        case 'info-basica':
+            inicializarInfoBasica();
+            break;
+        case 'infraestructura':
+            inicializarInfraestructura();
+            break;
+        case 'red-telecomunicaciones':
+            inicializarRedTelecomunicaciones();
+            break;
+        case 'mediciones':
+            inicializarMediciones();
+            break;
+        case 'sistemas-integrados':
+            inicializarSistemasIntegrados();
+            break;
+        case 'vista-previa':
+            inicializarVistaPrevia();
+            break;
+    }
+}
+
+// Función para mostrar/ocultar componentes (ya existente pero aseguramos compatibilidad)
+function toggleComponente(componenteId, mostrar) {
+    const componente = document.getElementById(componenteId);
+    if (componente) {
+        componente.style.display = mostrar ? 'block' : 'none';
+    }
+}
+
+// Marcar que la maquetación ha sido modificada
+function marcarMaquetacionComoModificada() {
+    window.maquetacionModificada = true;
+    
+    // Agregar indicador visual en el título del modal
+    const modalTitle = document.querySelector('#modal-maquetacion .modal-title');
+    if (modalTitle && !modalTitle.textContent.includes('*')) {
+        modalTitle.textContent += ' *';
+    }
+}
+
+// ============================================================================
+// FUNCIONES DE INICIALIZACIÓN POR PESTAÑA
+// ============================================================================
+
+// Inicializar pestaña de información básica
+function inicializarInfoBasica() {
+    // Establecer fecha actual como predeterminada si no hay valor
+    const fechaInicio = document.getElementById('fecha-inicio-maq');
+    const fechaTermino = document.getElementById('fecha-termino-maq');
+    
+    if (fechaInicio && !fechaInicio.value) {
+        fechaInicio.value = new Date().toISOString().split('T')[0];
+    }
+    
+    // Establecer fecha de término 6 meses después si no hay valor
+    if (fechaTermino && !fechaTermino.value) {
+        const fechaFutura = new Date();
+        fechaFutura.setMonth(fechaFutura.getMonth() + 6);
+        fechaTermino.value = fechaFutura.toISOString().split('T')[0];
+    }
+}
+
+// Inicializar pestaña de infraestructura
+function inicializarInfraestructura() {
+    // Actualizar selectores dependientes si hay torres configuradas
+    if (document.getElementById('incluir-torres') && document.getElementById('incluir-torres').checked) {
+        actualizarConfiguracionPisosTorres();
+        actualizarSelectorTorreShaft();
+        actualizarSelectorTorreDispositivosShaft();
+    }
+    
+    // Actualizar tabla de shafts específicos si existen configuraciones
+    if (window.shaftsPorTorrePiso.length > 0) {
+        actualizarTablaShaftEspecifico();
+    }
+}
+
+// Inicializar pestaña de red de telecomunicaciones
+function inicializarRedTelecomunicaciones() {
+    // Actualizar descripción de red según tipo seleccionado
+    actualizarConfiguracionRed();
+    
+    // Actualizar opciones de dispositivos en shaft
+    actualizarOpcionesDispositivo();
+    
+    // Actualizar selectores de torres para dispositivos
+    if (document.getElementById('incluir-torres') && document.getElementById('incluir-torres').checked) {
+        actualizarSelectorTorreDispositivosShaft();
+    }
+    
+    // Actualizar tabla de dispositivos en shaft si existen
+    if (window.dispositivosPorShaft.length > 0) {
+        actualizarTablaDispositivosShaft();
+    }
+}
+
+// Inicializar pestaña de mediciones
+function inicializarMediciones() {
+    // La pestaña de mediciones está simplificada según el diseño
+    // Solo verificar que el equipo de certificación esté establecido
+    const equipoCertificacion = document.getElementById('equipo-certificacion');
+    if (equipoCertificacion && !equipoCertificacion.value) {
+        equipoCertificacion.value = 'Certificadora Unificada FO/Coaxial';
+    }
+}
+
+// Inicializar pestaña de sistemas integrados
+function inicializarSistemasIntegrados() {
+    // No requiere inicialización especial, solo verificar que los componentes estén listos
+    console.log('Sistemas integrados inicializados');
+}
+
+// Inicializar pestaña de vista previa
+function inicializarVistaPrevia() {
+    // La vista previa se genera bajo demanda, no requiere inicialización especial
+    const vistaPrevia = document.getElementById('vista-previa-resumen');
+    if (vistaPrevia && vistaPrevia.innerHTML.trim() === '') {
+        vistaPrevia.innerHTML = '<div class="alert alert-info">Haga clic en "Generar Vista Previa" para visualizar el resumen de configuración.</div>';
+    }
+}
+
+// ============================================================================
+// FUNCIONES DE CONFIGURACIÓN DE PISOS Y TORRES
+// ============================================================================
+
+// Toggle configuración global o por torre para pisos
+function toggleConfiguracionPisos(value) {
+    const pisosGlobal = document.getElementById('pisos-global');
+    const pisosPorTorre = document.getElementById('pisos-por-torre');
+    
+    if (pisosGlobal && pisosPorTorre) {
+        if (value === 'global') {
+            pisosGlobal.style.display = 'block';
+            pisosPorTorre.style.display = 'none';
+        } else {
+            pisosGlobal.style.display = 'none';
+            pisosPorTorre.style.display = 'block';
+            actualizarFormularioPisosPorTorre();
+        }
+    }
+}
+
+// Actualizar configuración de pisos y torres
+function actualizarConfiguracionPisosTorres() {
+    if (document.getElementById('incluir-torres') && document.getElementById('incluir-torres').checked) {
+        actualizarFormularioPisosPorTorre();
+        actualizarSelectorTorreShaft();
+        actualizarSelectorTorreDispositivosShaft();
+    }
+    marcarMaquetacionComoModificada();
+}
+
+// Generar formulario de pisos por torre basado en la cantidad de torres
+function actualizarFormularioPisosPorTorre() {
+    const incluirTorres = document.getElementById('incluir-torres');
+    if (!incluirTorres || !incluirTorres.checked) return;
+    
+    const cantidadTorres = parseInt(document.getElementById('cantidad-torres').value) || 1;
+    const contenedor = document.getElementById('pisos-por-torre');
+    const nomenclaturaTorres = document.getElementById('nomenclatura-torres').value;
+    
+    if (!contenedor) return;
+    
+    // Limpiar contenido actual
+    contenedor.innerHTML = '';
+    
+    for (let i = 0; i < cantidadTorres; i++) {
+        const torreId = (nomenclaturaTorres === 'letras') ? String.fromCharCode(65 + i) : (i + 1).toString();
+        
+        const seccionTorre = document.createElement('div');
+        seccionTorre.classList.add('maquetacion-section', 'mb-20');
+        seccionTorre.innerHTML = `
+            <div class="maquetacion-section-header">
+                <h5 class="maquetacion-section-title">Torre ${torreId}</h5>
+            </div>
+            <div class="maquetacion-grid">
+                <div class="form-group">
+                    <label for="piso-inicio-torre-${i}">Piso de inicio:</label>
+                    <input type="number" id="piso-inicio-torre-${i}" min="-10" value="1" onchange="marcarMaquetacionComoModificada()" />
+                </div>
+                <div class="form-group">
+                    <label for="piso-fin-torre-${i}">Piso final:</label>
+                    <input type="number" id="piso-fin-torre-${i}" min="-9" value="10" onchange="marcarMaquetacionComoModificada()" />
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="nomenclatura-pisos-torre-${i}">Nomenclatura:</label>
+                <select id="nomenclatura-pisos-torre-${i}" onchange="marcarMaquetacionComoModificada()">
+                    <option value="numerico">Numérica (1, 2, 3...)</option>
+                    <option value="alfanumerico">Alfanumérica (P1, P2, P3...)</option>
+                    <option value="personalizado">Personalizada</option>
+                </select>
+            </div>
+        `;
+        
+        contenedor.appendChild(seccionTorre);
+    }
+}
+// ============================================================================
+// FUNCIONES DE CONFIGURACIÓN DE SHAFT
+// ============================================================================
+
+// Toggle configuración global o específica para shaft
+function toggleConfiguracionShaft(value) {
+    const shaftGlobal = document.getElementById('shaft-global');
+    const shaftEspecifico = document.getElementById('shaft-especifico');
+    
+    if (shaftGlobal && shaftEspecifico) {
+        if (value === 'global') {
+            shaftGlobal.style.display = 'block';
+            shaftEspecifico.style.display = 'none';
+        } else {
+            shaftGlobal.style.display = 'none';
+            shaftEspecifico.style.display = 'block';
+            actualizarSelectorTorreShaft();
+        }
+    }
+    marcarMaquetacionComoModificada();
+}
+
+// Actualizar selector de torres para shafts
+function actualizarSelectorTorreShaft() {
+    const incluirTorres = document.getElementById('incluir-torres');
+    if (!incluirTorres || !incluirTorres.checked) return;
+    
+    const cantidadTorres = parseInt(document.getElementById('cantidad-torres').value) || 1;
+    const selectorTorre = document.getElementById('torre-shaft');
+    const nomenclaturaTorres = document.getElementById('nomenclatura-torres').value;
+    
+    if (!selectorTorre) return;
+    
+    // Limpiar opciones actuales
+    selectorTorre.innerHTML = '';
+    
+    for (let i = 0; i < cantidadTorres; i++) {
+        const torreId = (nomenclaturaTorres === 'letras') ? String.fromCharCode(65 + i) : (i + 1).toString();
+        const option = document.createElement('option');
+        option.value = i;
+        option.textContent = `Torre ${torreId}`;
+        selectorTorre.appendChild(option);
+    }
+    
+    // Actualizar pisos para la torre seleccionada
+    cargarPisosPorTorre();
+}
+
+// Cargar pisos disponibles en función de la torre seleccionada para shaft
+function cargarPisosPorTorre() {
+    const torreIndex = document.getElementById('torre-shaft').value;
+    const selectorPiso = document.getElementById('piso-shaft');
+    
+    if (!selectorPiso) return;
+    
+    // Limpiar opciones actuales
+    selectorPiso.innerHTML = '';
+    
+    const configuracionPisos = document.getElementById('configuracion-pisos-global');
+    if (!configuracionPisos) return;
+    
+    if (configuracionPisos.value === 'global') {
+        const pisoInicio = parseInt(document.getElementById('piso-inicio-global').value) || 1;
+        const pisoFin = parseInt(document.getElementById('piso-fin-global').value) || 10;
+        
+        for (let i = pisoInicio; i <= pisoFin; i++) {
+            const option = document.createElement('option');
+            option.value = i;
+            option.textContent = `Piso ${i}`;
+            selectorPiso.appendChild(option);
+        }
+    } else {
+        const pisoInicioElement = document.getElementById(`piso-inicio-torre-${torreIndex}`);
+        const pisoFinElement = document.getElementById(`piso-fin-torre-${torreIndex}`);
+        
+        if (pisoInicioElement && pisoFinElement) {
+            const pisoInicio = parseInt(pisoInicioElement.value) || 1;
+            const pisoFin = parseInt(pisoFinElement.value) || 10;
+            
+            for (let i = pisoInicio; i <= pisoFin; i++) {
+                const option = document.createElement('option');
+                option.value = i;
+                option.textContent = `Piso ${i}`;
+                selectorPiso.appendChild(option);
+            }
+        }
+    }
+}
+
+// Agregar configuración de shaft por torre y piso
+function agregarShaftEspecifico() {
+    const torreSelector = document.getElementById('torre-shaft');
+    const pisoSelector = document.getElementById('piso-shaft');
+    const cantidadShaft = document.getElementById('cantidad-shaft-especifico').value;
+    
+    if (!torreSelector || !pisoSelector || !cantidadShaft) {
+        alert('Por favor complete todos los campos.');
+        return;
+    }
+    
+    if (parseInt(cantidadShaft) <= 0) {
+        alert('La cantidad de shaft debe ser mayor a 0.');
+        return;
+    }
+    
+    const torreIndex = torreSelector.value;
+    const torreText = torreSelector.options[torreSelector.selectedIndex].text;
+    const pisoValue = pisoSelector.value;
+    const pisoText = pisoSelector.options[pisoSelector.selectedIndex].text;
+    
+    // Verificar si ya existe una configuración para esta torre y piso
+    const existeConfig = window.shaftsPorTorrePiso.some(
+        config => config.torre === torreIndex && config.piso === pisoValue
+    );
+    
+    if (existeConfig) {
+        alert('Ya existe una configuración para esta torre y piso. Edite o elimine la existente.');
+        return;
+    }
+    
+    // Agregar configuración a la lista
+    window.shaftsPorTorrePiso.push({
+        torre: torreIndex,
+        torreText: torreText,
+        piso: pisoValue,
+        pisoText: pisoText,
+        cantidad: parseInt(cantidadShaft)
+    });
+    
+    // Actualizar la tabla
+    actualizarTablaShaftEspecifico();
+    
+    // Limpiar campos
+    document.getElementById('cantidad-shaft-especifico').value = '1';
+    
+    marcarMaquetacionComoModificada();
+}
+
+// Actualizar la tabla de shafts específicos
+function actualizarTablaShaftEspecifico() {
+    const tbody = document.querySelector('#lista-shaft-especifico tbody');
+    if (!tbody) return;
+    
+    // Limpiar contenido actual
+    tbody.innerHTML = '';
+    
+    // Agregar cada configuración
+    window.shaftsPorTorrePiso.forEach((config, index) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${config.torreText}</td>
+            <td>${config.pisoText}</td>
+            <td>${config.cantidad}</td>
+            <td>
+                <button class="btn btn-sm btn-danger" onclick="eliminarShaftEspecifico(${index})">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+// Eliminar configuración de shaft específico
+function eliminarShaftEspecifico(index) {
+    if (confirm('¿Está seguro de eliminar esta configuración de shaft?')) {
+        window.shaftsPorTorrePiso.splice(index, 1);
+        actualizarTablaShaftEspecifico();
+        marcarMaquetacionComoModificada();
+    }
+}
+
+// ============================================================================
+// FUNCIONES DE DISPOSITIVOS EN SHAFT
+// ============================================================================
+
+// Actualizar selector de torres para dispositivos en shaft
+function actualizarSelectorTorreDispositivosShaft() {
+    const incluirTorres = document.getElementById('incluir-torres');
+    if (!incluirTorres || !incluirTorres.checked) return;
+    
+    const cantidadTorres = parseInt(document.getElementById('cantidad-torres').value) || 1;
+    const selectorTorre = document.getElementById('torre-shaft-dispositivos');
+    const nomenclaturaTorres = document.getElementById('nomenclatura-torres').value;
+    
+    if (!selectorTorre) return;
+    
+    // Limpiar opciones actuales
+    selectorTorre.innerHTML = '';
+    
+    for (let i = 0; i < cantidadTorres; i++) {
+        const torreId = (nomenclaturaTorres === 'letras') ? String.fromCharCode(65 + i) : (i + 1).toString();
+        const option = document.createElement('option');
+        option.value = i;
+        option.textContent = `Torre ${torreId}`;
+        selectorTorre.appendChild(option);
+    }
+    
+    // Actualizar shafts para la torre seleccionada
+    cargarShaftsPorTorre();
+}
+
+// Cargar shafts disponibles en función de la torre seleccionada
+function cargarShaftsPorTorre() {
+    const torreIndex = document.getElementById('torre-shaft-dispositivos').value;
+    const selectorShaft = document.getElementById('shaft-dispositivos');
+    
+    if (!selectorShaft) return;
+    
+    // Limpiar opciones actuales
+    selectorShaft.innerHTML = '';
+    
+    const configuracionShaft = document.getElementById('configuracion-shaft');
+    if (!configuracionShaft) return;
+    
+    // Si se usa configuración global de shafts
+    if (configuracionShaft.value === 'global') {
+        const cantidadShafts = parseInt(document.getElementById('cantidad-shaft-por-torre').value) || 1;
+        
+        for (let i = 1; i <= cantidadShafts; i++) {
+            const option = document.createElement('option');
+            option.value = i;
+            option.textContent = `Shaft ${i}`;
+            selectorShaft.appendChild(option);
+        }
+    } else {
+        // Si se usa configuración específica, buscar configuraciones para esta torre
+        const shaftsDeTorre = window.shaftsPorTorrePiso.filter(config => config.torre === torreIndex);
+        
+        if (shaftsDeTorre.length === 0) {
+            const option = document.createElement('option');
+            option.value = '';
+            option.textContent = 'No hay shafts configurados para esta torre';
+            selectorShaft.appendChild(option);
+        } else {
+            shaftsDeTorre.forEach(config => {
+                for (let i = 1; i <= config.cantidad; i++) {
+                    const option = document.createElement('option');
+                    option.value = `${config.piso}-${i}`;
+                    option.textContent = `Shaft ${i} (Piso ${config.piso})`;
+                    selectorShaft.appendChild(option);
+                }
+            });
+        }
+    }
+}
+
+// Actualizar opciones de dispositivo en shaft según el tipo seleccionado
+function actualizarOpcionesDispositivo() {
+    const tipoDispositivo = document.getElementById('tipo-dispositivo-shaft');
+    if (!tipoDispositivo) return;
+    
+    const tipoDispositivoValue = tipoDispositivo.value;
+    
+    // Ocultar todas las opciones primero
+    const opcionesElementos = [
+        'derivador-alam-opciones',
+        'derivador-inal-opciones', 
+        'odf-opciones',
+        'otro-dispositivo'
+    ];
+    
+    opcionesElementos.forEach(id => {
+        const elemento = document.getElementById(id);
+        if (elemento) {
+            elemento.style.display = 'none';
+        }
+    });
+    
+    // Mostrar las opciones según el tipo seleccionado
+    if (tipoDispositivoValue === 'derivador_alam') {
+        const elemento = document.getElementById('derivador-alam-opciones');
+        if (elemento) elemento.style.display = 'block';
+    } else if (tipoDispositivoValue === 'derivador_inal') {
+        const elemento = document.getElementById('derivador-inal-opciones');
+        if (elemento) elemento.style.display = 'block';
+    } else if (tipoDispositivoValue === 'odf') {
+        const elemento = document.getElementById('odf-opciones');
+        if (elemento) elemento.style.display = 'block';
+    } else if (tipoDispositivoValue === 'otro') {
+        const elemento = document.getElementById('otro-dispositivo');
+        if (elemento) elemento.style.display = 'block';
+    }
+}
+
+// Agregar dispositivo a un shaft específico
+function agregarDispositivoShaft() {
+    const torreSelector = document.getElementById('torre-shaft-dispositivos');
+    const shaftSelector = document.getElementById('shaft-dispositivos');
+    const tipoDispositivoSelector = document.getElementById('tipo-dispositivo-shaft');
+    
+    if (!torreSelector || !shaftSelector || !tipoDispositivoSelector) {
+        alert('Error: No se encontraron los selectores necesarios.');
+        return;
+    }
+    
+    if (shaftSelector.value === '' || tipoDispositivoSelector.value === '') {
+        alert('Por favor, seleccione una torre, un shaft y un tipo de dispositivo.');
+        return;
+    }
+    
+    const torreIndex = torreSelector.value;
+    const torreText = torreSelector.options[torreSelector.selectedIndex].text;
+    const shaftValue = shaftSelector.value;
+    const shaftText = shaftSelector.options[shaftSelector.selectedIndex].text;
+    
+    let tipoDispositivo = '';
+    let especificaciones = '';
+    
+    // Determinar qué tipo de dispositivo está seleccionado
+    const tipoDispositivoValue = tipoDispositivoSelector.value;
+    
+    if (tipoDispositivoValue === 'derivador_alam') {
+        const modeloSelector = document.getElementById('modelo-derivador-alam');
+        if (modeloSelector) {
+            tipoDispositivo = 'Derivador Alámbrico';
+            especificaciones = modeloSelector.options[modeloSelector.selectedIndex].text;
+        }
+    } 
+    else if (tipoDispositivoValue === 'derivador_inal') {
+        const modeloSelector = document.getElementById('modelo-derivador-inal');
+        if (modeloSelector) {
+            tipoDispositivo = 'Derivador Inalámbrico';
+            especificaciones = modeloSelector.options[modeloSelector.selectedIndex].text;
+        }
+    } 
+    else if (tipoDispositivoValue === 'odf') {
+        const puertosInput = document.getElementById('puertos-odf');
+        tipoDispositivo = 'ODF';
+        especificaciones = `${puertosInput ? puertosInput.value : '12'} puertos`;
+    } 
+    else if (tipoDispositivoValue === 'otro') {
+        const nombreInput = document.getElementById('nombre-otro-dispositivo');
+        const descripcionInput = document.getElementById('descripcion-otro-dispositivo');
+        tipoDispositivo = nombreInput ? nombreInput.value : 'Dispositivo personalizado';
+        especificaciones = descripcionInput ? descripcionInput.value : 'Sin descripción';
+    }
+    
+    if (!tipoDispositivo) {
+        alert('Por favor, configure correctamente el dispositivo.');
+        return;
+    }
+    
+    // Verificar si ya existe este dispositivo en el mismo shaft
+    const existeDispositivo = window.dispositivosPorShaft.some(disp => 
+        disp.torre === torreIndex && 
+        disp.shaft === shaftValue && 
+        disp.dispositivo === tipoDispositivo &&
+        disp.especificaciones === especificaciones
+    );
+    
+    if (existeDispositivo) {
+        alert('Este dispositivo ya está configurado en este shaft.');
+        return;
+    }
+    
+    // Agregar dispositivo a la lista
+    window.dispositivosPorShaft.push({
+        torre: torreIndex,
+        torreText: torreText,
+        shaft: shaftValue,
+        shaftText: shaftText,
+        dispositivo: tipoDispositivo,
+        especificaciones: especificaciones
+    });
+    
+    // Actualizar la tabla
+    actualizarTablaDispositivosShaft();
+    
+    // Limpiar la selección
+    tipoDispositivoSelector.value = '';
+    actualizarOpcionesDispositivo();
+    
+    // Limpiar campos específicos
+    const camposLimpiar = [
+        'nombre-otro-dispositivo',
+        'descripcion-otro-dispositivo',
+        'puertos-odf'
+    ];
+    
+    camposLimpiar.forEach(id => {
+        const elemento = document.getElementById(id);
+        if (elemento) {
+            elemento.value = elemento.type === 'number' ? '12' : '';
+        }
+    });
+    
+    marcarMaquetacionComoModificada();
+}
+
+// Actualizar la tabla de dispositivos por shaft
+function actualizarTablaDispositivosShaft() {
+    const tbody = document.querySelector('#lista-dispositivos-shaft tbody');
+    if (!tbody) return;
+    
+    // Limpiar contenido actual
+    tbody.innerHTML = '';
+    
+    // Agregar cada dispositivo
+    window.dispositivosPorShaft.forEach((config, index) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${config.torreText}</td>
+            <td>${config.shaftText}</td>
+            <td>${config.dispositivo}</td>
+            <td>${config.especificaciones}</td>
+            <td>
+                <button class="btn btn-sm btn-danger" onclick="eliminarDispositivoShaft(${index})">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+// Eliminar dispositivo de shaft
+function eliminarDispositivoShaft(index) {
+    if (confirm('¿Está seguro de eliminar este dispositivo?')) {
+        window.dispositivosPorShaft.splice(index, 1);
+        actualizarTablaDispositivosShaft();
+        marcarMaquetacionComoModificada();
+    }
+}
+// ============================================================================
+// FUNCIONES DE CONFIGURACIÓN DE RED DE TELECOMUNICACIONES
+// ============================================================================
+
+// Función para actualizar la descripción de la topología de red según selección
+function actualizarConfiguracionRed() {
+    const tipoRed = document.getElementById('tipo-red');
+    const descripcionRed = document.getElementById('descripcion-red');
+    
+    if (!tipoRed || !descripcionRed) return;
+    
+    let descripcion = '';
+    switch (tipoRed.value) {
+        case 'arbol':
+            descripcion = 'La topología en árbol distribuye la señal desde un punto central (raíz) a través de múltiples niveles de distribución.';
+            break;
+        case 'estrella':
+            descripcion = 'La topología en estrella conecta todos los dispositivos directamente a un punto central, facilitando la administración pero creando un único punto de fallo.';
+            break;
+        case 'rama':
+            descripcion = 'La topología en rama extiende la conexión a través de rutas lineales con derivaciones para cada punto de servicio.';
+            break;
+        case 'hibrida':
+            descripcion = 'La topología híbrida combina características de múltiples tipos de redes para maximizar beneficios y minimizar inconvenientes.';
+            break;
+        default:
+            descripcion = 'Seleccione un tipo de red para ver su descripción.';
+    }
+    descripcionRed.value = descripcion;
+    marcarMaquetacionComoModificada();
+}
+
+// ============================================================================
+// FUNCIONES DE MEDICIONES
+// ============================================================================
+
+// Abrir modal de registro de mediciones (función placeholder)
+function abrirModalRegistroMediciones() {
+    alert('Esta función abrirá el modal independiente de Registro de Mediciones que generará una hoja de cálculo separada.');
+    // En la implementación real, aquí se abriría el modal específico de mediciones
+}
+
+// ============================================================================
+// FUNCIONES DE VISTA PREVIA
+// ============================================================================
+
+// Mostrar la vista previa de la hoja de progreso
+function mostrarVistaHojaProgreso() {
+    const vistaHoja = document.getElementById('vista-hoja-progreso');
+    if (!vistaHoja) return;
+    
+    if (vistaHoja.style.display === 'none' || vistaHoja.style.display === '') {
+        vistaHoja.style.display = 'block';
+    } else {
+        vistaHoja.style.display = 'none';
+    }
+}
+
+// Función para generar la vista previa como tabla resumen
+function generarVistaPrevia() {
+    // Obtener toda la configuración actual del formulario
+    const configuracion = obtenerConfiguracionMaquetacion();
+    
+    // Generar HTML de tabla resumen
+    const contenedorResumen = document.getElementById('vista-previa-resumen');
+    if (!contenedorResumen) {
+        alert('Error: No se encontró el contenedor de vista previa.');
+        return;
+    }
+    
+    let htmlResumen = `
+        <table class="resumen-table">
+            <tr class="section-title">
+                <td colspan="2">Información Básica</td>
+            </tr>
+            <tr>
+                <td>Nombre de la obra:</td>
+                <td>${configuracion.infoBasica.nombre || '-'}</td>
+            </tr>
+            <tr>
+                <td>Dirección:</td>
+                <td>${configuracion.infoBasica.direccion || '-'}</td>
+            </tr>
+            <tr>
+                <td>Fecha de inicio:</td>
+                <td>${configuracion.infoBasica.fechaInicio || '-'}</td>
+            </tr>
+            <tr>
+                <td>Fecha estimada de término:</td>
+                <td>${configuracion.infoBasica.fechaTermino || '-'}</td>
+            </tr>
+            <tr>
+                <td>Tipo de obra:</td>
+                <td>${configuracion.infoBasica.tipo || '-'}</td>
+            </tr>
+            <tr>
+                <td>Estado:</td>
+                <td>${configuracion.infoBasica.estado || '-'}</td>
+            </tr>
+            <tr>
+                <td>Empresa cliente:</td>
+                <td>${configuracion.infoBasica.empresaCliente || '-'}</td>
+            </tr>
+            
+            <tr class="section-title">
+                <td colspan="2">Infraestructura</td>
+            </tr>
+    `;
+    
+    // Agregar torres
+    if (configuracion.estructuraFisica.torres) {
+        htmlResumen += `
+            <tr>
+                <td>Torres:</td>
+                <td>${configuracion.estructuraFisica.torres.cantidad} (${configuracion.estructuraFisica.torres.nomenclatura})</td>
+            </tr>
+        `;
+    } else {
+        htmlResumen += `
+            <tr>
+                <td>Torres:</td>
+                <td>No configurado</td>
+            </tr>
+        `;
+    }
+    
+    // Agregar pisos
+    if (configuracion.estructuraFisica.pisos) {
+        const configuracionPisos = document.getElementById('configuracion-pisos-global');
+        if (configuracionPisos && configuracionPisos.value === 'global') {
+            const pisoInicio = document.getElementById('piso-inicio-global').value;
+            const pisoFin = document.getElementById('piso-fin-global').value;
+            htmlResumen += `
+                <tr>
+                    <td>Pisos:</td>
+                    <td>Global - Del piso ${pisoInicio} al ${pisoFin} (${configuracion.estructuraFisica.pisos.nomenclatura})</td>
+                </tr>
+            `;
+        } else {
+            htmlResumen += `
+                <tr>
+                    <td>Pisos:</td>
+                    <td>Configuración específica por torre (ver detalle)</td>
+                </tr>
+            `;
+        }
+    } else {
+        htmlResumen += `
+            <tr>
+                <td>Pisos:</td>
+                <td>No configurado</td>
+            </tr>
+        `;
+    }
+    
+    // Agregar unidades
+    if (configuracion.estructuraFisica.unidades) {
+        htmlResumen += `
+            <tr>
+                <td>Unidades por piso:</td>
+                <td>${configuracion.estructuraFisica.unidades.cantidadPorPiso} (${configuracion.estructuraFisica.unidades.nomenclatura})</td>
+            </tr>
+        `;
+    } else {
+        htmlResumen += `
+            <tr>
+                <td>Unidades:</td>
+                <td>No configurado</td>
+            </tr>
+        `;
+    }
+    
+    // Agregar CTR
+    if (configuracion.estructuraFisica.ctr) {
+        htmlResumen += `
+            <tr>
+                <td>CTR (Centro de Telecomunicaciones):</td>
+                <td>Tipo: ${configuracion.estructuraFisica.ctr.tipo}</td>
+            </tr>
+        `;
+    }
+    
+    // Agregar shaft
+    if (configuracion.estructuraFisica.shaft) {
+        const configuracionShaft = document.getElementById('configuracion-shaft');
+        if (configuracionShaft && configuracionShaft.value === 'global') {
+            htmlResumen += `
+                <tr>
+                    <td>Shaft:</td>
+                    <td>${configuracion.estructuraFisica.shaft.cantidadPorTorre} por torre (configuración global)</td>
+                </tr>
+            `;
+        } else {
+            htmlResumen += `
+                <tr>
+                    <td>Shaft:</td>
+                    <td>Configuración específica (${window.shaftsPorTorrePiso.length} configuraciones)</td>
+                </tr>
+            `;
+        }
+    } else {
+        htmlResumen += `
+            <tr>
+                <td>Shaft:</td>
+                <td>No configurado</td>
+            </tr>
+        `;
+    }
+    
+    // Sección de Red de Telecomunicaciones
+    htmlResumen += `
+        <tr class="section-title">
+            <td colspan="2">Red de Telecomunicaciones</td>
+        </tr>
+        <tr>
+            <td>Tipo de red:</td>
+            <td>${configuracion.redTelecomunicaciones.tipo || '-'}</td>
+        </tr>
+    `;
+    
+    // Tecnologías
+    if (configuracion.redTelecomunicaciones.coaxAlambrico) {
+        const t1t2Text = document.getElementById('incluir-t1-t2-alam') && document.getElementById('incluir-t1-t2-alam').checked ? "Incluye T1 y T2" : "Sin T1/T2";
+        const troncalText = document.getElementById('incluir-troncal-coax') && document.getElementById('incluir-troncal-coax').checked ? 
+            `Con ${configuracion.redTelecomunicaciones.coaxAlambrico.troncales?.cantidad || 0} troncales principales` : 
+            "Sin troncales";
+        
+        htmlResumen += `
+            <tr>
+                <td>Coaxial Alámbrico:</td>
+                <td>Marca: ${configuracion.redTelecomunicaciones.coaxAlambrico.marca}, Tipo: ${configuracion.redTelecomunicaciones.coaxAlambrico.tipo} (${t1t2Text}, ${troncalText})</td>
+            </tr>
+        `;
+    }
+    
+    if (configuracion.redTelecomunicaciones.coaxInalambrico) {
+        const t1t2Text = document.getElementById('incluir-t1-t2-inal') && document.getElementById('incluir-t1-t2-inal').checked ? "Incluye T1 y T2" : "Sin T1/T2";
+        const troncalText = document.getElementById('incluir-troncal-inal') && document.getElementById('incluir-troncal-inal').checked ? 
+            `Con ${configuracion.redTelecomunicaciones.coaxInalambrico.troncales?.cantidad || 0} troncales principales` : 
+            "Sin troncales";
+        
+        htmlResumen += `
+            <tr>
+                <td>Coaxial Inalámbrico:</td>
+                <td>${t1t2Text}, ${troncalText}</td>
+            </tr>
+        `;
+    }
+    
+    if (configuracion.redTelecomunicaciones.fibra) {
+        const troncalText = document.getElementById('incluir-troncal-fibra') && document.getElementById('incluir-troncal-fibra').checked ? 
+            `Con ${configuracion.redTelecomunicaciones.fibra.troncales?.cantidad || 0} troncales principales` : 
+            "Sin troncales";
+        
+        htmlResumen += `
+            <tr>
+                <td>Fibra Óptica:</td>
+                <td>${configuracion.redTelecomunicaciones.fibra.tipo}, ${configuracion.redTelecomunicaciones.fibra.distribucion} (${troncalText})</td>
+            </tr>
+        `;
+    }
+    
+    // PAU
+    if (document.getElementById('incluir-pau') && document.getElementById('incluir-pau').checked) {
+        htmlResumen += `
+            <tr>
+                <td>PAU por unidad:</td>
+                <td>${document.getElementById('puntos-por-unidad').value} puntos por unidad</td>
+            </tr>
+        `;
+        
+        if (document.getElementById('incluir-repartidor-alam') && document.getElementById('incluir-repartidor-alam').checked) {
+            htmlResumen += `
+                <tr>
+                    <td>- Repartidor ALAM:</td>
+                    <td>Marca: ${document.getElementById('marca-repartidor-alam').value || "No especificada"}</td>
+                </tr>
+            `;
+        }
+        if (document.getElementById('incluir-repartidor-inal') && document.getElementById('incluir-repartidor-inal').checked) {
+            htmlResumen += `
+                <tr>
+                    <td>- Repartidor INAL:</td>
+                    <td>Marca: ${document.getElementById('marca-repartidor-inal').value || "No especificada"}</td>
+                </tr>
+            `;
+        }
+        
+        if (document.getElementById('incluir-roseta-fo') && document.getElementById('incluir-roseta-fo').checked) {
+            htmlResumen += `
+                <tr>
+                    <td>- Roseta F.O.:</td>
+                    <td>Marca: ${document.getElementById('marca-roseta-fo').value || "No especificada"}</td>
+                </tr>
+            `;
+        }
+    }
+    
+    // Dispositivos en Shaft
+    if (document.getElementById('incluir-dispositivos-shaft') && document.getElementById('incluir-dispositivos-shaft').checked && window.dispositivosPorShaft.length > 0) {
+        htmlResumen += `
+            <tr>
+                <td>Dispositivos en Shaft:</td>
+                <td>${window.dispositivosPorShaft.length} dispositivos configurados</td>
+            </tr>
+        `;
+        
+        // Mostrar los primeros 3 dispositivos como ejemplo
+        const dispositivosMostrar = window.dispositivosPorShaft.slice(0, 3);
+        dispositivosMostrar.forEach(disp => {
+            htmlResumen += `
+                <tr>
+                    <td>- ${disp.dispositivo}:</td>
+                    <td>${disp.torreText}, ${disp.shaftText}, ${disp.especificaciones}</td>
+                </tr>
+            `;
+        });
+        
+        if (window.dispositivosPorShaft.length > 3) {
+            htmlResumen += `
+                <tr>
+                    <td colspan="2" style="text-align: center; font-style: italic;">... y ${window.dispositivosPorShaft.length - 3} más</td>
+                </tr>
+            `;
+        }
+    }
+    
+    // Antenas
+    if (configuracion.redTelecomunicaciones.antenas) {
+        htmlResumen += `
+            <tr>
+                <td>Antenas de Televisión:</td>
+                <td>${configuracion.redTelecomunicaciones.antenas.cantidad}, ${configuracion.redTelecomunicaciones.antenas.tipo}, ${document.getElementById('ubicacion-antenas').value}</td>
+            </tr>
+        `;
+    }
+    
+    // Amplificadores
+    if (configuracion.redTelecomunicaciones.amplificadores) {
+        htmlResumen += `
+            <tr>
+                <td>Amplificadores:</td>
+                <td>${configuracion.redTelecomunicaciones.amplificadores.cantidad}, ${configuracion.redTelecomunicaciones.amplificadores.tipo}</td>
+            </tr>
+        `;
+    }
+    
+    // Sección de Mediciones
+    htmlResumen += `
+        <tr class="section-title">
+            <td colspan="2">Mediciones</td>
+        </tr>
+    `;
+    
+    if (document.getElementById('incluir-certificacion') && document.getElementById('incluir-certificacion').checked) {
+        htmlResumen += `
+            <tr>
+                <td>Certificación:</td>
+                <td>${document.getElementById('equipo-certificacion').value}</td>
+            </tr>
+            <tr>
+                <td>Parámetros:</td>
+                <td>
+                    ${document.getElementById('param-atenuacion') && document.getElementById('param-atenuacion').checked ? 'Atenuación, ' : ''}
+                    ${document.getElementById('param-continuidad') && document.getElementById('param-continuidad').checked ? 'Continuidad, ' : ''}
+                    ${document.getElementById('param-potencia') && document.getElementById('param-potencia').checked ? 'Potencia óptica/Señal' : ''}
+                </td>
+            </tr>
+        `;
+    } else {
+        htmlResumen += `
+            <tr>
+                <td>Certificación:</td>
+                <td>No configurada</td>
+            </tr>
+        `;
+    }
+    
+    // Sección de Sistemas Integrados
+    htmlResumen += `
+        <tr class="section-title">
+            <td colspan="2">Sistemas Integrados</td>
+        </tr>
+    `;
+    
+    // Red de Incendios
+    if (configuracion.sistemasIntegrados.redIncendios) {
+        htmlResumen += `
+            <tr>
+                <td>Red de Incendios:</td>
+                <td>${configuracion.sistemasIntegrados.redIncendios.tipoDeteccion}</td>
+            </tr>
+            <tr>
+                <td>Componentes:</td>
+                <td>
+                    ${configuracion.sistemasIntegrados.redIncendios.componentes.detectores ? 'Detectores de humo, ' : ''}
+                    ${configuracion.sistemasIntegrados.redIncendios.componentes.pulsadores ? 'Pulsadores manuales, ' : ''}
+                    ${configuracion.sistemasIntegrados.redIncendios.componentes.sirenas ? 'Sirenas, ' : ''}
+                    ${configuracion.sistemasIntegrados.redIncendios.componentes.central ? 'Central de incendios' : ''}
+                </td>
+            </tr>
+        `;
+    } else {
+        htmlResumen += `
+            <tr>
+                <td>Red de Incendios:</td>
+                <td>No configurada</td>
+            </tr>
+        `;
+    }
+    
+    // Corrientes Débiles
+    if (configuracion.sistemasIntegrados.corrientesDebiles) {
+        htmlResumen += `
+            <tr>
+                <td>Corrientes Débiles:</td>
+                <td>
+                    ${configuracion.sistemasIntegrados.corrientesDebiles.sistemas.cctv ? 'CCTV, ' : ''}
+                    ${configuracion.sistemasIntegrados.corrientesDebiles.sistemas.controlAcceso ? 'Control de acceso, ' : ''}
+                    ${configuracion.sistemasIntegrados.corrientesDebiles.sistemas.intrusion ? 'Intrusión, ' : ''}
+                    ${configuracion.sistemasIntegrados.corrientesDebiles.sistemas.audio ? 'Audio distribuido' : ''}
+                </td>
+            </tr>
+        `;
+    } else {
+        htmlResumen += `
+            <tr>
+                <td>Corrientes Débiles:</td>
+                <td>No configuradas</td>
+            </tr>
+        `;
+    }
+    
+    // Citofonía
+    if (configuracion.sistemasIntegrados.citofonia) {
+        htmlResumen += `
+            <tr>
+                <td>Citofonía:</td>
+                <td>${configuracion.sistemasIntegrados.citofonia.tipo}, ${configuracion.sistemasIntegrados.citofonia.integracion}</td>
+            </tr>
+        `;
+    } else {
+        htmlResumen += `
+            <tr>
+                <td>Citofonía:</td>
+                <td>No configurada</td>
+            </tr>
+        `;
+    }
+    
+    // Motores de Acceso
+    if (configuracion.sistemasIntegrados.motoresAcceso) {
+        htmlResumen += `
+            <tr>
+                <td>Motores de Acceso:</td>
+                <td>${configuracion.sistemasIntegrados.motoresAcceso.cantidad} ${configuracion.sistemasIntegrados.motoresAcceso.tipo}, Control: ${configuracion.sistemasIntegrados.motoresAcceso.control}</td>
+            </tr>
+        `;
+    } else {
+        htmlResumen += `
+            <tr>
+                <td>Motores de Acceso:</td>
+                <td>No configurados</td>
+            </tr>
+        `;
+    }
+    
+    htmlResumen += `</table>`;
+    
+    // Mostrar el resumen en el div correspondiente
+    contenedorResumen.innerHTML = htmlResumen;
+    
+    // Mostrar notificación de éxito
+    if (typeof mostrarNotificacion === 'function') {
+        mostrarNotificacion('Vista previa generada correctamente', 'success');
+    } else {
+        alert('Vista previa generada correctamente');
+    }
+}
+// ============================================================================
+// FUNCIONES DE OBTENCIÓN DE CONFIGURACIÓN
+// ============================================================================
+
+// Función para obtener todos los datos configurados (compatible con el modal existente)
+function obtenerConfiguracionMaquetacion() {
+    // Información básica
+    const infoBasica = {
+        nombre: getElementValue('nombre-obra-maq') || getElementValue('nombre-obra') || '',
+        direccion: getElementValue('direccion-obra-maq') || getElementValue('direccion-obra') || '',
+        fechaInicio: getElementValue('fecha-inicio-maq') || getElementValue('fecha-inicio') || '',
+        fechaTermino: getElementValue('fecha-termino-maq') || getElementValue('fecha-termino') || '',
+        tipo: getElementValue('tipo-obra-maq') || getElementValue('tipo-obra') || 'condominios',
+        estado: getElementValue('estado-obra-maq') || getElementValue('estado-obra') || 'Planificación',
+        descripcion: getElementValue('descripcion-obra-maq') || getElementValue('descripcion-obra') || '',
+        empresaCliente: getElementValue('empresa-cliente-maq') || getElementValue('empresa-cliente') || ''
+    };
+    
+    // Estructura física (infraestructura)
+    const estructuraFisica = {
+        torres: isElementChecked('incluir-torres') ? {
+            cantidad: parseInt(getElementValue('cantidad-torres')) || 1,
+            nomenclatura: getElementValue('nomenclatura-torres') || 'letras'
+        } : null,
+        
+        pisos: isElementChecked('incluir-pisos') ? {
+            configuracionGlobal: getElementValue('configuracion-pisos-global') === 'global',
+            inicioGlobal: parseInt(getElementValue('piso-inicio-global')) || 1,
+            finGlobal: parseInt(getElementValue('piso-fin-global')) || 10,
+            nomenclatura: getElementValue('nomenclatura-pisos-global') || 'numerico',
+            // Los datos específicos por torre estarían en configuracionPisosPorTorre
+            configuracionEspecifica: configuracionPisosPorTorre
+        } : null,
+        
+        unidades: isElementChecked('incluir-unidades') ? {
+            cantidadPorPiso: parseInt(getElementValue('unidades-por-piso')) || 4,
+            nomenclatura: getElementValue('nomenclatura-unidades') || 'numerico'
+        } : null,
+        
+        ctr: isElementChecked('incluir-ctr') ? {
+            tipo: getElementValue('tipo-ctr') || 'principal'
+        } : null,
+        
+        shaft: isElementChecked('incluir-shaft') ? {
+            configuracionGlobal: getElementValue('configuracion-shaft') === 'global',
+            cantidadPorTorre: parseInt(getElementValue('cantidad-shaft-por-torre')) || 1,
+            // Los datos específicos estarán en shaftsPorTorrePiso
+            configuracionEspecifica: window.shaftsPorTorrePiso || []
+        } : null,
+        
+        sot: isElementChecked('incluir-sot') ? {
+            distribucion: getElementValue('distribucion-sot') || 'por_piso'
+        } : null,
+        
+        camaras: isElementChecked('incluir-camaras') ? {
+            cantidad: parseInt(getElementValue('cantidad-camaras')) || 2
+        } : null
+    };
+    
+    // Red de telecomunicaciones
+    const redTelecomunicaciones = {
+        tipo: getElementValue('tipo-red') || 'arbol',
+        
+        coaxAlambrico: isElementChecked('incluir-coax-ala') ? {
+            marca: getElementValue('marca-coax') || 'bdn',
+            tipo: getElementValue('tipo-coax') || 'rg6',
+            incluyeT1T2: isElementChecked('incluir-t1-t2-alam'),
+            troncales: isElementChecked('incluir-troncal-coax') ? {
+                cantidad: parseInt(getElementValue('cantidad-troncales-coax')) || 1
+            } : null
+        } : null,
+        
+        coaxInalambrico: isElementChecked('incluir-coax-ina') ? {
+            incluyeT1T2: isElementChecked('incluir-t1-t2-inal'),
+            troncales: isElementChecked('incluir-troncal-inal') ? {
+                cantidad: parseInt(getElementValue('cantidad-troncales-inal')) || 1
+            } : null
+        } : null,
+        
+        fibra: isElementChecked('incluir-fibra') ? {
+            tipo: getElementValue('tipo-fibra') || 'monomodo',
+            distribucion: getElementValue('distribucion-fibra') || 'gpon',
+            troncales: isElementChecked('incluir-troncal-fibra') ? {
+                cantidad: parseInt(getElementValue('cantidad-troncales-fibra')) || 1
+            } : null
+        } : null,
+        
+        pau: isElementChecked('incluir-pau') ? {
+            puntosPorUnidad: parseInt(getElementValue('puntos-por-unidad')) || 2,
+            repartidorALAM: isElementChecked('incluir-repartidor-alam') ? {
+                marca: getElementValue('marca-repartidor-alam') || ''
+            } : null,
+            repartidorINAL: isElementChecked('incluir-repartidor-inal') ? {
+                marca: getElementValue('marca-repartidor-inal') || ''
+            } : null,
+            rosetaFO: isElementChecked('incluir-roseta-fo') ? {
+                marca: getElementValue('marca-roseta-fo') || ''
+            } : null
+        } : null,
+        
+        dispositivosShaft: isElementChecked('incluir-dispositivos-shaft') ? 
+            window.dispositivosPorShaft || [] : null,
+        
+        antenas: isElementChecked('incluir-antenas') ? {
+            tipo: getElementValue('tipo-antenas') || 'uhf',
+            cantidad: parseInt(getElementValue('cantidad-antenas')) || 1,
+            ubicacion: getElementValue('ubicacion-antenas') || 'azotea'
+        } : null,
+        
+        amplificadores: isElementChecked('incluir-amplificadores') ? {
+            tipo: getElementValue('tipo-amplificadores') || 'senal',
+            cantidad: parseInt(getElementValue('cantidad-amplificadores')) || 2
+        } : null
+    };
+    
+    // Mediciones
+    const mediciones = {
+        certificacion: isElementChecked('incluir-certificacion') ? {
+            equipo: getElementValue('equipo-certificacion') || 'Certificadora Unificada FO/Coaxial',
+            parametros: {
+                atenuacion: isElementChecked('param-atenuacion'),
+                continuidad: isElementChecked('param-continuidad'),
+                potencia: isElementChecked('param-potencia')
+            }
+        } : null
+    };
+    
+    // Sistemas integrados
+    const sistemasIntegrados = {
+        redIncendios: isElementChecked('incluir-red-incendios') ? {
+            tipoDeteccion: getElementValue('tipo-deteccion') || 'convencional',
+            componentes: {
+                detectores: isElementChecked('componente-detectores'),
+                pulsadores: isElementChecked('componente-pulsadores'),
+                sirenas: isElementChecked('componente-sirenas'),
+                central: isElementChecked('componente-central')
+            }
+        } : null,
+        
+        corrientesDebiles: isElementChecked('incluir-corrientes-debiles') ? {
+            sistemas: {
+                cctv: isElementChecked('sistema-cctv'),
+                controlAcceso: isElementChecked('sistema-control-acceso'),
+                intrusion: isElementChecked('sistema-intrusion'),
+                audio: isElementChecked('sistema-audio')
+            }
+        } : null,
+        
+        citofonia: isElementChecked('incluir-citofonia') ? {
+            tipo: getElementValue('tipo-citofonia') || 'analogico',
+            integracion: getElementValue('integracion-citofonia') || 'standalone'
+        } : null,
+        
+        motoresAcceso: isElementChecked('incluir-motores-acceso') ? {
+            tipo: getElementValue('tipo-motores') || 'correderas',
+            cantidad: parseInt(getElementValue('cantidad-motores')) || 2,
+            control: getElementValue('control-motores') || 'local'
+        } : null
+    };
+    
+    // Consolidar toda la configuración
+    return {
+        infoBasica,
+        estructuraFisica,
+        redTelecomunicaciones,
+        mediciones,
+        sistemasIntegrados,
+        // Incluir las configuraciones que se manejan en variables globales
+        shaftsPorTorrePiso: window.shaftsPorTorrePiso || [],
+        dispositivosPorShaft: window.dispositivosPorShaft || [],
+        configuracionPisosPorTorre: configuracionPisosPorTorre,
+        espaciosComunesPorObra: espaciosComunesPorObra
+    };
+}
+
+// Funciones auxiliares para obtener valores de elementos DOM de forma segura
+function getElementValue(elementId) {
+    const element = document.getElementById(elementId);
+    return element ? element.value : '';
+}
+
+function isElementChecked(elementId) {
+    const element = document.getElementById(elementId);
+    return element ? element.checked : false;
+}
+
+function getElementText(elementId) {
+    const element = document.getElementById(elementId);
+    return element ? element.textContent : '';
+}
+// ============================================================================
+// FUNCIONES DE EXPORTACIÓN Y GUARDADO
+// ============================================================================
+
+// Función para exportar la configuración
+function exportarConfiguracion() {
+    const formato = getElementValue('formato-exportacion') || 'excel';
+    const configuracion = obtenerConfiguracionMaquetacion();
+    
+    // Validar que hay configuración para exportar
+    if (!configuracion.infoBasica.nombre) {
+        alert('Por favor ingrese al menos el nombre de la obra antes de exportar.');
+        return;
+    }
+    
+    try {
+        // Mostrar notificación de inicio
+        if (typeof mostrarNotificacion === 'function') {
+            mostrarNotificacion(`Preparando exportación en formato ${formato.toUpperCase()}...`, 'info');
+        }
+        
+        // Generar contenido según el formato seleccionado
+        switch (formato.toLowerCase()) {
+            case 'excel':
+                exportarAExcel(configuracion);
+                break;
+            case 'pdf':
+                exportarAPDF(configuracion);
+                break;
+            case 'json':
+                exportarAJSON(configuracion);
+                break;
+            default:
+                throw new Error('Formato de exportación no válido');
+        }
+        
+        // Simular proceso de exportación
+        setTimeout(() => {
+            if (typeof mostrarNotificacion === 'function') {
+                mostrarNotificacion(`Configuración exportada correctamente en formato ${formato.toUpperCase()}`, 'success');
+            } else {
+                alert(`Configuración exportada correctamente en formato ${formato.toUpperCase()}`);
+            }
+        }, 1500);
+        
+    } catch (error) {
+        console.error('Error en exportación:', error);
+        if (typeof mostrarNotificacion === 'function') {
+            mostrarNotificacion('Error al exportar la configuración: ' + error.message, 'error');
+        } else {
+            alert('Error al exportar la configuración: ' + error.message);
+        }
+    }
+}
+
+// Exportar a Excel
+function exportarAExcel(configuracion) {
+    // En una implementación real, aquí se generaría un archivo Excel
+    // Por ahora simulamos con un CSV básico
+    
+    let csvContent = "Sección,Campo,Valor\n";
+    
+    // Información básica
+    csvContent += `"Información Básica","Nombre","${configuracion.infoBasica.nombre}"\n`;
+    csvContent += `"Información Básica","Dirección","${configuracion.infoBasica.direccion}"\n`;
+    csvContent += `"Información Básica","Fecha Inicio","${configuracion.infoBasica.fechaInicio}"\n`;
+    csvContent += `"Información Básica","Fecha Término","${configuracion.infoBasica.fechaTermino}"\n`;
+    csvContent += `"Información Básica","Tipo","${configuracion.infoBasica.tipo}"\n`;
+    csvContent += `"Información Básica","Estado","${configuracion.infoBasica.estado}"\n`;
+    csvContent += `"Información Básica","Empresa Cliente","${configuracion.infoBasica.empresaCliente}"\n`;
+    
+    // Infraestructura
+    if (configuracion.estructuraFisica.torres) {
+        csvContent += `"Infraestructura","Torres","${configuracion.estructuraFisica.torres.cantidad} (${configuracion.estructuraFisica.torres.nomenclatura})"\n`;
+    }
+    
+    if (configuracion.estructuraFisica.pisos) {
+        const configPisos = configuracion.estructuraFisica.pisos.configuracionGlobal ? 
+            `Global: ${configuracion.estructuraFisica.pisos.inicioGlobal} a ${configuracion.estructuraFisica.pisos.finGlobal}` :
+            'Específica por torre';
+        csvContent += `"Infraestructura","Pisos","${configPisos}"\n`;
+    }
+    
+    if (configuracion.estructuraFisica.unidades) {
+        csvContent += `"Infraestructura","Unidades por piso","${configuracion.estructuraFisica.unidades.cantidadPorPiso}"\n`;
+    }
+    
+    // Red de telecomunicaciones
+    csvContent += `"Red de Telecomunicaciones","Tipo de red","${configuracion.redTelecomunicaciones.tipo}"\n`;
+    
+    if (configuracion.redTelecomunicaciones.coaxAlambrico) {
+        csvContent += `"Red de Telecomunicaciones","Coaxial Alámbrico","${configuracion.redTelecomunicaciones.coaxAlambrico.marca} ${configuracion.redTelecomunicaciones.coaxAlambrico.tipo}"\n`;
+    }
+    
+    if (configuracion.redTelecomunicaciones.fibra) {
+        csvContent += `"Red de Telecomunicaciones","Fibra Óptica","${configuracion.redTelecomunicaciones.fibra.tipo} - ${configuracion.redTelecomunicaciones.fibra.distribucion}"\n`;
+    }
+    
+    // Crear y descargar archivo
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `maquetacion_${configuracion.infoBasica.nombre.replace(/\s+/g, '_')}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+// Exportar a PDF
+function exportarAPDF(configuracion) {
+    // En una implementación real, se usaría una librería como jsPDF
+    // Por ahora simulamos creando un HTML que se puede imprimir como PDF
+    
+    const contenidoPDF = generarHTMLParaPDF(configuracion);
+    
+    // Abrir ventana para imprimir
+    const ventanaImpresion = window.open('', '_blank');
+    ventanaImpresion.document.write(contenidoPDF);
+    ventanaImpresion.document.close();
+    ventanaImpresion.focus();
+    
+    // Auto-imprimir después de cargar
+    setTimeout(() => {
+        ventanaImpresion.print();
+    }, 1000);
+}
+
+// Generar HTML para PDF
+function generarHTMLParaPDF(configuracion) {
+    return `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Maquetación - ${configuracion.infoBasica.nombre}</title>
+            <style>
+                body { font-family: Arial, sans-serif; margin: 20px; }
+                .header { text-align: center; margin-bottom: 30px; }
+                .section { margin-bottom: 20px; }
+                .section-title { font-weight: bold; background-color: #f0f0f0; padding: 10px; }
+                .field { margin: 5px 0; }
+                .field-label { font-weight: bold; display: inline-block; width: 200px; }
+                table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                th { background-color: #f2f2f2; }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h1>Configuración de Maquetación</h1>
+                <h2>${configuracion.infoBasica.nombre}</h2>
+                <p>Generado el: ${new Date().toLocaleDateString()}</p>
+            </div>
+            
+            <div class="section">
+                <div class="section-title">Información Básica</div>
+                <div class="field"><span class="field-label">Nombre:</span> ${configuracion.infoBasica.nombre}</div>
+                <div class="field"><span class="field-label">Dirección:</span> ${configuracion.infoBasica.direccion}</div>
+                <div class="field"><span class="field-label">Fecha de inicio:</span> ${configuracion.infoBasica.fechaInicio}</div>
+                <div class="field"><span class="field-label">Fecha de término:</span> ${configuracion.infoBasica.fechaTermino}</div>
+                <div class="field"><span class="field-label">Tipo:</span> ${configuracion.infoBasica.tipo}</div>
+                <div class="field"><span class="field-label">Estado:</span> ${configuracion.infoBasica.estado}</div>
+                <div class="field"><span class="field-label">Empresa cliente:</span> ${configuracion.infoBasica.empresaCliente}</div>
+            </div>
+            
+            <div class="section">
+                <div class="section-title">Infraestructura</div>
+                ${configuracion.estructuraFisica.torres ? 
+                    `<div class="field"><span class="field-label">Torres:</span> ${configuracion.estructuraFisica.torres.cantidad} (${configuracion.estructuraFisica.torres.nomenclatura})</div>` : 
+                    '<div class="field"><span class="field-label">Torres:</span> No configurado</div>'
+                }
+                ${configuracion.estructuraFisica.pisos ? 
+                    `<div class="field"><span class="field-label">Pisos:</span> ${configuracion.estructuraFisica.pisos.configuracionGlobal ? 
+                        `Global (${configuracion.estructuraFisica.pisos.inicioGlobal} a ${configuracion.estructuraFisica.pisos.finGlobal})` : 
+                        'Específico por torre'}</div>` : 
+                    '<div class="field"><span class="field-label">Pisos:</span> No configurado</div>'
+                }
+                ${configuracion.estructuraFisica.unidades ? 
+                    `<div class="field"><span class="field-label">Unidades por piso:</span> ${configuracion.estructuraFisica.unidades.cantidadPorPiso}</div>` : 
+                    '<div class="field"><span class="field-label">Unidades:</span> No configurado</div>'
+                }
+            </div>
+            
+            <div class="section">
+                <div class="section-title">Red de Telecomunicaciones</div>
+                <div class="field"><span class="field-label">Tipo de red:</span> ${configuracion.redTelecomunicaciones.tipo}</div>
+                ${configuracion.redTelecomunicaciones.coaxAlambrico ? 
+                    `<div class="field"><span class="field-label">Coaxial Alámbrico:</span> ${configuracion.redTelecomunicaciones.coaxAlambrico.marca} ${configuracion.redTelecomunicaciones.coaxAlambrico.tipo}</div>` : ''
+                }
+                ${configuracion.redTelecomunicaciones.coaxInalambrico ? 
+                    `<div class="field"><span class="field-label">Coaxial Inalámbrico:</span> Configurado</div>` : ''
+                }
+                ${configuracion.redTelecomunicaciones.fibra ? 
+                    `<div class="field"><span class="field-label">Fibra Óptica:</span> ${configuracion.redTelecomunicaciones.fibra.tipo} - ${configuracion.redTelecomunicaciones.fibra.distribucion}</div>` : ''
+                }
+            </div>
+            
+            ${configuracion.dispositivosPorShaft && configuracion.dispositivosPorShaft.length > 0 ? `
+                <div class="section">
+                    <div class="section-title">Dispositivos en Shaft</div>
+                    <table>
+                        <tr><th>Torre</th><th>Shaft</th><th>Dispositivo</th><th>Especificaciones</th></tr>
+                        ${configuracion.dispositivosPorShaft.map(disp => 
+                            `<tr><td>${disp.torreText}</td><td>${disp.shaftText}</td><td>${disp.dispositivo}</td><td>${disp.especificaciones}</td></tr>`
+                        ).join('')}
+                    </table>
+                </div>
+            ` : ''}
+        </body>
+        </html>
+    `;
+}
+
+// Exportar a JSON
+function exportarAJSON(configuracion) {
+    const jsonContent = JSON.stringify(configuracion, null, 2);
+    const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `maquetacion_${configuracion.infoBasica.nombre.replace(/\s+/g, '_')}.json`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+// ============================================================================
+// FUNCIÓN PRINCIPAL DE GUARDADO
+// ============================================================================
+
+// Guardar maquetación (función principal)
+function guardarMaquetacion() {
+    try {
+        // Validar configuración básica
+        const nombreObra = getElementValue('nombre-obra-maq') || getElementValue('nombre-obra');
+        if (!nombreObra || nombreObra.trim() === '') {
+            alert('Por favor ingrese el nombre de la obra antes de guardar.');
+            return false;
+        }
+        
+        // Obtener toda la configuración del formulario de maquetación
+        const configuracionMaquetacion = obtenerConfiguracionMaquetacion();
+        
+        // Validar configuración mínima
+        if (!validarConfiguracionMinima(configuracionMaquetacion)) {
+            return false;
+        }
+        
+        // Crear objeto para enviar a la API
+        const datosMaquetacion = {
+            id: window.maquetacionObraId, // Puede ser null si es una obra nueva
+            maquetacion: configuracionMaquetacion,
+            // Datos básicos del formulario de maquetación
+            nombre: configuracionMaquetacion.infoBasica.nombre,
+            direccion: configuracionMaquetacion.infoBasica.direccion,
+            fechaInicio: configuracionMaquetacion.infoBasica.fechaInicio,
+            fechaTermino: configuracionMaquetacion.infoBasica.fechaTermino,
+            tipo: configuracionMaquetacion.infoBasica.tipo,
+            estado: configuracionMaquetacion.infoBasica.estado,
+            empresaCliente: configuracionMaquetacion.infoBasica.empresaCliente
+        };
+        
+        // Mostrar notificación de guardado
+        if (typeof mostrarNotificacion === 'function') {
+            mostrarNotificacion('Guardando configuración de maquetación...', 'info');
+        }
+        
+        // En una implementación real, aquí se haría una llamada a la API
+        // Para el ejemplo, simularemos el proceso
+        return procesarGuardadoMaquetacion(datosMaquetacion);
+        
+    } catch (error) {
+        console.error('Error al guardar la maquetación:', error);
+        if (typeof mostrarNotificacion === 'function') {
+            mostrarNotificacion('Error al guardar la maquetación: ' + error.message, 'error');
+        } else {
+            alert('Error al guardar la maquetación: ' + error.message);
+        }
+        return false;
+    }
+}
+
+// Validar configuración mínima
+function validarConfiguracionMinima(configuracion) {
+    // Validar información básica
+    if (!configuracion.infoBasica.nombre || configuracion.infoBasica.nombre.trim() === '') {
+        alert('El nombre de la obra es obligatorio.');
+        return false;
+    }
+    
+    if (!configuracion.infoBasica.tipo) {
+        alert('Debe seleccionar un tipo de obra.');
+        return false;
+    }
+    
+    // Validar fechas
+    if (configuracion.infoBasica.fechaInicio && configuracion.infoBasica.fechaTermino) {
+        const fechaInicio = new Date(configuracion.infoBasica.fechaInicio);
+        const fechaTermino = new Date(configuracion.infoBasica.fechaTermino);
+        
+        if (fechaTermino <= fechaInicio) {
+            alert('La fecha de término debe ser posterior a la fecha de inicio.');
+            return false;
+        }
+    }
+    
+    // Validar configuración de torres y pisos si están habilitados
+    if (configuracion.estructuraFisica.torres && configuracion.estructuraFisica.pisos) {
+        if (configuracion.estructuraFisica.torres.cantidad <= 0) {
+            alert('La cantidad de torres debe ser mayor a 0.');
+            return false;
+        }
+        
+        if (configuracion.estructuraFisica.pisos.configuracionGlobal) {
+            if (configuracion.estructuraFisica.pisos.finGlobal <= configuracion.estructuraFisica.pisos.inicioGlobal) {
+                alert('El piso final debe ser mayor al piso inicial.');
+                return false;
+            }
+        }
+    }
+    
+    // Validar unidades si están habilitadas
+    if (configuracion.estructuraFisica.unidades) {
+        if (configuracion.estructuraFisica.unidades.cantidadPorPiso <= 0) {
+            alert('La cantidad de unidades por piso debe ser mayor a 0.');
+            return false;
+        }
+    }
+    
+    return true;
+}
+
+// Procesar guardado de maquetación
+function procesarGuardadoMaquetacion(datosMaquetacion) {
+    return new Promise((resolve, reject) => {
+        // Simular proceso de guardado
+        setTimeout(() => {
+            try {
+                // Simular ID de obra si es nueva
+                if (!datosMaquetacion.id) {
+                    datosMaquetacion.id = 'obra-' + Date.now();
+                    window.maquetacionObraId = datosMaquetacion.id;
+                }
+                
+                // En una implementación real, aquí se haría la llamada a la API
+                // callAPI('guardarMaquetacionObra', datosMaquetacion)
+                
+                // Transferir datos al formulario principal si existe
+                transferirDatosAFormularioPrincipal(datosMaquetacion);
+                
+                // Generar hojas de progreso
+                const hojaGenerada = generarHojaProgreso(datosMaquetacion.maquetacion);
+                
+                // Marcar como no modificado
+                window.maquetacionModificada = false;
+                
+                // Limpiar indicador visual del título
+                const modalTitle = document.querySelector('#modal-maquetacion .modal-title');
+                if (modalTitle) {
+                    modalTitle.textContent = modalTitle.textContent.replace(' *', '');
+                }
+                
+                // Notificar éxito
+                if (typeof mostrarNotificacion === 'function') {
+                    mostrarNotificacion('Maquetación guardada correctamente', 'success');
+                } else {
+                    alert('Maquetación guardada correctamente');
+                }
+                
+                // Recargar lista de obras si la función existe
+                if (typeof cargarObras === 'function') {
+                    cargarObras();
+                }
+                
+                resolve(true);
+                
+            } catch (error) {
+                reject(error);
+            }
+        }, 1000); // Simular delay de red
+    });
+}
+
+// Transferir datos al formulario principal
+function transferirDatosAFormularioPrincipal(datosMaquetacion) {
+    // Solo transferir si existen los elementos del formulario principal
+    const elementos = {
+        'obra-id': datosMaquetacion.id,
+        'nombre-obra': datosMaquetacion.nombre,
+        'direccion-obra': datosMaquetacion.direccion,
+        'fecha-inicio': datosMaquetacion.fechaInicio,
+        'fecha-termino': datosMaquetacion.fechaTermino,
+        'tipo-obra': datosMaquetacion.tipo,
+        'estado-obra': datosMaquetacion.estado
+    };
+    
+    Object.keys(elementos).forEach(id => {
+        const elemento = document.getElementById(id);
+        if (elemento && elementos[id]) {
+            elemento.value = elementos[id];
+        }
+    });
+}
+// ============================================================================
+// FUNCIONES DE GENERACIÓN DE HOJAS DE PROGRESO
+// ============================================================================
+
+// Función para generar la hoja de progreso
+function generarHojaProgreso(configuracionMaquetacion) {
+    try {
+        if (!configuracionMaquetacion) {
+            console.warn('No se proporcionó configuración para generar hoja de progreso');
+            return false;
+        }
+        
+        // Validar que hay estructura básica configurada
+        if (!configuracionMaquetacion.estructuraFisica.torres || 
+            !configuracionMaquetacion.estructuraFisica.pisos || 
+            !configuracionMaquetacion.estructuraFisica.unidades) {
+            console.warn('Estructura básica incompleta para generar hoja de progreso');
+            return false;
+        }
+        
+        // Generar estructura de hojas por torre
+        const hojasProgreso = generarEstructuraHojasProgreso(configuracionMaquetacion);
+        
+        // En una implementación real, aquí se generaría el archivo Excel
+        // Por ahora simulamos el proceso
+        console.log('Hojas de progreso generadas:', hojasProgreso);
+        
+        // Simular guardado de hojas
+        setTimeout(() => {
+            if (typeof mostrarNotificacion === 'function') {
+                mostrarNotificacion(`Se generaron ${hojasProgreso.length} hojas de progreso (una por torre)`, 'info');
+            }
+        }, 500);
+        
+        return true;
+        
+    } catch (error) {
+        console.error('Error al generar hoja de progreso:', error);
+        return false;
+    }
+}
+
+// Generar estructura de hojas de progreso
+function generarEstructuraHojasProgreso(configuracion) {
+    const hojasProgreso = [];
+    const torres = configuracion.estructuraFisica.torres;
+    const pisos = configuracion.estructuraFisica.pisos;
+    const unidades = configuracion.estructuraFisica.unidades;
+    
+    // Generar una hoja por cada torre
+    for (let iTorre = 0; iTorre < torres.cantidad; iTorre++) {
+        const torreId = torres.nomenclatura === 'letras' ? 
+            String.fromCharCode(65 + iTorre) : 
+            (iTorre + 1).toString();
+        
+        // Determinar rango de pisos para esta torre
+        let pisosRango = [];
+        if (pisos.configuracionGlobal) {
+            for (let i = pisos.inicioGlobal; i <= pisos.finGlobal; i++) {
+                pisosRango.push(i);
+            }
+        } else {
+            // Configuración específica por torre
+            const configTorre = configuracion.configuracionPisosPorTorre[iTorre];
+            if (configTorre) {
+                for (let i = configTorre.inicio; i <= configTorre.fin; i++) {
+                    pisosRango.push(i);
+                }
+            } else {
+                // Valor por defecto si no hay configuración específica
+                for (let i = 1; i <= 10; i++) {
+                    pisosRango.push(i);
+                }
+            }
+        }
+        
+        // Generar estructura de la hoja
+        const hojaProgreso = {
+            torreId: torreId,
+            nombreHoja: `Torre_${torreId}`,
+            columnas: generarColumnasHojaProgreso(configuracion),
+            filas: []
+        };
+        
+        // Generar filas por piso y unidad
+        pisosRango.forEach(numeroPiso => {
+            for (let iUnidad = 1; iUnidad <= unidades.cantidadPorPiso; iUnidad++) {
+                const unidadNombre = generarNombreUnidad(unidades.nomenclatura, numeroPiso, iUnidad, torreId);
+                
+                hojaProgreso.filas.push({
+                    ubicacion: `Piso ${numeroPiso} - Depto ${unidadNombre}`,
+                    valores: generarValoresIniciales(configuracion)
+                });
+            }
+        });
+        
+        hojasProgreso.push(hojaProgreso);
+    }
+    
+    return hojasProgreso;
+}
+
+// Generar columnas de la hoja de progreso basadas en la configuración
+function generarColumnasHojaProgreso(configuracion) {
+    const columnas = ['N° DEPTO']; // Columna base
+    
+    // Agregar columnas según tecnologías configuradas
+    if (configuracion.redTelecomunicaciones.coaxAlambrico) {
+        columnas.push('COAXIAL ALAM');
+    }
+    
+    if (configuracion.redTelecomunicaciones.coaxInalambrico) {
+        columnas.push('COAXIAL INAL');
+    }
+    
+    if (configuracion.redTelecomunicaciones.fibra) {
+        columnas.push('LATERALES F.O');
+    }
+    
+    // Columna de interiores (siempre presente si hay PAU)
+    if (configuracion.redTelecomunicaciones.pau) {
+        columnas.push('interiores');
+    }
+    
+    // CTR conectada (subdividida por tipo si es necesario)
+    if (configuracion.estructuraFisica.ctr) {
+        if (configuracion.redTelecomunicaciones.coaxAlambrico && configuracion.redTelecomunicaciones.coaxInalambrico) {
+            columnas.push('ctr conectada alam');
+            columnas.push('ctr conectada inal');
+        } else {
+            columnas.push('ctr conectada');
+        }
+    }
+    
+    // Roseta F.O
+    if (configuracion.redTelecomunicaciones.pau && configuracion.redTelecomunicaciones.pau.rosetaFO) {
+        columnas.push('roseta f.o');
+    }
+    
+    // Mediciones (si están configuradas)
+    if (configuracion.mediciones.certificacion) {
+        if (configuracion.mediciones.certificacion.parametros.atenuacion) {
+            columnas.push('medición atenuación');
+        }
+        if (configuracion.mediciones.certificacion.parametros.continuidad) {
+            columnas.push('medición continuidad');
+        }
+        if (configuracion.mediciones.certificacion.parametros.potencia) {
+            columnas.push('medición potencia');
+        }
+    }
+    
+    return columnas;
+}
+
+// Generar nombre de unidad según nomenclatura
+function generarNombreUnidad(nomenclatura, numeroPiso, numeroUnidad, torreId) {
+    switch (nomenclatura) {
+        case 'numerico':
+            return `${numeroPiso}${numeroUnidad.toString().padStart(2, '0')}`;
+        case 'combinado':
+            return `${torreId}-${numeroPiso}-${numeroUnidad}`;
+        case 'personalizado':
+            return `${numeroPiso}${String.fromCharCode(64 + numeroUnidad)}`; // 64 + 1 = A
+        default:
+            return `${numeroPiso}${numeroUnidad.toString().padStart(2, '0')}`;
+    }
+}
+
+// Generar valores iniciales para las columnas (todos en blanco para llenar por trabajadores)
+function generarValoresIniciales(configuracion) {
+    const valores = {};
+    const columnas = generarColumnasHojaProgreso(configuracion);
+    
+    // Inicializar todos los valores como vacíos (para ser llenados por los trabajadores)
+    columnas.forEach(columna => {
+        if (columna !== 'N° DEPTO') {
+            valores[columna] = ''; // Valor vacío para ser llenado
+        }
+    });
+    
+    return valores;
+}
+
+// ============================================================================
+// FUNCIONES DE UTILIDADES Y COMPONENTES ADICIONALES
+// ============================================================================
+
+// Función para agregar dinámicamente un componente estructural personalizado
+function agregarComponenteEstructural() {
+    const container = document.getElementById('componentes-estructurales');
+    if (!container) {
+        console.warn('No se encontró contenedor de componentes estructurales');
+        return;
+    }
+    
+    const componenteId = 'componente-custom-' + Math.floor(Math.random() * 1000);
+    const nuevoComponente = document.createElement('div');
+    nuevoComponente.className = 'checkbox-group';
+    nuevoComponente.innerHTML = `
+        <label class="checkbox-label">
+            <input type="checkbox" id="${componenteId}" onchange="toggleComponente('${componenteId}-config', this.checked); marcarMaquetacionComoModificada();">
+            <input type="text" placeholder="Nombre del componente" style="width: auto; display: inline-block; margin-left: 10px;" onchange="marcarMaquetacionComoModificada();">
+        </label>
+        <div id="${componenteId}-config" class="item-body" style="display: none;">
+            <div class="form-group">
+                <label for="${componenteId}-cantidad">Cantidad:</label>
+                <input type="number" id="${componenteId}-cantidad" min="1" value="1" onchange="marcarMaquetacionComoModificada();">
+            </div>
+            <div class="form-group">
+                <label for="${componenteId}-descripcion">Descripción:</label>
+                <textarea id="${componenteId}-descripcion" placeholder="Descripción del componente" onchange="marcarMaquetacionComoModificada();"></textarea>
+            </div>
+            <button class="btn btn-sm btn-danger" onclick="eliminarComponente(this.parentNode.parentNode)">
+                <i class="fas fa-trash"></i> Eliminar
+            </button>
+        </div>
+    `;
+    container.appendChild(nuevoComponente);
+    marcarMaquetacionComoModificada();
+}
+
+// Función para eliminar un componente personalizado
+function eliminarComponente(elemento) {
+    if (elemento && elemento.parentNode) {
+        if (confirm('¿Está seguro de eliminar este componente personalizado?')) {
+            elemento.parentNode.removeChild(elemento);
+            marcarMaquetacionComoModificada();
+        }
+    }
+}
+
+// ============================================================================
+// FUNCIONES DE INICIALIZACIÓN Y EVENTOS
+// ============================================================================
+
+// Función para inicializar el sistema de maquetación
+function inicializarSistemaMaquetacion() {
+    // Inicializar variables globales si no existen
+    if (typeof window.shaftsPorTorrePiso === 'undefined') {
+        window.shaftsPorTorrePiso = [];
+    }
+    if (typeof window.dispositivosPorShaft === 'undefined') {
+        window.dispositivosPorShaft = [];
+    }
+    if (typeof window.maquetacionModificada === 'undefined') {
+        window.maquetacionModificada = false;
+    }
+    
+    // Agregar eventos para detectar cambios en el modal de maquetación
+    const modal = document.getElementById('modal-maquetacion');
+    if (modal) {
+        const elementosInput = modal.querySelectorAll('input, select, textarea');
+        elementosInput.forEach(elemento => {
+            elemento.addEventListener('change', marcarMaquetacionComoModificada);
+            elemento.addEventListener('input', marcarMaquetacionComoModificada);
+        });
+        
+        // Evento para advertir antes de cerrar si hay cambios sin guardar
+        window.addEventListener('beforeunload', function(e) {
+            if (window.maquetacionModificada) {
+                const mensaje = 'Hay cambios sin guardar en la maquetación. ¿Está seguro de salir?';
+                e.preventDefault();
+                e.returnValue = mensaje;
+                return mensaje;
+            }
+        });
+    }
+    
+    console.log('Sistema de maquetación inicializado correctamente');
+}
+
+// Función para limpiar el sistema de maquetación
+function limpiarSistemaMaquetacion() {
+    // Limpiar variables globales
+    window.shaftsPorTorrePiso = [];
+    window.dispositivosPorShaft = [];
+    window.maquetacionModificada = false;
+    window.maquetacionObraId = null;
+    
+    // Limpiar variables locales
+    configuracionPisosPorTorre = {};
+    espaciosComunesPorObra = [];
+    
+    console.log('Sistema de maquetación limpiado');
+}
+
+// Función para validar integridad del sistema
+function validarIntegridadSistema() {
+    const errores = [];
+    
+    // Verificar que existen los elementos básicos del DOM
+    const elementosRequeridos = [
+        'modal-maquetacion',
+        'tab-info-basica',
+        'tab-infraestructura',
+        'tab-red-telecomunicaciones',
+        'tab-mediciones',
+        'tab-sistemas-integrados',
+        'tab-vista-previa'
+    ];
+    
+    elementosRequeridos.forEach(id => {
+        if (!document.getElementById(id)) {
+            errores.push(`Elemento requerido no encontrado: ${id}`);
+        }
+    });
+    
+    // Verificar variables globales
+    if (typeof window.shaftsPorTorrePiso === 'undefined') {
+        errores.push('Variable global shaftsPorTorrePiso no está definida');
+    }
+    
+    if (typeof window.dispositivosPorShaft === 'undefined') {
+        errores.push('Variable global dispositivosPorShaft no está definida');
+    }
+    
+    if (errores.length > 0) {
+        console.error('Errores de integridad del sistema:', errores);
+        return false;
+    }
+    
+    console.log('Validación de integridad del sistema: OK');
+    return true;
+}
+
+// ============================================================================
+// FUNCIONES DE COMPATIBILIDAD Y MIGRACIÓN
+// ============================================================================
+
+// Función para cargar configuración existente (compatibilidad con versiones anteriores)
+function cargarConfiguracionExistente(configuracionAnterior) {
+    try {
+        if (!configuracionAnterior) return;
+        
+        // Mapear configuración anterior a la nueva estructura
+        if (configuracionAnterior.infoBasica) {
+            const elementos = {
+                'nombre-obra-maq': configuracionAnterior.infoBasica.nombre,
+                'direccion-obra-maq': configuracionAnterior.infoBasica.direccion,
+                'fecha-inicio-maq': configuracionAnterior.infoBasica.fechaInicio,
+                'fecha-termino-maq': configuracionAnterior.infoBasica.fechaTermino,
+                'tipo-obra-maq': configuracionAnterior.infoBasica.tipo,
+                'estado-obra-maq': configuracionAnterior.infoBasica.estado,
+                'empresa-cliente-maq': configuracionAnterior.infoBasica.empresaCliente
+            };
+            
+            Object.keys(elementos).forEach(id => {
+                const elemento = document.getElementById(id);
+                if (elemento && elementos[id]) {
+                    elemento.value = elementos[id];
+                }
+            });
+        }
+        
+        // Cargar configuración de infraestructura
+        if (configuracionAnterior.estructuraFisica) {
+            cargarConfiguracionInfraestructura(configuracionAnterior.estructuraFisica);
+        }
+        
+        // Cargar configuración de red
+        if (configuracionAnterior.redTelecomunicaciones) {
+            cargarConfiguracionRed(configuracionAnterior.redTelecomunicaciones);
+        }
+        
+        // Cargar datos de variables globales
+        if (configuracionAnterior.shaftsPorTorrePiso) {
+            window.shaftsPorTorrePiso = configuracionAnterior.shaftsPorTorrePiso;
+        }
+        
+        if (configuracionAnterior.dispositivosPorShaft) {
+            window.dispositivosPorShaft = configuracionAnterior.dispositivosPorShaft;
+        }
+        
+        console.log('Configuración anterior cargada correctamente');
+        
+    } catch (error) {
+        console.error('Error al cargar configuración anterior:', error);
+    }
+}
+
+// Cargar configuración de infraestructura
+function cargarConfiguracionInfraestructura(infraestructura) {
+    if (infraestructura.torres) {
+        const incluirTorres = document.getElementById('incluir-torres');
+        if (incluirTorres) {
+            incluirTorres.checked = true;
+            toggleComponente('torres-config', true);
+        }
+        
+        const cantidadTorres = document.getElementById('cantidad-torres');
+        const nomenclaturaTorres = document.getElementById('nomenclatura-torres');
+        
+        if (cantidadTorres) cantidadTorres.value = infraestructura.torres.cantidad;
+        if (nomenclaturaTorres) nomenclaturaTorres.value = infraestructura.torres.nomenclatura;
+    }
+    
+    if (infraestructura.pisos) {
+        const incluirPisos = document.getElementById('incluir-pisos');
+        if (incluirPisos) {
+            incluirPisos.checked = true;
+            toggleComponente('pisos-config', true);
+        }
+        
+        const configuracionPisos = document.getElementById('configuracion-pisos-global');
+        if (configuracionPisos) {
+            configuracionPisos.value = infraestructura.pisos.configuracionGlobal ? 'global' : 'porTorre';
+            toggleConfiguracionPisos(configuracionPisos.value);
+        }
+        
+        if (infraestructura.pisos.configuracionGlobal) {
+            const pisoInicio = document.getElementById('piso-inicio-global');
+            const pisoFin = document.getElementById('piso-fin-global');
+            const nomenclatura = document.getElementById('nomenclatura-pisos-global');
+            
+            if (pisoInicio) pisoInicio.value = infraestructura.pisos.inicioGlobal;
+            if (pisoFin) pisoFin.value = infraestructura.pisos.finGlobal;
+            if (nomenclatura) nomenclatura.value = infraestructura.pisos.nomenclatura;
+        }
+    }
+    
+    if (infraestructura.unidades) {
+        const incluirUnidades = document.getElementById('incluir-unidades');
+        if (incluirUnidades) {
+            incluirUnidades.checked = true;
+            toggleComponente('unidades-config', true);
+        }
+        
+        const unidadesPorPiso = document.getElementById('unidades-por-piso');
+        const nomenclaturaUnidades = document.getElementById('nomenclatura-unidades');
+        
+        if (unidadesPorPiso) unidadesPorPiso.value = infraestructura.unidades.cantidadPorPiso;
+        if (nomenclaturaUnidades) nomenclaturaUnidades.value = infraestructura.unidades.nomenclatura;
+    }
+}
+
+// Cargar configuración de red
+function cargarConfiguracionRed(redTelecom) {
+    const tipoRed = document.getElementById('tipo-red');
+    if (tipoRed) {
+        tipoRed.value = redTelecom.tipo;
+        actualizarConfiguracionRed();
+    }
+    
+    if (redTelecom.coaxAlambrico) {
+        const incluirCoaxAlam = document.getElementById('incluir-coax-ala');
+        if (incluirCoaxAlam) {
+            incluirCoaxAlam.checked = true;
+            toggleComponente('coax-ala-config', true);
+        }
+        
+        const marcaCoax = document.getElementById('marca-coax');
+        const tipoCoax = document.getElementById('tipo-coax');
+        
+        if (marcaCoax) marcaCoax.value = redTelecom.coaxAlambrico.marca;
+        if (tipoCoax) tipoCoax.value = redTelecom.coaxAlambrico.tipo;
+    }
+    
+    if (redTelecom.fibra) {
+        const incluirFibra = document.getElementById('incluir-fibra');
+        if (incluirFibra) {
+            incluirFibra.checked = true;
+            toggleComponente('fibra-config', true);
+        }
+        
+        const tipoFibra = document.getElementById('tipo-fibra');
+        const distribucionFibra = document.getElementById('distribucion-fibra');
+        
+        if (tipoFibra) tipoFibra.value = redTelecom.fibra.tipo;
+        if (distribucionFibra) distribucionFibra.value = redTelecom.fibra.distribucion;
+    }
+}
+
+// ============================================================================
+// INICIALIZACIÓN AUTOMÁTICA DEL SISTEMA
+// ============================================================================
+
+// Inicializar cuando el DOM esté listo
+document.addEventListener('DOMContentLoaded', function() {
+    // Esperar un poco para asegurar que todo esté cargado
+    setTimeout(() => {
+        inicializarSistemaMaquetacion();
+        validarIntegridadSistema();
+    }, 100);
+});
+
+// Exportar funciones principales para compatibilidad
+if (typeof window !== 'undefined') {
+    window.MaquetacionBDPA = {
+        // Funciones principales
+        mostrarTabMaquetacion,
+        obtenerConfiguracionMaquetacion,
+        guardarMaquetacion,
+        exportarConfiguracion,
+        
+        // Funciones de componentes
+        toggleComponente,
+        toggleConfiguracionPisos,
+        toggleConfiguracionShaft,
+        
+        // Funciones de shaft
+        agregarShaftEspecifico,
+        eliminarShaftEspecifico,
+        actualizarTablaShaftEspecifico,
+        
+        // Funciones de dispositivos
+        agregarDispositivoShaft,
+        eliminarDispositivoShaft,
+        actualizarOpcionesDispositivo,
+        
+        // Funciones de vista previa
+        generarVistaPrevia,
+        mostrarVistaHojaProgreso,
+        
+        // Funciones de utilidades
+        marcarMaquetacionComoModificada,
+        inicializarSistemaMaquetacion,
+        limpiarSistemaMaquetacion,
+        validarIntegridadSistema,
+        
+        // Variables globales (solo lectura)
+        get shaftsPorTorrePiso() { return window.shaftsPorTorrePiso; },
+        get dispositivosPorShaft() { return window.dispositivosPorShaft; },
+        get maquetacionModificada() { return window.maquetacionModificada; }
+    };
+}
+
+console.log('✅ Sistema de maquetación BDPA cargado completamente - js/maquetacion.html');
+</script>

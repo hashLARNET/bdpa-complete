@@ -1,0 +1,789 @@
+<script>
+// ============================================================================
+// VARIABLES GLOBALES PARA CONFIGURACIÓN
+// ============================================================================
+
+let configuracionActual = {
+    general: {},
+    avances: {},
+    notificaciones: {},
+    backup: {}
+};
+
+let tabConfigActiva = 'general';
+
+// ============================================================================
+// FUNCIONES PRINCIPALES DE CONFIGURACIÓN
+// ============================================================================
+
+/**
+ * Inicializar módulo de configuración
+ */
+function inicializarConfiguracion() {
+    console.log('[Configuración] Inicializando módulo de configuración');
+    
+    // Cargar configuraciones
+    cargarTodasLasConfiguraciones();
+    
+    // Event listeners
+    setupConfiguracionEventListeners();
+    
+    console.log('[Configuración] Módulo inicializado correctamente');
+}
+
+/**
+ * Configurar event listeners para configuración
+ */
+function setupConfiguracionEventListeners() {
+    // Validación en tiempo real para campos numéricos
+    const camposNumericos = ['items-por-pagina', 'dias-edicion-avances'];
+    
+    camposNumericos.forEach(campoId => {
+        const campo = document.getElementById(campoId);
+        if (campo) {
+            campo.addEventListener('input', validarCampoNumerico);
+        }
+    });
+    
+    // Validación de email
+    const campoEmail = document.getElementById('email-notificaciones');
+    if (campoEmail) {
+        campoEmail.addEventListener('blur', validarEmail);
+    }
+    
+    // Auto-guardado para checkboxes
+    const checkboxes = document.querySelectorAll('#config-notificaciones input[type="checkbox"]');
+    checkboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', autoGuardarNotificaciones);
+    });
+}
+
+/**
+ * Cargar todas las configuraciones
+ */
+async function cargarTodasLasConfiguraciones() {
+    try {
+        mostrarLoader('config-loader');
+        
+        // Cargar configuraciones en paralelo
+        const [general, avances, notificaciones, backup] = await Promise.all([
+            callAPI('obtenerConfiguracionGeneral'),
+            callAPI('obtenerConfiguracionAvances'),
+            callAPI('obtenerConfiguracionNotificaciones'),
+            callAPI('obtenerConfiguracionBackup')
+        ]);
+        
+        ocultarLoader('config-loader');
+        
+        // Procesar respuestas
+        if (!general.error) {
+            configuracionActual.general = general.datos || {};
+            cargarConfiguracionGeneral();
+        }
+        
+        if (!avances.error) {
+            configuracionActual.avances = avances.datos || {};
+            cargarConfiguracionAvances();
+        }
+        
+        if (!notificaciones.error) {
+            configuracionActual.notificaciones = notificaciones.datos || {};
+            cargarConfiguracionNotificaciones();
+        }
+        
+        if (!backup.error) {
+            configuracionActual.backup = backup.datos || {};
+            cargarConfiguracionBackup();
+        }
+        
+        console.log('[Configuración] Todas las configuraciones cargadas');
+        
+    } catch (error) {
+        ocultarLoader('config-loader');
+        console.error('[Configuración] Error al cargar configuraciones:', error);
+        mostrarNotificacion('Error al cargar las configuraciones', 'error');
+    }
+}
+
+/**
+ * Mostrar tab de configuración
+ */
+function mostrarTabConfig(tab) {
+    // Ocultar todos los tabs
+    const tabs = ['config-general', 'config-avances', 'config-notificaciones', 'config-backup'];
+    tabs.forEach(tabId => {
+        const elemento = document.getElementById(tabId);
+        if (elemento) {
+            elemento.classList.add('hidden');
+        }
+    });
+    
+    // Mostrar tab seleccionado
+    const tabSeleccionado = document.getElementById(`config-${tab}`);
+    if (tabSeleccionado) {
+        tabSeleccionado.classList.remove('hidden');
+    }
+    
+    // Actualizar navegación
+    const navLinks = document.querySelectorAll('#configuracion .nav-link');
+    navLinks.forEach(link => {
+        link.classList.remove('active');
+    });
+    
+    const linkActivo = document.querySelector(`#configuracion .nav-link[onclick="mostrarTabConfig('${tab}')"]`);
+    if (linkActivo) {
+        linkActivo.classList.add('active');
+    }
+    
+    tabConfigActiva = tab;
+}
+
+// ============================================================================
+// CONFIGURACIÓN GENERAL
+// ============================================================================
+
+/**
+ * Cargar configuración general
+ */
+function cargarConfiguracionGeneral() {
+    const config = configuracionActual.general;
+    
+    // Cargar valores en los campos
+    const campos = {
+        'nombre-empresa': config.nombreEmpresa || 'Larnet Telecomunicaciones',
+        'email-notificaciones': config.emailNotificaciones || '',
+        'items-por-pagina': config.itemsPorPagina || 20
+    };
+    
+    Object.keys(campos).forEach(campoId => {
+        const campo = document.getElementById(campoId);
+        if (campo) {
+            campo.value = campos[campoId];
+        }
+    });
+    
+    console.log('[Configuración] Configuración general cargada');
+}
+
+/**
+ * Guardar configuración general
+ */
+async function guardarConfiguracionGeneral() {
+    const configuracion = {
+        nombreEmpresa: document.getElementById('nombre-empresa').value.trim(),
+        emailNotificaciones: document.getElementById('email-notificaciones').value.trim(),
+        itemsPorPagina: parseInt(document.getElementById('items-por-pagina').value)
+    };
+    
+    // Validaciones
+    if (!configuracion.nombreEmpresa) {
+        mostrarNotificacion('El nombre de la empresa es obligatorio', 'error');
+        return;
+    }
+    
+    if (configuracion.emailNotificaciones && !validarFormatoEmail(configuracion.emailNotificaciones)) {
+        mostrarNotificacion('El email de notificaciones no es válido', 'error');
+        return;
+    }
+    
+    if (configuracion.itemsPorPagina < 10 || configuracion.itemsPorPagina > 100) {
+        mostrarNotificacion('Los items por página deben estar entre 10 y 100', 'error');
+        return;
+    }
+    
+    try {
+        mostrarLoader('config-loader');
+        
+        const response = await callAPI('guardarConfiguracionGeneral', configuracion);
+        
+        ocultarLoader('config-loader');
+        
+        if (response.error) {
+            mostrarNotificacion(response.message || 'Error al guardar la configuración', 'error');
+            return;
+        }
+        
+        configuracionActual.general = configuracion;
+        mostrarNotificacion('Configuración general guardada correctamente', 'success');
+        
+    } catch (error) {
+        ocultarLoader('config-loader');
+        console.error('[Configuración] Error al guardar configuración general:', error);
+        mostrarNotificacion('Error al guardar la configuración general', 'error');
+    }
+}
+
+// ============================================================================
+// CONFIGURACIÓN DE AVANCES
+// ============================================================================
+
+/**
+ * Cargar configuración de avances
+ */
+function cargarConfiguracionAvances() {
+    const config = configuracionActual.avances;
+    
+    // Cargar valores en los campos
+    const permitirEdicion = document.getElementById('permitir-edicion-avances');
+    if (permitirEdicion) {
+        permitirEdicion.value = config.permitirEdicion || 'si';
+    }
+    
+    const diasEdicion = document.getElementById('dias-edicion-avances');
+    if (diasEdicion) {
+        diasEdicion.value = config.diasEdicion || 7;
+    }
+    
+    console.log('[Configuración] Configuración de avances cargada');
+}
+
+/**
+ * Guardar configuración de avances
+ */
+async function guardarConfiguracionAvances() {
+    const configuracion = {
+        permitirEdicion: document.getElementById('permitir-edicion-avances').value,
+        diasEdicion: parseInt(document.getElementById('dias-edicion-avances').value)
+    };
+    
+    // Validaciones
+    if (configuracion.diasEdicion < 0 || configuracion.diasEdicion > 30) {
+        mostrarNotificacion('Los días para editar avances deben estar entre 0 y 30', 'error');
+        return;
+    }
+    
+    try {
+        mostrarLoader('config-loader');
+        
+        const response = await callAPI('guardarConfiguracionAvances', configuracion);
+        
+        ocultarLoader('config-loader');
+        
+        if (response.error) {
+            mostrarNotificacion(response.message || 'Error al guardar la configuración', 'error');
+            return;
+        }
+        
+        configuracionActual.avances = configuracion;
+        mostrarNotificacion('Configuración de avances guardada correctamente', 'success');
+        
+    } catch (error) {
+        ocultarLoader('config-loader');
+        console.error('[Configuración] Error al guardar configuración de avances:', error);
+        mostrarNotificacion('Error al guardar la configuración de avances', 'error');
+    }
+}
+
+// ============================================================================
+// CONFIGURACIÓN DE NOTIFICACIONES
+// ============================================================================
+
+/**
+ * Cargar configuración de notificaciones
+ */
+function cargarConfiguracionNotificaciones() {
+    const config = configuracionActual.notificaciones;
+    
+    // Cargar valores en los checkboxes
+    const checkboxes = {
+        'notificar-avances-completados': config.avancesCompletados !== false,
+        'notificar-stock-bajo': config.stockBajo !== false,
+        'notificar-obras-retrasadas': config.obrasRetrasadas !== false
+    };
+    
+    Object.keys(checkboxes).forEach(checkboxId => {
+        const checkbox = document.getElementById(checkboxId);
+        if (checkbox) {
+            checkbox.checked = checkboxes[checkboxId];
+        }
+    });
+    
+    console.log('[Configuración] Configuración de notificaciones cargada');
+}
+
+/**
+ * Guardar configuración de notificaciones
+ */
+async function guardarConfiguracionNotificaciones() {
+    const configuracion = {
+        avancesCompletados: document.getElementById('notificar-avances-completados').checked,
+        stockBajo: document.getElementById('notificar-stock-bajo').checked,
+        obrasRetrasadas: document.getElementById('notificar-obras-retrasadas').checked
+    };
+    
+    try {
+        mostrarLoader('config-loader');
+        
+        const response = await callAPI('guardarConfiguracionNotificaciones', configuracion);
+        
+        ocultarLoader('config-loader');
+        
+        if (response.error) {
+            mostrarNotificacion(response.message || 'Error al guardar la configuración', 'error');
+            return;
+        }
+        
+        configuracionActual.notificaciones = configuracion;
+        mostrarNotificacion('Configuración de notificaciones guardada correctamente', 'success');
+        
+    } catch (error) {
+        ocultarLoader('config-loader');
+        console.error('[Configuración] Error al guardar configuración de notificaciones:', error);
+        mostrarNotificacion('Error al guardar la configuración de notificaciones', 'error');
+    }
+}
+
+/**
+ * Auto-guardar notificaciones (cuando cambia un checkbox)
+ */
+function autoGuardarNotificaciones() {
+    // Pequeño delay para evitar múltiples llamadas
+    clearTimeout(window.autoGuardarTimeout);
+    window.autoGuardarTimeout = setTimeout(() => {
+        guardarConfiguracionNotificaciones();
+    }, 1000);
+}
+
+// ============================================================================
+// CONFIGURACIÓN DE BACKUP
+// ============================================================================
+
+/**
+ * Cargar configuración de backup
+ */
+function cargarConfiguracionBackup() {
+    const config = configuracionActual.backup;
+    
+    // Cargar valores en los campos
+    const frecuencia = document.getElementById('frecuencia-backup');
+    if (frecuencia) {
+        frecuencia.value = config.frecuencia || 'semanal';
+    }
+    
+    const hora = document.getElementById('hora-backup');
+    if (hora) {
+        hora.value = config.hora || '02:00';
+    }
+    
+    // Cargar información de backups recientes si existe
+    if (config.ultimosBackups) {
+        mostrarUltimosBackups(config.ultimosBackups);
+    }
+    
+    console.log('[Configuración] Configuración de backup cargada');
+}
+
+/**
+ * Guardar configuración de backup
+ */
+async function guardarConfiguracionBackup() {
+    const configuracion = {
+        frecuencia: document.getElementById('frecuencia-backup').value,
+        hora: document.getElementById('hora-backup').value
+    };
+    
+    try {
+        mostrarLoader('config-loader');
+        
+        const response = await callAPI('guardarConfiguracionBackup', configuracion);
+        
+        ocultarLoader('config-loader');
+        
+        if (response.error) {
+            mostrarNotificacion(response.message || 'Error al guardar la configuración', 'error');
+            return;
+        }
+        
+        configuracionActual.backup = { ...configuracionActual.backup, ...configuracion };
+        mostrarNotificacion('Configuración de backup guardada correctamente', 'success');
+        
+    } catch (error) {
+        ocultarLoader('config-loader');
+        console.error('[Configuración] Error al guardar configuración de backup:', error);
+        mostrarNotificacion('Error al guardar la configuración de backup', 'error');
+    }
+}
+
+/**
+ * Realizar backup manual
+ */
+async function realizarBackupManual() {
+    if (!confirm('¿Está seguro de realizar un backup manual? Este proceso puede tomar varios minutos.')) {
+        return;
+    }
+    
+    try {
+        mostrarLoader('config-loader');
+        
+        // Mostrar progreso
+        mostrarNotificacion('Iniciando backup manual...', 'info');
+        
+        const response = await callAPI('realizarBackupManual');
+        
+        ocultarLoader('config-loader');
+        
+        if (response.error) {
+            mostrarNotificacion(response.message || 'Error al realizar el backup', 'error');
+            return;
+        }
+        
+        mostrarNotificacion('Backup manual completado correctamente', 'success');
+        
+        // Actualizar lista de backups
+        if (response.backupInfo) {
+            agregarBackupALista(response.backupInfo);
+        }
+        
+        // Recargar configuración de backup para obtener lista actualizada
+        setTimeout(() => {
+            cargarConfiguracionBackup();
+        }, 2000);
+        
+    } catch (error) {
+        ocultarLoader('config-loader');
+        console.error('[Configuración] Error al realizar backup manual:', error);
+        mostrarNotificacion('Error al realizar el backup manual', 'error');
+    }
+}
+
+/**
+ * Mostrar últimos backups
+ */
+function mostrarUltimosBackups(backups) {
+    // Crear contenedor si no existe
+    let contenedor = document.getElementById('lista-backups');
+    if (!contenedor) {
+        contenedor = document.createElement('div');
+        contenedor.id = 'lista-backups';
+        contenedor.className = 'backups-list mt-20';
+        
+        const titulo = document.createElement('h5');
+        titulo.innerHTML = '<i class="fas fa-history"></i> Backups Recientes';
+        contenedor.appendChild(titulo);
+        
+        const tabBackup = document.getElementById('config-backup');
+        if (tabBackup) {
+            tabBackup.appendChild(contenedor);
+        }
+    }
+    
+    // Limpiar contenido anterior (excepto título)
+    const titulo = contenedor.querySelector('h5');
+    contenedor.innerHTML = '';
+    if (titulo) {
+        contenedor.appendChild(titulo);
+    }
+    
+    if (!backups || backups.length === 0) {
+        const mensaje = document.createElement('p');
+        mensaje.className = 'text-muted';
+        mensaje.textContent = 'No hay backups recientes';
+        contenedor.appendChild(mensaje);
+        return;
+    }
+    
+    // Crear lista de backups
+    const lista = document.createElement('div');
+    lista.className = 'backups-items';
+    
+    backups.forEach(backup => {
+        const item = document.createElement('div');
+        item.className = 'backup-item';
+        
+        const estado = backup.estado === 'completado' ? 'success' : 
+                      backup.estado === 'error' ? 'danger' : 'warning';
+        
+        item.innerHTML = `
+            <div class="backup-info">
+                <div class="backup-fecha">${new Date(backup.fecha).toLocaleString()}</div>
+                <div class="backup-tipo">${backup.tipo || 'Manual'}</div>
+                <span class="badge badge-${estado}">${backup.estado}</span>
+            </div>
+            <div class="backup-acciones">
+                ${backup.estado === 'completado' ? `
+                    <button class="btn btn-sm btn-info" onclick="descargarBackup('${backup.id}')" title="Descargar">
+                        <i class="fas fa-download"></i>
+                    </button>
+                    <button class="btn btn-sm btn-warning" onclick="restaurarBackup('${backup.id}')" title="Restaurar">
+                        <i class="fas fa-undo"></i>
+                    </button>
+                ` : ''}
+                <button class="btn btn-sm btn-danger" onclick="eliminarBackup('${backup.id}')" title="Eliminar">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        `;
+        
+        lista.appendChild(item);
+    });
+    
+    contenedor.appendChild(lista);
+}
+
+/**
+ * Agregar backup a la lista
+ */
+function agregarBackupALista(backupInfo) {
+    const lista = document.querySelector('.backups-items');
+    if (!lista) return;
+    
+    const item = document.createElement('div');
+    item.className = 'backup-item';
+    
+    item.innerHTML = `
+        <div class="backup-info">
+            <div class="backup-fecha">${new Date(backupInfo.fecha).toLocaleString()}</div>
+            <div class="backup-tipo">${backupInfo.tipo || 'Manual'}</div>
+            <span class="badge badge-success">completado</span>
+        </div>
+        <div class="backup-acciones">
+            <button class="btn btn-sm btn-info" onclick="descargarBackup('${backupInfo.id}')" title="Descargar">
+                <i class="fas fa-download"></i>
+            </button>
+            <button class="btn btn-sm btn-warning" onclick="restaurarBackup('${backupInfo.id}')" title="Restaurar">
+                <i class="fas fa-undo"></i>
+            </button>
+            <button class="btn btn-sm btn-danger" onclick="eliminarBackup('${backupInfo.id}')" title="Eliminar">
+                <i class="fas fa-trash"></i>
+            </button>
+        </div>
+    `;
+    
+    // Insertar al principio de la lista
+    lista.insertBefore(item, lista.firstChild);
+}
+
+/**
+ * Descargar backup
+ */
+async function descargarBackup(backupId) {
+    try {
+        mostrarLoader('config-loader');
+        
+        const response = await callAPI('obtenerUrlDescargaBackup', { id: backupId });
+        
+        ocultarLoader('config-loader');
+        
+        if (response.error) {
+            mostrarNotificacion('Error al obtener la URL de descarga', 'error');
+            return;
+        }
+        
+        // Crear enlace de descarga
+        const link = document.createElement('a');
+        link.href = response.url;
+        link.download = response.nombreArchivo || `backup_${backupId}.zip`;
+        link.click();
+        
+        mostrarNotificacion('Descarga iniciada', 'success');
+        
+    } catch (error) {
+        ocultarLoader('config-loader');
+        console.error('[Configuración] Error al descargar backup:', error);
+        mostrarNotificacion('Error al descargar el backup', 'error');
+    }
+}
+
+/**
+ * Restaurar backup
+ */
+async function restaurarBackup(backupId) {
+    if (!confirm('¿Está seguro de restaurar este backup? Esta acción sobrescribirá todos los datos actuales y no se puede deshacer.')) {
+        return;
+    }
+    
+    const confirmacion = prompt('Para confirmar, escriba "RESTAURAR" en mayúsculas:');
+    if (confirmacion !== 'RESTAURAR') {
+        mostrarNotificacion('Restauración cancelada', 'info');
+        return;
+    }
+    
+    try {
+        mostrarLoader('config-loader');
+        
+        mostrarNotificacion('Iniciando restauración... No cierre la aplicación.', 'warning');
+        
+        const response = await callAPI('restaurarBackup', { id: backupId });
+        
+        ocultarLoader('config-loader');
+        
+        if (response.error) {
+            mostrarNotificacion(response.message || 'Error al restaurar el backup', 'error');
+            return;
+        }
+        
+        mostrarNotificacion('Backup restaurado correctamente. La aplicación se recargará.', 'success');
+        
+        // Recargar la aplicación después de 3 segundos
+        setTimeout(() => {
+            window.location.reload();
+        }, 3000);
+        
+    } catch (error) {
+        ocultarLoader('config-loader');
+        console.error('[Configuración] Error al restaurar backup:', error);
+        mostrarNotificacion('Error al restaurar el backup', 'error');
+    }
+}
+
+/**
+ * Eliminar backup
+ */
+async function eliminarBackup(backupId) {
+    if (!confirm('¿Está seguro de eliminar este backup? Esta acción no se puede deshacer.')) {
+        return;
+    }
+    
+    try {
+        mostrarLoader('config-loader');
+        
+        const response = await callAPI('eliminarBackup', { id: backupId });
+        
+        ocultarLoader('config-loader');
+        
+        if (response.error) {
+            mostrarNotificacion(response.message || 'Error al eliminar el backup', 'error');
+            return;
+        }
+        
+        mostrarNotificacion('Backup eliminado correctamente', 'success');
+        
+        // Remover de la lista
+        const backupItems = document.querySelectorAll('.backup-item');
+        backupItems.forEach(item => {
+            const botonEliminar = item.querySelector(`[onclick="eliminarBackup('${backupId}')"]`);
+            if (botonEliminar) {
+                item.remove();
+            }
+        });
+        
+    } catch (error) {
+        ocultarLoader('config-loader');
+        console.error('[Configuración] Error al eliminar backup:', error);
+        mostrarNotificacion('Error al eliminar el backup', 'error');
+    }
+}
+
+// ============================================================================
+// FUNCIONES DE VALIDACIÓN
+// ============================================================================
+
+/**
+ * Validar campo numérico
+ */
+function validarCampoNumerico(event) {
+    const campo = event.target;
+    const valor = parseInt(campo.value);
+    const min = parseInt(campo.min);
+    const max = parseInt(campo.max);
+    
+    // Limpiar mensaje anterior
+    const mensajeAnterior = campo.parentNode.querySelector('.validation-message');
+    if (mensajeAnterior) {
+        mensajeAnterior.remove();
+    }
+    
+    if (isNaN(valor) || valor < min || valor > max) {
+        campo.style.borderColor = 'var(--danger-color)';
+        
+        const mensaje = document.createElement('div');
+        mensaje.className = 'validation-message';
+        mensaje.style.color = 'var(--danger-color)';
+        mensaje.style.fontSize = '14px';
+        mensaje.style.marginTop = '5px';
+        mensaje.textContent = `El valor debe estar entre ${min} y ${max}`;
+        
+        campo.parentNode.appendChild(mensaje);
+    } else {
+        campo.style.borderColor = '';
+    }
+}
+
+/**
+ * Validar email
+ */
+function validarEmail(event) {
+    const campo = event.target;
+    const email = campo.value.trim();
+    
+    // Limpiar mensaje anterior
+    const mensajeAnterior = campo.parentNode.querySelector('.validation-message');
+    if (mensajeAnterior) {
+        mensajeAnterior.remove();
+    }
+    
+    if (email && !validarFormatoEmail(email)) {
+        campo.style.borderColor = 'var(--danger-color)';
+        
+        const mensaje = document.createElement('div');
+        mensaje.className = 'validation-message';
+        mensaje.style.color = 'var(--danger-color)';
+        mensaje.style.fontSize = '14px';
+        mensaje.style.marginTop = '5px';
+        mensaje.textContent = 'Ingrese un email válido';
+        
+        campo.parentNode.appendChild(mensaje);
+    } else {
+        campo.style.borderColor = '';
+    }
+}
+
+/**
+ * Validar formato de email
+ */
+function validarFormatoEmail(email) {
+    const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return regex.test(email);
+}
+
+// ============================================================================
+// FUNCIONES DE UTILIDAD
+// ============================================================================
+
+/**
+ * Mostrar loader
+ */
+function mostrarLoader(loaderId) {
+    const loader = document.getElementById(loaderId);
+    if (loader) {
+        loader.classList.remove('hidden');
+    }
+}
+
+/**
+ * Ocultar loader
+ */
+function ocultarLoader(loaderId) {
+    const loader = document.getElementById(loaderId);
+    if (loader) {
+        loader.classList.add('hidden');
+    }
+}
+
+// ============================================================================
+// INICIALIZACIÓN
+// ============================================================================
+
+// Auto-inicialización cuando se carga el DOM
+document.addEventListener('DOMContentLoaded', function() {
+    if (document.getElementById('configuracion')) {
+        inicializarConfiguracion();
+    }
+});
+
+// Exportar funciones globalmente
+window.configuracionModule = {
+    inicializarConfiguracion,
+    mostrarTabConfig,
+    guardarConfiguracionGeneral,
+    guardarConfiguracionAvances,
+    guardarConfiguracionNotificaciones,
+    guardarConfiguracionBackup,
+    realizarBackupManual,
+    descargarBackup,
+    restaurarBackup,
+    eliminarBackup
+};
+
+console.log('[Configuración] Módulo de configuración cargado correctamente');
+</script>

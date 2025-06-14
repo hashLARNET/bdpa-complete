@@ -1,0 +1,1507 @@
+<script>
+//============================================================================
+//BDPA - js/inventario.html - PARTE 1: Funciones principales de inventario
+//============================================================================
+//
+// Variables globales para inventario
+let materialesData = [];
+let categoriasData = [];
+let movimientosData = [];
+
+// Función para cargar materiales con filtros opcionales
+async function cargarMateriales(filtros = {}) {
+    try {
+        const response = await callAPI('obtenerMateriales', { filtros });
+        if (response.error) {
+            mostrarNotificacion("Error al cargar los materiales.", "error");
+            return;
+        }
+        
+        materialesData = response.datos;
+        
+        // Actualizar selectores de materiales
+        const selectores = [
+            'material-entrada',
+            'material-salida',
+            'filtro-material-movimiento',
+            'material-transferencia',
+            'material-presupuesto',
+            'material-programacion'
+        ];
+        
+        selectores.forEach(selector => {
+            const select = document.getElementById(selector);
+            if (!select) return;
+            
+            // Mantener primera opción
+            const primeraOpcion = select.options[0];
+            select.innerHTML = '';
+            select.appendChild(primeraOpcion);
+            
+            // Agregar materiales
+            materialesData.forEach(material => {
+                const option = document.createElement('option');
+                option.value = material.id;
+                option.textContent = `${material.codigo} - ${material.nombre}`;
+                select.appendChild(option);
+            });
+        });
+        
+        // Actualizar tabla de inventario si está visible
+        if (!document.getElementById('inventario-consultar').classList.contains('hidden')) {
+            const tbody = document.getElementById('inventario-tbody');
+            tbody.innerHTML = '';
+            
+            materialesData.forEach(material => {
+                const tr = document.createElement('tr');
+                
+                // Aplicar clase según el stock
+                if (material.stock <= 0) {
+                    tr.classList.add('stock-zero');
+                } else if (material.stock <= material.stockMinimo) {
+                    tr.classList.add('stock-low');
+                } else {
+                    tr.classList.add('stock-ok');
+                }
+                
+                // Encontrar categoría
+                const categoria = categoriasData.find(c => c.id === material.categoriaId);
+                const categoriaNombre = categoria ? categoria.nombre : 'Sin categoría';
+                const categoriaColor = categoria ? categoria.color : '#999';
+                
+                tr.innerHTML = `
+                    <td>${material.codigo}</td>
+                    <td>${material.nombre}</td>
+                    <td>${material.descripcion || '-'}</td>
+                    <td>
+                        <span class="badge" style="background-color: ${categoriaColor}">
+                            ${categoriaNombre}
+                        </span>
+                    </td>
+                    <td class="${material.stock <= material.stockMinimo ? 'text-danger' : ''}">${material.stock}</td>
+                    <td>${material.stockMinimo}</td>
+                    <td>${material.unidad}</td>
+                    <td>${material.ubicacion || '-'}</td>
+                    <td>
+                        <button class="btn btn-sm btn-primary" onclick="editarMaterial('${material.id}')">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn btn-sm btn-success" onclick="mostrarEntradaRapida('${material.id}')">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                        <button class="btn btn-sm btn-warning" onclick="mostrarSalidaRapida('${material.id}')">
+                            <i class="fas fa-minus"></i>
+                        </button>
+                        <button class="btn btn-sm btn-danger" onclick="eliminarMaterial('${material.id}')">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                `;
+                
+                tbody.appendChild(tr);
+            });
+        }
+    } catch (error) {
+        mostrarNotificacion("Error al cargar los materiales.", "error");
+    }
+}
+
+// Función para cargar categorías
+async function cargarCategorias() {
+    try {
+        const response = await callAPI('obtenerCategorias');
+        if (response.error) {
+            mostrarNotificacion("Error al cargar las categorías.", "error");
+            return;
+        }
+        
+        categoriasData = response.datos;
+        
+        // Actualizar selectores de categorías
+        const selectores = [
+            'filtro-categoria',
+            'categoria-material',
+            'reporte-inv-categoria'
+        ];
+        
+        selectores.forEach(selector => {
+            const select = document.getElementById(selector);
+            if (!select) return;
+            
+            // Mantener primera opción
+            const primeraOpcion = select.options[0];
+            select.innerHTML = '';
+            select.appendChild(primeraOpcion);
+            
+            // Agregar categorías
+            categoriasData.forEach(categoria => {
+                const option = document.createElement('option');
+                option.value = categoria.id;
+                option.textContent = categoria.nombre;
+                select.appendChild(option);
+            });
+        });
+        
+        // Actualizar tabla de categorías si está visible
+        if (!document.getElementById('inventario-categorias').classList.contains('hidden')) {
+            const tbody = document.getElementById('categorias-tbody');
+            tbody.innerHTML = '';
+            
+            categoriasData.forEach(categoria => {
+                const tr = document.createElement('tr');
+                
+                // Contar materiales por categoría
+                const cantidadMateriales = materialesData.filter(m => m.categoriaId == categoria.id).length;
+                
+                tr.innerHTML = `
+                    <td>${categoria.nombre}</td>
+                    <td>${categoria.descripcion}</td>
+                    <td>
+                        <div style="width: 20px; height: 20px; background-color: ${categoria.color}; border-radius: 3px;"></div>
+                    </td>
+                    <td>${cantidadMateriales}</td>
+                    <td>
+                        <button class="btn btn-sm btn-primary" onclick="editarCategoria('${categoria.id}')">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn btn-sm btn-danger" onclick="eliminarCategoria('${categoria.id}')">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                `;
+                
+                tbody.appendChild(tr);
+            });
+        }
+    } catch (error) {
+        mostrarNotificacion("Error al cargar las categorías.", "error");
+    }
+}
+// ============================================================================
+// BDPA - js/inventario.html - PARTE 2: Movimientos y registros de inventario
+// ============================================================================
+
+// Función para cargar movimientos de inventario
+async function cargarMovimientosInventario(filtros = {}) {
+    try {
+        const response = await callAPI('obtenerMovimientosInventario', { filtros });
+        if (response.error) {
+            mostrarNotificacion("Error al cargar los movimientos.", "error");
+            return;
+        }
+        
+        movimientosData = response.datos;
+        
+        // Actualizar tabla de movimientos
+        const tbody = document.getElementById('movimientos-tbody');
+        tbody.innerHTML = '';
+        
+        movimientosData.forEach(movimiento => {
+            const tr = document.createElement('tr');
+            
+            // Aplicar clase según el tipo de movimiento
+            if (movimiento.tipoMovimiento === 'entrada') {
+                tr.classList.add('bg-success');
+            } else if (movimiento.tipoMovimiento === 'salida') {
+                tr.classList.add('bg-warning');
+            } else if (movimiento.tipoMovimiento === 'transferencia') {
+                tr.classList.add('bg-info');
+            } else {
+                tr.classList.add('bg-secondary');
+            }
+            
+            tr.innerHTML = `
+                <td>${new Date(movimiento.fecha).toLocaleString()}</td>
+                <td>
+                    <span class="badge badge-${
+                        movimiento.tipoMovimiento === 'entrada' ? 'success' : 
+                        movimiento.tipoMovimiento === 'salida' ? 'warning' : 
+                        movimiento.tipoMovimiento === 'transferencia' ? 'info' : 'secondary'
+                    }">
+                        ${movimiento.tipoMovimiento.toUpperCase()}
+                    </span>
+                </td>
+                <td>${movimiento.materialNombre}</td>
+                <td>${movimiento.cantidad} ${movimiento.unidad}</td>
+                <td>${movimiento.origenDestino || '-'}</td>
+                <td>${movimiento.usuarioNombre}</td>
+                <td>${movimiento.comentario || '-'}</td>
+            `;
+            
+            tbody.appendChild(tr);
+        });
+    } catch (error) {
+        mostrarNotificacion("Error al cargar los movimientos.", "error");
+    }
+}
+
+// Función para registrar entrada de material
+async function registrarEntrada() {
+    const materialId = document.getElementById('material-entrada').value;
+    const cantidad = parseFloat(document.getElementById('cantidad-entrada').value);
+    const origen = document.getElementById('origen-entrada').value;
+    const costo = parseFloat(document.getElementById('costo-entrada').value);
+    const comentario = document.getElementById('comentario-entrada').value;
+    
+    // Validar campos requeridos
+    if (!materialId || isNaN(cantidad) || cantidad <= 0) {
+        mostrarNotificacion("Por favor complete todos los campos requeridos con valores válidos.", "error");
+        return;
+    }
+    
+    // Crear objeto de entrada
+    const entrada = {
+        materialId,
+        cantidad,
+        origen,
+        costo: isNaN(costo) ? 0 : costo,
+        comentario
+    };
+    
+    try {
+        // Mostrar loader
+        document.getElementById('entrada-loader').classList.remove('hidden');
+        
+        const response = await callAPI('registrarEntradaMaterial', entrada);
+        
+        // Ocultar loader
+        document.getElementById('entrada-loader').classList.add('hidden');
+        
+        if (response.success) {
+            mostrarNotificacion("Entrada registrada correctamente.", "success");
+            
+            // Limpiar formulario
+            document.getElementById('material-entrada').value = '';
+            document.getElementById('cantidad-entrada').value = '';
+            document.getElementById('origen-entrada').value = '';
+            document.getElementById('costo-entrada').value = '';
+            document.getElementById('comentario-entrada').value = '';
+            document.getElementById('detalles-material').style.display = 'none';
+            
+            // Recargar materiales
+            await cargarMateriales();
+        } else {
+            mostrarNotificacion(response.message || "Error al registrar la entrada.", "error");
+        }
+    } catch (error) {
+        document.getElementById('entrada-loader').classList.add('hidden');
+        mostrarNotificacion("Error al registrar la entrada.", "error");
+    }
+}
+
+// Función para registrar salida de material
+async function registrarSalida() {
+    const materialId = document.getElementById('material-salida').value;
+    const cantidad = parseFloat(document.getElementById('cantidad-salida').value);
+    const destino = document.getElementById('destino-salida').value;
+    const comentario = document.getElementById('comentario-salida').value;
+    const prioridad = document.getElementById('prioridad-salida').value;
+    
+    // Validar campos requeridos
+    if (!materialId || isNaN(cantidad) || cantidad <= 0 || !destino) {
+        mostrarNotificacion("Por favor complete todos los campos requeridos con valores válidos.", "error");
+        return;
+    }
+    
+    // Validar stock disponible
+    const material = materialesData.find(m => m.id === materialId);
+    if (material && cantidad > material.stock) {
+        mostrarNotificacion(`No hay suficiente stock disponible. Stock actual: ${material.stock} ${material.unidad}`, "error");
+        return;
+    }
+    
+    // Crear objeto de salida
+    const salida = {
+        materialId,
+        cantidad,
+        destino,
+        comentario,
+        prioridad
+    };
+    
+    try {
+        // Mostrar loader
+        document.getElementById('salida-loader').classList.remove('hidden');
+        
+        const response = await callAPI('registrarSalidaMaterial', salida);
+        
+        // Ocultar loader
+        document.getElementById('salida-loader').classList.add('hidden');
+        
+        if (response.success) {
+            mostrarNotificacion("Salida registrada correctamente.", "success");
+            
+            // Limpiar formulario
+            document.getElementById('material-salida').value = '';
+            document.getElementById('cantidad-salida').value = '';
+            document.getElementById('destino-salida').value = '';
+            document.getElementById('comentario-salida').value = '';
+            document.getElementById('prioridad-salida').value = 'Normal';
+            document.getElementById('stock-disponible-valor').textContent = '0';
+            
+            // Recargar materiales
+            await cargarMateriales();
+        } else {
+            mostrarNotificacion(response.message || "Error al registrar la salida.", "error");
+        }
+    } catch (error) {
+        document.getElementById('salida-loader').classList.add('hidden');
+        mostrarNotificacion("Error al registrar la salida.", "error");
+    }
+}
+
+// Función para actualizar detalles del material
+function actualizarDetallesMaterial() {
+    const materialId = document.getElementById('material-entrada').value;
+    const detallesDiv = document.getElementById('detalles-material');
+    
+    if (!materialId) {
+        detallesDiv.style.display = 'none';
+        return;
+    }
+    
+    const material = materialesData.find(m => m.id === materialId);
+    if (material) {
+        document.getElementById('stock-actual').textContent = material.stock;
+        document.getElementById('unidad-actual').textContent = material.unidad;
+        document.getElementById('minimo-actual').textContent = material.stockMinimo;
+        document.getElementById('ubicacion-actual').textContent = material.ubicacion || 'No especificada';
+        detallesDiv.style.display = 'block';
+    } else {
+        detallesDiv.style.display = 'none';
+    }
+}
+
+// Función para actualizar stock disponible
+function actualizarStockDisponible() {
+    const materialId = document.getElementById('material-salida').value;
+    const spanStock = document.getElementById('stock-disponible-valor');
+    
+    if (!materialId) {
+        spanStock.textContent = '0';
+        return;
+    }
+    
+    const material = materialesData.find(m => m.id === materialId);
+    if (material) {
+        spanStock.textContent = `${material.stock} ${material.unidad}`;
+    } else {
+        spanStock.textContent = '0';
+    }
+}
+
+// Función para filtrar inventario
+function filtrarInventario() {
+    const categoriaId = document.getElementById('filtro-categoria').value;
+    const soloStockBajo = document.getElementById('filtro-stock').checked;
+    const busqueda = document.getElementById('buscar-material').value.toLowerCase();
+    
+    const filtros = {};
+    if (categoriaId) filtros.categoriaId = categoriaId;
+    if (soloStockBajo) filtros.stockBajo = true;
+    if (busqueda) filtros.busqueda = busqueda;
+    
+    cargarMateriales(filtros);
+}
+
+// Función para filtrar movimientos
+function filtrarMovimientos() {
+    const tipoMovimiento = document.getElementById('filtro-tipo-movimiento').value;
+    const materialId = document.getElementById('filtro-material-movimiento').value;
+    const fechaDesde = document.getElementById('filtro-fecha-desde').value;
+    const fechaHasta = document.getElementById('filtro-fecha-hasta').value;
+    
+    const filtros = {};
+    if (tipoMovimiento) filtros.tipoMovimiento = tipoMovimiento;
+    if (materialId) filtros.materialId = materialId;
+    if (fechaDesde) filtros.fechaDesde = fechaDesde;
+    if (fechaHasta) filtros.fechaHasta = fechaHasta;
+    
+    cargarMovimientosInventario(filtros);
+}
+// ============================================================================
+// BDPA - js/inventario.html - PARTE 3: CRUD de materiales y categorías
+// ============================================================================
+
+// Funciones para mostrar formularios de materiales
+function mostrarFormularioMaterial(materialId = null) {
+    const formulario = document.getElementById('formulario-material');
+    
+    // Limpiar formulario
+    document.getElementById('material-id').value = '';
+    document.getElementById('codigo-material').value = '';
+    document.getElementById('nombre-material').value = '';
+    document.getElementById('descripcion-material').value = '';
+    document.getElementById('categoria-material').value = '';
+    document.getElementById('stock-material').value = '0';
+    document.getElementById('stock-minimo-material').value = '5';
+    document.getElementById('unidad-material').value = 'unidad';
+    document.getElementById('ubicacion-material').value = '';
+    
+    // Si es edición, cargar los datos del material
+    if (materialId) {
+        const material = materialesData.find(m => m.id === materialId);
+        if (material) {
+            document.getElementById('material-id').value = material.id;
+            document.getElementById('codigo-material').value = material.codigo;
+            document.getElementById('nombre-material').value = material.nombre;
+            document.getElementById('descripcion-material').value = material.descripcion || '';
+            document.getElementById('categoria-material').value = material.categoriaId || '';
+            document.getElementById('stock-material').value = material.stock;
+            document.getElementById('stock-minimo-material').value = material.stockMinimo;
+            document.getElementById('unidad-material').value = material.unidad;
+            document.getElementById('ubicacion-material').value = material.ubicacion || '';
+        }
+    }
+    
+    // Mostrar formulario
+    formulario.classList.remove('hidden');
+}
+
+function cancelarEdicionMaterial() {
+    document.getElementById('formulario-material').classList.add('hidden');
+}
+
+// Función para guardar material
+async function guardarMaterial() {
+    const materialId = document.getElementById('material-id').value;
+    const codigo = document.getElementById('codigo-material').value;
+    const nombre = document.getElementById('nombre-material').value;
+    const descripcion = document.getElementById('descripcion-material').value;
+    const categoriaId = document.getElementById('categoria-material').value;
+    const stock = parseFloat(document.getElementById('stock-material').value);
+    const stockMinimo = parseFloat(document.getElementById('stock-minimo-material').value);
+    const unidad = document.getElementById('unidad-material').value;
+    const ubicacion = document.getElementById('ubicacion-material').value;
+    
+    // Validar campos requeridos
+    if (!codigo || !nombre || !unidad) {
+        mostrarNotificacion("Por favor complete todos los campos requeridos.", "error");
+        return;
+    }
+    
+    // Crear objeto de material
+    const material = {
+        id: materialId,
+        codigo,
+        nombre,
+        descripcion,
+        categoriaId,
+        stock: isNaN(stock) ? 0 : stock,
+        stockMinimo: isNaN(stockMinimo) ? 5 : stockMinimo,
+        unidad,
+        ubicacion
+    };
+    
+    try {
+        const response = await callAPI('guardarMaterial', material);
+        
+        if (response.success) {
+            mostrarNotificacion("Material guardado correctamente.", "success");
+            cancelarEdicionMaterial();
+            await cargarMateriales();
+        } else {
+            mostrarNotificacion(response.message || "Error al guardar el material.", "error");
+        }
+    } catch (error) {
+        mostrarNotificacion("Error al guardar el material.", "error");
+    }
+}
+
+// Funciones para editar y eliminar material
+function editarMaterial(materialId) {
+    mostrarFormularioMaterial(materialId);
+}
+
+async function eliminarMaterial(materialId) {
+    if (!confirm('¿Está seguro de eliminar este material? Esta acción no se puede deshacer.')) {
+        return;
+    }
+    
+    try {
+        const response = await callAPI('eliminarMaterial', { materialId });
+        
+        if (response.success) {
+            mostrarNotificacion("Material eliminado correctamente.", "success");
+            await cargarMateriales();
+        } else {
+            mostrarNotificacion(response.message || "Error al eliminar el material.", "error");
+        }
+    } catch (error) {
+        mostrarNotificacion("Error al eliminar el material.", "error");
+    }
+}
+
+// Funciones para entradas y salidas rápidas
+function mostrarEntradaRapida(materialId) {
+    const material = materialesData.find(m => m.id === materialId);
+    if (!material) return;
+    
+    const cantidad = prompt(`Ingrese la cantidad a agregar para ${material.nombre}:`);
+    if (cantidad && !isNaN(cantidad) && parseFloat(cantidad) > 0) {
+        registrarEntradaRapida(materialId, parseFloat(cantidad));
+    }
+}
+
+function mostrarSalidaRapida(materialId) {
+    const material = materialesData.find(m => m.id === materialId);
+    if (!material) return;
+    
+    const cantidad = prompt(`Ingrese la cantidad a quitar para ${material.nombre} (Stock actual: ${material.stock}):`);
+    if (cantidad && !isNaN(cantidad) && parseFloat(cantidad) > 0) {
+        if (parseFloat(cantidad) > material.stock) {
+            mostrarNotificacion("No hay suficiente stock disponible.", "error");
+            return;
+        }
+        registrarSalidaRapida(materialId, parseFloat(cantidad));
+    }
+}
+
+async function registrarEntradaRapida(materialId, cantidad) {
+    try {
+        const response = await callAPI('registrarEntradaMaterial', {
+            materialId,
+            cantidad,
+            origen: 'Entrada rápida',
+            comentario: 'Entrada registrada desde inventario'
+        });
+        
+        if (response.success) {
+            mostrarNotificacion("Entrada registrada correctamente.", "success");
+            await cargarMateriales();
+        } else {
+            mostrarNotificacion(response.message || "Error al registrar la entrada.", "error");
+        }
+    } catch (error) {
+        mostrarNotificacion("Error al registrar la entrada.", "error");
+    }
+}
+
+async function registrarSalidaRapida(materialId, cantidad) {
+    try {
+        const response = await callAPI('registrarSalidaMaterial', {
+            materialId,
+            cantidad,
+            destino: 'Salida rápida',
+            comentario: 'Salida registrada desde inventario'
+        });
+        
+        if (response.success) {
+            mostrarNotificacion("Salida registrada correctamente.", "success");
+            await cargarMateriales();
+        } else {
+            mostrarNotificacion(response.message || "Error al registrar la salida.", "error");
+        }
+    } catch (error) {
+        mostrarNotificacion("Error al registrar la salida.", "error");
+    }
+}
+
+// ============================================================================
+// FUNCIONES PARA CATEGORÍAS
+// ============================================================================
+
+// Función para mostrar formulario de categoría
+function mostrarFormularioCategoria() {
+    // Limpiar formulario
+    document.getElementById('categoria-id').value = '';
+    document.getElementById('nombre-categoria').value = '';
+    document.getElementById('descripcion-categoria').value = '';
+    document.getElementById('color-categoria').value = '#3498db';
+    
+    // Mostrar formulario
+    document.getElementById('formulario-categoria').classList.remove('hidden');
+}
+
+function cancelarEdicionCategoria() {
+    document.getElementById('formulario-categoria').classList.add('hidden');
+}
+
+// Función para guardar categoría
+async function guardarCategoria() {
+    const categoriaId = document.getElementById('categoria-id').value;
+    const nombre = document.getElementById('nombre-categoria').value;
+    const descripcion = document.getElementById('descripcion-categoria').value;
+    const color = document.getElementById('color-categoria').value;
+    
+    // Validar campos requeridos
+    if (!nombre) {
+        mostrarNotificacion("Por favor ingrese el nombre de la categoría.", "error");
+        return;
+    }
+    
+    // Crear objeto de categoría
+    const categoria = {
+        id: categoriaId,
+        nombre,
+        descripcion,
+        color
+    };
+    
+    try {
+        const response = await callAPI('guardarCategoria', categoria);
+        
+        if (response.success) {
+            mostrarNotificacion("Categoría guardada correctamente.", "success");
+            cancelarEdicionCategoria();
+            await cargarCategorias();
+        } else {
+            mostrarNotificacion(response.message || "Error al guardar la categoría.", "error");
+        }
+    } catch (error) {
+        mostrarNotificacion("Error al guardar la categoría.", "error");
+    }
+}
+
+// Función para editar categoría
+function editarCategoria(categoriaId) {
+    const categoria = categoriasData.find(c => c.id === categoriaId);
+    if (!categoria) {
+        mostrarNotificacion("Categoría no encontrada.", "error");
+        return;
+    }
+    
+    // Cargar datos en el formulario
+    document.getElementById('categoria-id').value = categoria.id;
+    document.getElementById('nombre-categoria').value = categoria.nombre;
+    document.getElementById('descripcion-categoria').value = categoria.descripcion || '';
+    document.getElementById('color-categoria').value = categoria.color || '#3498db';
+    
+    // Mostrar formulario
+    document.getElementById('formulario-categoria').classList.remove('hidden');
+}
+
+// Función para eliminar categoría
+async function eliminarCategoria(categoriaId) {
+    // Verificar si hay materiales usando esta categoría
+    const materialesEnCategoria = materialesData.filter(m => m.categoriaId === categoriaId);
+    if (materialesEnCategoria.length > 0) {
+        mostrarNotificacion(`No se puede eliminar la categoría porque tiene ${materialesEnCategoria.length} materiales asociados.`, "error");
+        return;
+    }
+    
+    if (!confirm('¿Está seguro de eliminar esta categoría? Esta acción no se puede deshacer.')) {
+        return;
+    }
+    
+    try {
+        const response = await callAPI('eliminarCategoria', { categoriaId });
+        
+        if (response.success) {
+            mostrarNotificacion("Categoría eliminada correctamente.", "success");
+            await cargarCategorias();
+        } else {
+            mostrarNotificacion(response.message || "Error al eliminar la categoría.", "error");
+        }
+    } catch (error) {
+        mostrarNotificacion("Error al eliminar la categoría.", "error");
+    }
+}
+// ============================================================================
+// BDPA - js/inventario.html - PARTE 4: Presupuesto y programación de materiales
+// ============================================================================
+
+// Función para cargar presupuesto de obra
+async function cargarPresupuestoObra() {
+    const obraId = document.getElementById('presupuesto-obra').value;
+    
+    if (!obraId) {
+        document.getElementById('presupuesto-container').classList.add('hidden');
+        return;
+    }
+    
+    try {
+        const response = await callAPI('obtenerPresupuestoObra', { obraId });
+        
+        if (response.error) {
+            mostrarNotificacion("Error al cargar el presupuesto de la obra.", "error");
+            return;
+        }
+        
+        const presupuesto = response.datos;
+        
+        // Actualizar nombre de la obra
+        const obra = obrasData.find(o => o.id === obraId);
+        document.getElementById('presupuesto-obra-nombre').textContent = obra ? obra.nombre : obraId;
+        
+        // Cargar material selector
+        const materialSelector = document.getElementById('material-presupuesto');
+        // Mantener primera opción
+        const primeraOpcion = materialSelector.options[0];
+        materialSelector.innerHTML = '';
+        materialSelector.appendChild(primeraOpcion);
+        
+        // Agregar materiales que no están en el presupuesto
+        const materialesEnPresupuesto = presupuesto.items.map(item => item.materialId);
+        const materialesDisponibles = materialesData.filter(m => !materialesEnPresupuesto.includes(m.id));
+        
+        materialesDisponibles.forEach(material => {
+            const option = document.createElement('option');
+            option.value = material.id;
+            option.textContent = `${material.codigo} - ${material.nombre}`;
+            materialSelector.appendChild(option);
+        });
+        
+        // Cargar tabla de presupuesto
+        const tbody = document.getElementById('presupuesto-tbody');
+        tbody.innerHTML = '';
+        
+        presupuesto.items.forEach(item => {
+            const tr = document.createElement('tr');
+            
+            // Buscar material
+            const material = materialesData.find(m => m.id === item.materialId);
+            
+            // Calcular porcentaje entregado
+            const porcentajeEntregado = item.cantidadRequerida > 0 ? 
+                Math.round((item.cantidadEntregada / item.cantidadRequerida) * 100) : 0;
+            
+            // Aplicar clase según el porcentaje entregado
+            if (porcentajeEntregado >= 100) {
+                tr.classList.add('stock-ok');
+            } else if (porcentajeEntregado >= 50) {
+                tr.classList.add('bg-warning');
+            } else {
+                tr.classList.add('stock-low');
+            }
+            
+            tr.innerHTML = `
+                <td>${material ? material.codigo : '-'}</td>
+                <td>${material ? material.nombre : 'Material no encontrado'}</td>
+                <td>${item.cantidadRequerida}</td>
+                <td>${material ? material.unidad : '-'}</td>
+                <td>${item.cantidadEntregada}</td>
+                <td>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar bg-${
+                            porcentajeEntregado >= 100 ? 'success' : 
+                            porcentajeEntregado >= 50 ? 'warning' : 
+                            'danger'
+                        }" 
+                        style="width: ${porcentajeEntregado}%;">${porcentajeEntregado}%</div>
+                    </div>
+                </td>
+                <td>${item.comentario || '-'}</td>
+                <td>
+                    <button class="btn btn-sm btn-primary" onclick="editarItemPresupuesto('${item.id}')">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-sm btn-success" onclick="registrarEntregaPresupuesto('${item.id}')">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                    <button class="btn btn-sm btn-danger" onclick="eliminarItemPresupuesto('${item.id}')">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            `;
+            
+            tbody.appendChild(tr);
+        });
+        
+        // Mostrar contenedor
+        document.getElementById('presupuesto-container').classList.remove('hidden');
+    } catch (error) {
+        mostrarNotificacion("Error al cargar el presupuesto de la obra.", "error");
+    }
+}
+
+// Funciones para gestionar materiales del presupuesto
+function mostrarAgregarMaterialPresupuesto() {
+    document.getElementById('agregar-material-presupuesto').classList.remove('hidden');
+}
+
+function cancelarAgregarMaterialPresupuesto() {
+    document.getElementById('agregar-material-presupuesto').classList.add('hidden');
+    document.getElementById('material-presupuesto').value = '';
+    document.getElementById('cantidad-presupuesto').value = '';
+    document.getElementById('comentario-presupuesto').value = '';
+}
+
+async function agregarMaterialPresupuesto() {
+    const obraId = document.getElementById('presupuesto-obra').value;
+    const materialId = document.getElementById('material-presupuesto').value;
+    const cantidadRequerida = parseFloat(document.getElementById('cantidad-presupuesto').value);
+    const comentario = document.getElementById('comentario-presupuesto').value;
+    
+    // Validar campos requeridos
+    if (!obraId || !materialId || isNaN(cantidadRequerida) || cantidadRequerida <= 0) {
+        mostrarNotificacion("Por favor complete todos los campos requeridos con valores válidos.", "error");
+        return;
+    }
+    
+    // Crear objeto de item de presupuesto
+    const item = {
+        obraId,
+        materialId,
+        cantidadRequerida,
+        comentario
+    };
+    
+    try {
+        const response = await callAPI('agregarItemPresupuesto', item);
+        
+        if (response.success) {
+            mostrarNotificacion("Material agregado al presupuesto correctamente.", "success");
+            cancelarAgregarMaterialPresupuesto();
+            await cargarPresupuestoObra();
+        } else {
+            mostrarNotificacion(response.message || "Error al agregar el material al presupuesto.", "error");
+        }
+    } catch (error) {
+        mostrarNotificacion("Error al agregar el material al presupuesto.", "error");
+    }
+}
+
+// Función para registrar entrega en presupuesto
+async function registrarEntregaPresupuesto(itemId) {
+    const cantidad = prompt("Ingrese la cantidad entregada:");
+    
+    if (!cantidad || isNaN(cantidad) || parseFloat(cantidad) <= 0) {
+        mostrarNotificacion("Por favor ingrese una cantidad válida.", "error");
+        return;
+    }
+    
+    try {
+        const response = await callAPI('registrarEntregaPresupuesto', {
+            itemId,
+            cantidadEntregada: parseFloat(cantidad)
+        });
+        
+        if (response.success) {
+            mostrarNotificacion("Entrega registrada correctamente.", "success");
+            await cargarPresupuestoObra();
+        } else {
+            mostrarNotificacion(response.message || "Error al registrar la entrega.", "error");
+        }
+    } catch (error) {
+        mostrarNotificacion("Error al registrar la entrega.", "error");
+    }
+}
+
+// Función para editar item de presupuesto
+async function editarItemPresupuesto(itemId) {
+    try {
+        const response = await callAPI('obtenerItemPresupuesto', { itemId });
+        
+        if (response.error) {
+            mostrarNotificacion("Error al obtener el item del presupuesto.", "error");
+            return;
+        }
+        
+        const item = response.datos;
+        
+        // Crear modal para editar
+        const nuevaCantidad = prompt(`Editar cantidad requerida (actual: ${item.cantidadRequerida}):`, item.cantidadRequerida);
+        
+        if (nuevaCantidad && !isNaN(nuevaCantidad) && parseFloat(nuevaCantidad) > 0) {
+            const responseUpdate = await callAPI('actualizarItemPresupuesto', {
+                itemId,
+                cantidadRequerida: parseFloat(nuevaCantidad)
+            });
+            
+            if (responseUpdate.success) {
+                mostrarNotificacion("Item actualizado correctamente.", "success");
+                await cargarPresupuestoObra();
+            } else {
+                mostrarNotificacion(responseUpdate.message || "Error al actualizar el item.", "error");
+            }
+        }
+    } catch (error) {
+        mostrarNotificacion("Error al obtener el item del presupuesto.", "error");
+    }
+}
+
+// Función para eliminar item de presupuesto
+async function eliminarItemPresupuesto(itemId) {
+    if (!confirm('¿Está seguro de eliminar este material del presupuesto? Esta acción no se puede deshacer.')) {
+        return;
+    }
+    
+    try {
+        const response = await callAPI('eliminarItemPresupuesto', { itemId });
+        
+        if (response.success) {
+            mostrarNotificacion("Material eliminado del presupuesto correctamente.", "success");
+            await cargarPresupuestoObra();
+        } else {
+            mostrarNotificacion(response.message || "Error al eliminar el material del presupuesto.", "error");
+        }
+    } catch (error) {
+        mostrarNotificacion("Error al eliminar el material del presupuesto.", "error");
+    }
+}
+
+// Función para exportar presupuesto
+async function exportarPresupuesto() {
+    const obraId = document.getElementById('presupuesto-obra').value;
+    
+    if (!obraId) {
+        mostrarNotificacion("Seleccione una obra para exportar su presupuesto.", "error");
+        return;
+    }
+    
+    try {
+        const response = await callAPI('exportarPresupuestoObra', { obraId });
+        
+        if (response.success) {
+            mostrarNotificacion("Presupuesto exportado correctamente.", "success");
+            
+            // Crear enlace para descargar
+            const url = response.urlArchivo;
+            if (url) {
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = "presupuesto_obra.xlsx";
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            }
+        } else {
+            mostrarNotificacion(response.message || "Error al exportar el presupuesto.", "error");
+        }
+    } catch (error) {
+        mostrarNotificacion("Error al exportar el presupuesto.", "error");
+    }
+}
+
+// ============================================================================
+// FUNCIONES DE PROGRAMACIÓN DE MATERIALES
+// ============================================================================
+
+// Función para cargar programación de obra
+async function cargarProgramacionObra() {
+    const obraId = document.getElementById('planificacion-obra').value;
+    
+    if (!obraId) {
+        document.getElementById('planificacion-container').classList.add('hidden');
+        return;
+    }
+    
+    try {
+        const response = await callAPI('obtenerProgramacionObra', { obraId });
+        
+        if (response.error) {
+            mostrarNotificacion("Error al cargar la programación de la obra.", "error");
+            return;
+        }
+        
+        const programacion = response.datos;
+        
+        // Actualizar nombre de la obra
+        const obra = obrasData.find(o => o.id === obraId);
+        document.getElementById('planificacion-obra-nombre').textContent = obra ? obra.nombre : obraId;
+        
+        // Cargar tabla de programación
+        const tbody = document.getElementById('planificacion-tbody');
+        tbody.innerHTML = '';
+        
+        programacion.items.forEach(item => {
+            const tr = document.createElement('tr');
+            
+            // Buscar material
+            const material = materialesData.find(m => m.id === item.materialId);
+            
+            // Determinar estado según fechas
+            const fechaActual = new Date();
+            const fechaRequerida = new Date(item.fechaRequerida);
+            let estado = 'Pendiente';
+            let estadoClass = 'warning';
+            
+            if (item.fechaEntregada) {
+                estado = 'Entregado';
+                estadoClass = 'success';
+            } else if (fechaRequerida < fechaActual) {
+                estado = 'Atrasado';
+                estadoClass = 'danger';
+            }
+            
+            tr.innerHTML = `
+                <td>${material ? material.codigo : '-'}</td>
+                <td>${material ? material.nombre : 'Material no encontrado'}</td>
+                <td>${item.cantidadRequerida}</td>
+                <td>${material ? material.unidad : '-'}</td>
+                <td>${new Date(item.fechaRequerida).toLocaleDateString()}</td>
+                <td>${item.fechaEntregada ? new Date(item.fechaEntregada).toLocaleDateString() : '-'}</td>
+                <td><span class="badge badge-${estadoClass}">${estado}</span></td>
+                <td>${item.comentario || '-'}</td>
+                <td>
+                    <button class="btn btn-sm btn-primary" onclick="editarItemProgramacion('${item.id}')">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    ${!item.fechaEntregada ? `
+                        <button class="btn btn-sm btn-success" onclick="marcarComoEntregado('${item.id}')">
+                            <i class="fas fa-check"></i>
+                        </button>
+                    ` : ''}
+                    <button class="btn btn-sm btn-danger" onclick="eliminarItemProgramacion('${item.id}')">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            `;
+            
+            tbody.appendChild(tr);
+        });
+        
+        // Mostrar contenedor
+        document.getElementById('planificacion-container').classList.remove('hidden');
+    } catch (error) {
+        mostrarNotificacion("Error al cargar la programación de la obra.", "error");
+    }
+}
+
+// Función para marcar item como entregado
+async function marcarComoEntregado(itemId) {
+    try {
+        const response = await callAPI('marcarItemProgramacionEntregado', { itemId });
+        
+        if (response.success) {
+            mostrarNotificacion("Item marcado como entregado.", "success");
+            await cargarProgramacionObra();
+        } else {
+            mostrarNotificacion(response.message || "Error al marcar como entregado.", "error");
+        }
+    } catch (error) {
+        mostrarNotificacion("Error al marcar como entregado.", "error");
+    }
+}
+// ============================================================================
+// BDPA - js/inventario.html - PARTE 5: Transferencias y funciones auxiliares
+// ============================================================================
+
+// Variables para transferencias
+let transferenciasItems = [];
+
+// Función para cargar materiales disponibles en la obra origen
+async function cargarMaterialesDisponiblesObra() {
+    const obraId = document.getElementById('obra-origen').value;
+    
+    if (!obraId) {
+        document.getElementById('seleccion-materiales').classList.add('hidden');
+        document.getElementById('lista-materiales-transferencia').classList.add('hidden');
+        transferenciasItems = [];
+        return;
+    }
+    
+    try {
+        const response = await callAPI('obtenerMaterialesDisponiblesObra', { obraId });
+        
+        if (response.error) {
+            mostrarNotificacion("Error al cargar los materiales disponibles.", "error");
+            return;
+        }
+        
+        const materialesDisponibles = response.datos;
+        
+        // Cargar selector de materiales
+        const materialSelector = document.getElementById('material-transferencia');
+        // Mantener primera opción
+        const primeraOpcion = materialSelector.options[0];
+        materialSelector.innerHTML = '';
+        materialSelector.appendChild(primeraOpcion);
+        
+        // Agregar materiales disponibles
+        materialesDisponibles.forEach(material => {
+            const option = document.createElement('option');
+            option.value = material.id;
+            option.textContent = `${material.codigo} - ${material.nombre} (${material.stockDisponible} ${material.unidad})`;
+            // Guardar el stock disponible como atributo personalizado
+            option.dataset.stockDisponible = material.stockDisponible;
+            option.dataset.unidad = material.unidad;
+            materialSelector.appendChild(option);
+        });
+        
+        // Mostrar sección de selección de materiales
+        document.getElementById('seleccion-materiales').classList.remove('hidden');
+        
+        // Mostrar lista de materiales si hay items
+        if (transferenciasItems.length > 0) {
+            document.getElementById('lista-materiales-transferencia').classList.remove('hidden');
+            actualizarTablaMaterialesTransferencia();
+        } else {
+            document.getElementById('lista-materiales-transferencia').classList.add('hidden');
+        }
+    } catch (error) {
+        mostrarNotificacion("Error al cargar los materiales disponibles.", "error");
+    }
+}
+
+// Función para actualizar la disponibilidad del material seleccionado
+function actualizarDisponibilidadMaterial() {
+    const materialSelector = document.getElementById('material-transferencia');
+    const materialId = materialSelector.value;
+    const spanDisponible = document.getElementById('disponible-obra');
+    
+    if (!materialId) {
+        spanDisponible.textContent = '0';
+        return;
+    }
+    
+    const selectedOption = materialSelector.options[materialSelector.selectedIndex];
+    const stockDisponible = selectedOption.dataset.stockDisponible;
+    const unidad = selectedOption.dataset.unidad;
+    
+    spanDisponible.textContent = `${stockDisponible} ${unidad}`;
+}
+
+// Función para agregar material a la lista de transferencia
+function agregarMaterialTransferencia() {
+    const materialSelector = document.getElementById('material-transferencia');
+    const materialId = materialSelector.value;
+    const cantidadInput = document.getElementById('cantidad-transferencia');
+    const cantidad = parseFloat(cantidadInput.value);
+    
+    // Validar campos
+    if (!materialId || isNaN(cantidad) || cantidad <= 0) {
+        mostrarNotificacion("Por favor seleccione un material e ingrese una cantidad válida.", "error");
+        return;
+    }
+    
+    // Validar stock disponible
+    const selectedOption = materialSelector.options[materialSelector.selectedIndex];
+    const stockDisponible = parseFloat(selectedOption.dataset.stockDisponible);
+    const unidad = selectedOption.dataset.unidad;
+    
+    if (cantidad > stockDisponible) {
+        mostrarNotificacion(`No hay suficiente stock disponible. Máximo: ${stockDisponible}`, "error");
+        return;
+    }
+    
+    // Verificar si el material ya está en la lista
+    const itemExistente = transferenciasItems.find(item => item.materialId === materialId);
+    if (itemExistente) {
+        mostrarNotificacion("Este material ya está en la lista de transferencia.", "error");
+        return;
+    }
+    
+    // Obtener información del material
+    const materialNombre = selectedOption.textContent.split(' (')[0];
+    const materialCodigo = materialNombre.split(' - ')[0];
+    
+    // Agregar a la lista de transferencias
+    transferenciasItems.push({
+        materialId,
+        materialNombre: materialNombre.split(' - ')[1],
+        materialCodigo,
+        cantidad,
+        unidad
+    });
+    
+    // Actualizar tabla de materiales
+    actualizarTablaMaterialesTransferencia();
+    
+    // Mostrar la lista
+    document.getElementById('lista-materiales-transferencia').classList.remove('hidden');
+    
+    // Limpiar campos
+    materialSelector.value = '';
+    cantidadInput.value = '';
+    document.getElementById('disponible-obra').textContent = '0';
+}
+
+// Función para actualizar la tabla de materiales en transferencia
+function actualizarTablaMaterialesTransferencia() {
+    const tbody = document.getElementById('transferencia-items-tbody');
+    tbody.innerHTML = '';
+    
+    transferenciasItems.forEach((item, index) => {
+        const tr = document.createElement('tr');
+        
+        tr.innerHTML = `
+            <td>${item.materialCodigo}</td>
+            <td>${item.materialNombre}</td>
+            <td>${item.cantidad}</td>
+            <td>${item.unidad}</td>
+            <td>
+                <button class="btn btn-sm btn-danger" onclick="quitarMaterialTransferencia(${index})">
+                    <i class="fas fa-trash"></i> Quitar
+                </button>
+            </td>
+        `;
+        
+        tbody.appendChild(tr);
+    });
+}
+
+// Función para quitar un material de la lista de transferencia
+function quitarMaterialTransferencia(index) {
+    transferenciasItems.splice(index, 1);
+    
+    // Actualizar tabla
+    actualizarTablaMaterialesTransferencia();
+    
+    // Ocultar lista si está vacía
+    if (transferenciasItems.length === 0) {
+        document.getElementById('lista-materiales-transferencia').classList.add('hidden');
+    }
+}
+
+// Función para registrar la transferencia
+async function registrarTransferencia() {
+    const obraOrigenId = document.getElementById('obra-origen').value;
+    const obraDestinoId = document.getElementById('obra-destino').value;
+    const motivo = document.getElementById('motivo-transferencia').value;
+    
+    // Validar campos
+    if (!obraOrigenId || !obraDestinoId) {
+        mostrarNotificacion("Por favor seleccione las obras de origen y destino.", "error");
+        return;
+    }
+    
+    if (obraOrigenId === obraDestinoId) {
+        mostrarNotificacion("Las obras de origen y destino no pueden ser iguales.", "error");
+        return;
+    }
+    
+    if (transferenciasItems.length === 0) {
+        mostrarNotificacion("No hay materiales en la lista de transferencia.", "error");
+        return;
+    }
+    
+    // Crear objeto de transferencia
+    const transferencia = {
+        obraOrigenId,
+        obraDestinoId,
+        motivo,
+        items: transferenciasItems
+    };
+    
+    try {
+        // Mostrar loader
+        document.getElementById('transferencias-loader').classList.remove('hidden');
+        
+        const response = await callAPI('registrarTransferencia', transferencia);
+        
+        // Ocultar loader
+        document.getElementById('transferencias-loader').classList.add('hidden');
+        
+        if (response.success) {
+            mostrarNotificacion("Transferencia registrada correctamente.", "success");
+            cancelarTransferencia();
+            cargarObras();
+        } else {
+            mostrarNotificacion(response.message || "Error al registrar la transferencia.", "error");
+        }
+    } catch (error) {
+        document.getElementById('transferencias-loader').classList.add('hidden');
+        mostrarNotificacion("Error al registrar la transferencia.", "error");
+    }
+}
+
+// Función para cancelar la transferencia
+function cancelarTransferencia() {
+    document.getElementById('obra-origen').value = '';
+    document.getElementById('obra-destino').value = '';
+    document.getElementById('motivo-transferencia').value = '';
+    document.getElementById('seleccion-materiales').classList.add('hidden');
+    document.getElementById('lista-materiales-transferencia').classList.add('hidden');
+    transferenciasItems = [];
+    document.getElementById('formulario-transferencia').classList.add('hidden');
+}
+
+// ============================================================================
+// FUNCIONES AUXILIARES Y DE INICIALIZACIÓN
+// ============================================================================
+
+// Función para limpiar filtros de inventario
+function limpiarFiltrosInventario() {
+    document.getElementById('filtro-categoria').value = '';
+    document.getElementById('filtro-stock').checked = false;
+    document.getElementById('buscar-material').value = '';
+    
+    // Recargar materiales sin filtros
+    cargarMateriales();
+}
+
+// Función para limpiar filtros de movimientos
+function limpiarFiltrosMovimientos() {
+    document.getElementById('filtro-tipo-movimiento').value = '';
+    document.getElementById('filtro-material-movimiento').value = '';
+    document.getElementById('filtro-fecha-desde').value = '';
+    document.getElementById('filtro-fecha-hasta').value = '';
+    
+    // Recargar movimientos sin filtros
+    cargarMovimientosInventario();
+}
+
+// Función para exportar inventario completo
+async function exportarInventarioCompleto() {
+    try {
+        mostrarNotificacion("Preparando exportación del inventario...", "info");
+        
+        const response = await callAPI('exportarInventarioCompleto');
+        
+        if (response.success) {
+            mostrarNotificacion("Inventario exportado correctamente.", "success");
+            
+            // Crear enlace para descargar
+            const url = response.urlArchivo;
+            if (url) {
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `inventario_completo_${new Date().toISOString().split('T')[0]}.xlsx`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            }
+        } else {
+            mostrarNotificacion(response.message || "Error al exportar el inventario.", "error");
+        }
+    } catch (error) {
+        mostrarNotificacion("Error al exportar el inventario.", "error");
+    }
+}
+
+// Función para generar código automático de material
+function generarCodigoMaterial() {
+    const categoriaId = document.getElementById('categoria-material').value;
+    
+    if (!categoriaId) {
+        mostrarNotificacion("Seleccione una categoría primero.", "warning");
+        return;
+    }
+    
+    const categoria = categoriasData.find(c => c.id === categoriaId);
+    if (!categoria) return;
+    
+    // Generar código basado en categoría y timestamp
+    const prefijo = categoria.nombre.substring(0, 3).toUpperCase();
+    const timestamp = Date.now().toString().slice(-4);
+    const codigo = `${prefijo}-${timestamp}`;
+    
+    document.getElementById('codigo-material').value = codigo;
+}
+
+// Función para validar código único de material
+async function validarCodigoMaterial() {
+    const codigo = document.getElementById('codigo-material').value;
+    const materialId = document.getElementById('material-id').value;
+    
+    if (!codigo) return;
+    
+    try {
+        const response = await callAPI('validarCodigoMaterial', { codigo, materialId });
+        
+        if (!response.success) {
+            mostrarNotificacion("Este código ya existe. Por favor use otro código.", "warning");
+            document.getElementById('codigo-material').focus();
+        }
+    } catch (error) {
+        console.error("Error al validar código:", error);
+    }
+}
+
+// Función para calcular valor total del inventario
+function calcularValorTotalInventario() {
+    let valorTotal = 0;
+    
+    materialesData.forEach(material => {
+        const valorUnitario = material.valorUnitario || 0;
+        valorTotal += material.stock * valorUnitario;
+    });
+    
+    // Mostrar en algún elemento de la interfaz
+    const elementoTotal = document.getElementById('valor-total-inventario');
+    if (elementoTotal) {
+        elementoTotal.textContent = `$${valorTotal.toLocaleString()}`;
+    }
+    
+    return valorTotal;
+}
+
+// Función para obtener estadísticas de inventario
+function obtenerEstadisticasInventario() {
+    const estadisticas = {
+        totalMateriales: materialesData.length,
+        materialesStockBajo: materialesData.filter(m => m.stock <= m.stockMinimo).length,
+        materialesSinStock: materialesData.filter(m => m.stock <= 0).length,
+        valorTotal: calcularValorTotalInventario(),
+        categorias: categoriasData.length
+    };
+    
+    return estadisticas;
+}
+
+// Función de inicialización de inventario
+function inicializarInventario() {
+    // Agregar event listeners para campos específicos de inventario
+    const codigoMaterial = document.getElementById('codigo-material');
+    if (codigoMaterial) {
+        codigoMaterial.addEventListener('blur', validarCodigoMaterial);
+    }
+    
+    const categoriaSelector = document.getElementById('categoria-material');
+    if (categoriaSelector) {
+        categoriaSelector.addEventListener('change', function() {
+            if (this.value && !document.getElementById('codigo-material').value) {
+                generarCodigoMaterial();
+            }
+        });
+    }
+    
+    // Configurar eventos para campos de entrada y salida
+    const materialEntrada = document.getElementById('material-entrada');
+    if (materialEntrada) {
+        materialEntrada.addEventListener('change', actualizarDetallesMaterial);
+    }
+    
+    const materialSalida = document.getElementById('material-salida');
+    if (materialSalida) {
+        materialSalida.addEventListener('change', actualizarStockDisponible);
+    }
+    
+    const materialTransferencia = document.getElementById('material-transferencia');
+    if (materialTransferencia) {
+        materialTransferencia.addEventListener('change', actualizarDisponibilidadMaterial);
+    }
+    
+    // Configurar fechas por defecto
+    const fechaInputs = ['filtro-fecha-desde', 'filtro-fecha-hasta'];
+    fechaInputs.forEach(id => {
+        const input = document.getElementById(id);
+        if (input && !input.value) {
+            const hoy = new Date();
+            if (id.includes('desde')) {
+                // Fecha desde: primer día del mes actual
+                const primerDia = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+                input.value = primerDia.toISOString().split('T')[0];
+            } else {
+                // Fecha hasta: hoy
+                input.value = hoy.toISOString().split('T')[0];
+            }
+        }
+    });
+    
+    console.log("Módulo de inventario inicializado correctamente");
+}
+
+// Auto-inicialización cuando se carga el DOM
+document.addEventListener('DOMContentLoaded', function() {
+    // Solo inicializar si estamos en una página que tiene elementos de inventario
+    if (document.getElementById('gestion-inventario') || 
+        document.getElementById('inventario-consultar') ||
+        document.getElementById('material-entrada')) {
+        inicializarInventario();
+    }
+});
+
+// ============================================================================
+// EXPORTAR FUNCIONES PARA USO GLOBAL
+// ============================================================================
+
+// Hacer disponibles las funciones principales globalmente
+window.inventarioFunctions = {
+    cargarMateriales,
+    cargarCategorias,
+    cargarMovimientosInventario,
+    registrarEntrada,
+    registrarSalida,
+    guardarMaterial,
+    eliminarMaterial,
+    guardarCategoria,
+    eliminarCategoria,
+    cargarPresupuestoObra,
+    exportarInventarioCompleto,
+    obtenerEstadisticasInventario,
+    inicializarInventario
+};
+</script>

@@ -1,0 +1,984 @@
+<script>
+
+// ============================================================================
+// VARIABLES GLOBALES PARA TRANSFERENCIAS
+// ============================================================================
+
+let transferenciasData = [];
+let obrasDisponibles = [];
+let materialesDisponibles = [];
+let transferenciaPaginaActual = 1;
+let transferenciasItemsPorPagina = 20;
+
+// ============================================================================
+// FUNCIONES PRINCIPALES DE TRANSFERENCIAS
+// ============================================================================
+
+/**
+ * Inicializar módulo de transferencias
+ */
+function inicializarTransferencias() {
+    console.log('[Transferencias] Inicializando módulo de transferencias');
+    
+    // Cargar datos iniciales
+    cargarObrasParaTransferencias();
+    cargarMaterialesParaTransferencias();
+    cargarTransferencias();
+    
+    // Event listeners
+    setupTransferenciasEventListeners();
+    
+    console.log('[Transferencias] Módulo inicializado correctamente');
+}
+
+/**
+ * Configurar event listeners para transferencias
+ */
+function setupTransferenciasEventListeners() {
+    // Filtros de búsqueda
+    const filtros = ['filtro-obra-origen-trans', 'filtro-obra-destino-trans', 'filtro-estado-trans', 'filtro-fecha-desde-trans', 'filtro-fecha-hasta-trans'];
+    
+    filtros.forEach(filtroId => {
+        const elemento = document.getElementById(filtroId);
+        if (elemento) {
+            elemento.addEventListener('change', filtrarTransferencias);
+        }
+    });
+    
+    // Validación en tiempo real
+    const camposCantidad = document.getElementById('cantidad-transferencia');
+    if (camposCantidad) {
+        camposCantidad.addEventListener('input', validarCantidadDisponible);
+    }
+    
+    const obraOrigen = document.getElementById('obra-origen');
+    if (obraOrigen) {
+        obraOrigen.addEventListener('change', cargarMaterialesDisponiblesObraOrigen);
+    }
+}
+
+/**
+ * Cargar obras disponibles para transferencias
+ */
+async function cargarObrasParaTransferencias() {
+    try {
+        const response = await callAPI('obtenerObras');
+        
+        if (response.error) {
+            console.error('[Transferencias] Error al cargar obras:', response.message);
+            return;
+        }
+        
+        obrasDisponibles = response.datos || [];
+        
+        // Actualizar selectores
+        const selectores = ['obra-origen', 'obra-destino', 'filtro-obra-origen-trans', 'filtro-obra-destino-trans'];
+        
+        selectores.forEach(selectorId => {
+            const selector = document.getElementById(selectorId);
+            if (selector) {
+                // Limpiar opciones existentes (excepto la primera)
+                while (selector.children.length > 1) {
+                    selector.removeChild(selector.lastChild);
+                }
+                
+                // Agregar obras
+                obrasDisponibles.forEach(obra => {
+                    const option = document.createElement('option');
+                    option.value = obra.id;
+                    option.textContent = obra.nombre;
+                    selector.appendChild(option);
+                });
+            }
+        });
+        
+        console.log('[Transferencias] Obras cargadas:', obrasDisponibles.length);
+        
+    } catch (error) {
+        console.error('[Transferencias] Error al cargar obras:', error);
+        mostrarNotificacion('Error al cargar las obras disponibles', 'error');
+    }
+}
+
+/**
+ * Cargar materiales disponibles para transferencias
+ */
+async function cargarMaterialesParaTransferencias() {
+    try {
+        const response = await callAPI('obtenerMateriales');
+        
+        if (response.error) {
+            console.error('[Transferencias] Error al cargar materiales:', response.message);
+            return;
+        }
+        
+        materialesDisponibles = response.datos || [];
+        
+        console.log('[Transferencias] Materiales cargados:', materialesDisponibles.length);
+        
+    } catch (error) {
+        console.error('[Transferencias] Error al cargar materiales:', error);
+        mostrarNotificacion('Error al cargar los materiales disponibles', 'error');
+    }
+}
+
+/**
+ * Cargar materiales disponibles en obra origen
+ */
+async function cargarMaterialesDisponiblesObraOrigen() {
+    const obraOrigenId = document.getElementById('obra-origen').value;
+    const materialSelector = document.getElementById('material-transferencia');
+    
+    if (!obraOrigenId) {
+        // Limpiar selector de materiales
+        while (materialSelector.children.length > 1) {
+            materialSelector.removeChild(materialSelector.lastChild);
+        }
+        return;
+    }
+    
+    try {
+        mostrarLoader('transferencias-loader');
+        
+        const response = await callAPI('obtenerMaterialesDisponiblesObra', { obraId: obraOrigenId });
+        
+        ocultarLoader('transferencias-loader');
+        
+        if (response.error) {
+            mostrarNotificacion('Error al cargar materiales de la obra', 'error');
+            return;
+        }
+        
+        const materialesObra = response.datos || [];
+        
+        // Limpiar selector
+        while (materialSelector.children.length > 1) {
+            materialSelector.removeChild(materialSelector.lastChild);
+        }
+        
+        // Agregar materiales disponibles
+        materialesObra.forEach(material => {
+            if (material.stockActual > 0) {
+                const option = document.createElement('option');
+                option.value = material.id;
+                option.textContent = `${material.nombre} (Stock: ${material.stockActual} ${material.unidad})`;
+                option.dataset.stockDisponible = material.stockActual;
+                option.dataset.unidad = material.unidad;
+                materialSelector.appendChild(option);
+            }
+        });
+        
+        if (materialesObra.length === 0) {
+            mostrarNotificacion('La obra seleccionada no tiene materiales disponibles', 'warning');
+        }
+        
+    } catch (error) {
+        ocultarLoader('transferencias-loader');
+        console.error('[Transferencias] Error al cargar materiales de obra:', error);
+        mostrarNotificacion('Error al cargar materiales de la obra', 'error');
+    }
+}
+
+/**
+ * Validar cantidad disponible
+ */
+function validarCantidadDisponible() {
+    const materialSelector = document.getElementById('material-transferencia');
+    const cantidadInput = document.getElementById('cantidad-transferencia');
+    
+    if (!materialSelector.value || !cantidadInput.value) {
+        return;
+    }
+    
+    const selectedOption = materialSelector.options[materialSelector.selectedIndex];
+    const stockDisponible = parseInt(selectedOption.dataset.stockDisponible || 0);
+    const cantidadSolicitada = parseInt(cantidadInput.value);
+    
+    // Limpiar mensajes anteriores
+    const mensajeAnterior = cantidadInput.parentNode.querySelector('.stock-warning');
+    if (mensajeAnterior) {
+        mensajeAnterior.remove();
+    }
+    
+    if (cantidadSolicitada > stockDisponible) {
+        cantidadInput.style.borderColor = 'var(--danger-color)';
+        
+        const mensaje = document.createElement('div');
+        mensaje.className = 'stock-warning';
+        mensaje.style.color = 'var(--danger-color)';
+        mensaje.style.fontSize = '14px';
+        mensaje.style.marginTop = '5px';
+        mensaje.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Stock insuficiente. Disponible: ${stockDisponible}`;
+        
+        cantidadInput.parentNode.appendChild(mensaje);
+    } else {
+        cantidadInput.style.borderColor = '';
+    }
+}
+
+/**
+ * Cargar transferencias
+ */
+async function cargarTransferencias() {
+    try {
+        mostrarLoader('transferencias-loader');
+        
+        const filtros = obtenerFiltrosTransferencias();
+        const response = await callAPI('obtenerTransferencias', { 
+            filtros,
+            pagina: transferenciaPaginaActual,
+            itemsPorPagina: transferenciasItemsPorPagina
+        });
+        
+        ocultarLoader('transferencias-loader');
+        
+        if (response.error) {
+            mostrarNotificacion('Error al cargar las transferencias', 'error');
+            return;
+        }
+        
+        transferenciasData = response.datos || [];
+        
+        actualizarTablaTransferencias();
+        actualizarPaginacionTransferencias(response.totalPaginas || 1);
+        
+        console.log('[Transferencias] Transferencias cargadas:', transferenciasData.length);
+        
+    } catch (error) {
+        ocultarLoader('transferencias-loader');
+        console.error('[Transferencias] Error al cargar transferencias:', error);
+        mostrarNotificacion('Error al cargar las transferencias', 'error');
+    }
+}
+
+/**
+ * Obtener filtros de transferencias
+ */
+function obtenerFiltrosTransferencias() {
+    return {
+        obraOrigen: document.getElementById('filtro-obra-origen-trans')?.value || '',
+        obraDestino: document.getElementById('filtro-obra-destino-trans')?.value || '',
+        estado: document.getElementById('filtro-estado-trans')?.value || '',
+        fechaDesde: document.getElementById('filtro-fecha-desde-trans')?.value || '',
+        fechaHasta: document.getElementById('filtro-fecha-hasta-trans')?.value || ''
+    };
+}
+
+/**
+ * Filtrar transferencias
+ */
+function filtrarTransferencias() {
+    transferenciaPaginaActual = 1;
+    cargarTransferencias();
+}
+
+/**
+ * Actualizar tabla de transferencias
+ */
+function actualizarTablaTransferencias() {
+    const tbody = document.getElementById('transferencias-tbody');
+    if (!tbody) return;
+    
+    tbody.innerHTML = '';
+    
+    if (transferenciasData.length === 0) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td colspan="8" class="text-center text-muted">
+                <i class="fas fa-inbox"></i> No hay transferencias registradas
+            </td>
+        `;
+        tbody.appendChild(tr);
+        return;
+    }
+    
+    transferenciasData.forEach(transferencia => {
+        const tr = document.createElement('tr');
+        
+        // Determinar clase de estado
+        let estadoClass = 'secondary';
+        switch (transferencia.estado) {
+            case 'Completada':
+                estadoClass = 'success';
+                break;
+            case 'En tránsito':
+                estadoClass = 'warning';
+                break;
+            case 'Cancelada':
+                estadoClass = 'danger';
+                break;
+            case 'Pendiente':
+                estadoClass = 'info';
+                break;
+        }
+        
+        tr.innerHTML = `
+            <td>${new Date(transferencia.fecha).toLocaleDateString()}</td>
+            <td>
+                <div class="obra-info">
+                    <strong>${transferencia.obraOrigen}</strong>
+                    <small class="text-muted d-block">${transferencia.direccionOrigen || ''}</small>
+                </div>
+            </td>
+            <td>
+                <div class="obra-info">
+                    <strong>${transferencia.obraDestino}</strong>
+                    <small class="text-muted d-block">${transferencia.direccionDestino || ''}</small>
+                </div>
+            </td>
+            <td>
+                <div class="material-info">
+                    <strong>${transferencia.material}</strong>
+                    <small class="text-muted d-block">Código: ${transferencia.codigoMaterial || 'N/A'}</small>
+                </div>
+            </td>
+            <td>
+                <span class="cantidad-badge">${transferencia.cantidad}</span>
+                <small class="text-muted">${transferencia.unidad}</small>
+            </td>
+            <td>${transferencia.responsable}</td>
+            <td>
+                <span class="badge badge-${estadoClass}">${transferencia.estado}</span>
+            </td>
+            <td>
+                <div class="btn-group">
+                    <button class="btn btn-sm btn-info" onclick="verDetalleTransferencia('${transferencia.id}')" title="Ver detalle">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    ${transferencia.estado === 'Pendiente' ? `
+                        <button class="btn btn-sm btn-primary" onclick="editarTransferencia('${transferencia.id}')" title="Editar">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn btn-sm btn-success" onclick="confirmarTransferencia('${transferencia.id}')" title="Confirmar">
+                            <i class="fas fa-check"></i>
+                        </button>
+                        <button class="btn btn-sm btn-danger" onclick="cancelarTransferenciaItem('${transferencia.id}')" title="Cancelar">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    ` : ''}
+                    ${transferencia.estado === 'En tránsito' ? `
+                        <button class="btn btn-sm btn-success" onclick="completarTransferencia('${transferencia.id}')" title="Marcar como completada">
+                            <i class="fas fa-check-double"></i>
+                        </button>
+                    ` : ''}
+                    <button class="btn btn-sm btn-secondary" onclick="imprimirGuiaTransferencia('${transferencia.id}')" title="Imprimir guía">
+                        <i class="fas fa-print"></i>
+                    </button>
+                </div>
+            </td>
+        `;
+        
+        tbody.appendChild(tr);
+    });
+}
+
+/**
+ * Actualizar paginación de transferencias
+ */
+function actualizarPaginacionTransferencias(totalPaginas) {
+    const paginacionContainer = document.getElementById('paginacion-transferencias');
+    if (!paginacionContainer) return;
+    
+    paginacionContainer.innerHTML = `
+        <button class="btn btn-sm" onclick="cambiarPaginaTransferencias(-1)" ${transferenciaPaginaActual <= 1 ? 'disabled' : ''}>
+            <i class="fas fa-chevron-left"></i>
+        </button>
+        <span class="pagination-info">Página ${transferenciaPaginaActual} de ${totalPaginas}</span>
+        <button class="btn btn-sm" onclick="cambiarPaginaTransferencias(1)" ${transferenciaPaginaActual >= totalPaginas ? 'disabled' : ''}>
+            <i class="fas fa-chevron-right"></i>
+        </button>
+    `;
+}
+
+/**
+ * Cambiar página de transferencias
+ */
+function cambiarPaginaTransferencias(direccion) {
+    transferenciaPaginaActual += direccion;
+    if (transferenciaPaginaActual < 1) transferenciaPaginaActual = 1;
+    cargarTransferencias();
+}
+
+// ============================================================================
+// FUNCIONES DE FORMULARIO DE TRANSFERENCIAS
+// ============================================================================
+
+/**
+ * Mostrar formulario de transferencia
+ */
+function mostrarFormularioTransferencia() {
+    limpiarFormularioTransferencia();
+    document.getElementById('formulario-transferencia').classList.remove('hidden');
+    document.getElementById('obra-origen').focus();
+}
+
+/**
+ * Limpiar formulario de transferencia
+ */
+function limpiarFormularioTransferencia() {
+    document.getElementById('obra-origen').value = '';
+    document.getElementById('obra-destino').value = '';
+    document.getElementById('material-transferencia').value = '';
+    document.getElementById('cantidad-transferencia').value = '';
+    document.getElementById('responsable-transferencia').value = '';
+    document.getElementById('motivo-transferencia').value = '';
+    
+    // Limpiar selector de materiales
+    const materialSelector = document.getElementById('material-transferencia');
+    while (materialSelector.children.length > 1) {
+        materialSelector.removeChild(materialSelector.lastChild);
+    }
+    
+    // Limpiar mensajes de error
+    const warnings = document.querySelectorAll('.stock-warning');
+    warnings.forEach(warning => warning.remove());
+    
+    // Resetear estilos
+    document.getElementById('cantidad-transferencia').style.borderColor = '';
+}
+
+/**
+ * Cancelar transferencia (formulario)
+ */
+function cancelarTransferencia() {
+    document.getElementById('formulario-transferencia').classList.add('hidden');
+    limpiarFormularioTransferencia();
+}
+
+/**
+ * Validar formulario de transferencia
+ */
+function validarFormularioTransferencia() {
+    const obraOrigen = document.getElementById('obra-origen').value;
+    const obraDestino = document.getElementById('obra-destino').value;
+    const material = document.getElementById('material-transferencia').value;
+    const cantidad = document.getElementById('cantidad-transferencia').value;
+    const responsable = document.getElementById('responsable-transferencia').value;
+    
+    if (!obraOrigen) {
+        mostrarNotificacion('Debe seleccionar una obra origen', 'error');
+        return false;
+    }
+    
+    if (!obraDestino) {
+        mostrarNotificacion('Debe seleccionar una obra destino', 'error');
+        return false;
+    }
+    
+    if (obraOrigen === obraDestino) {
+        mostrarNotificacion('La obra origen y destino no pueden ser la misma', 'error');
+        return false;
+    }
+    
+    if (!material) {
+        mostrarNotificacion('Debe seleccionar un material', 'error');
+        return false;
+    }
+    
+    if (!cantidad || cantidad <= 0) {
+        mostrarNotificacion('Debe ingresar una cantidad válida', 'error');
+        return false;
+    }
+    
+    if (!responsable.trim()) {
+        mostrarNotificacion('Debe ingresar el nombre del responsable', 'error');
+        return false;
+    }
+    
+    // Validar stock disponible
+    const materialSelector = document.getElementById('material-transferencia');
+    const selectedOption = materialSelector.options[materialSelector.selectedIndex];
+    const stockDisponible = parseInt(selectedOption.dataset.stockDisponible || 0);
+    
+    if (parseInt(cantidad) > stockDisponible) {
+        mostrarNotificacion('La cantidad solicitada excede el stock disponible', 'error');
+        return false;
+    }
+    
+    return true;
+}
+
+/**
+ * Guardar transferencia
+ */
+async function guardarTransferencia() {
+    if (!validarFormularioTransferencia()) {
+        return;
+    }
+    
+    const transferencia = {
+        obraOrigenId: document.getElementById('obra-origen').value,
+        obraDestinoId: document.getElementById('obra-destino').value,
+        materialId: document.getElementById('material-transferencia').value,
+        cantidad: parseInt(document.getElementById('cantidad-transferencia').value),
+        responsable: document.getElementById('responsable-transferencia').value.trim(),
+        motivo: document.getElementById('motivo-transferencia').value.trim(),
+        fecha: new Date().toISOString(),
+        estado: 'Pendiente'
+    };
+    
+    try {
+        mostrarLoader('transferencias-loader');
+        
+        const response = await callAPI('registrarTransferencia', transferencia);
+        
+        ocultarLoader('transferencias-loader');
+        
+        if (response.error) {
+            mostrarNotificacion(response.message || 'Error al guardar la transferencia', 'error');
+            return;
+        }
+        
+        mostrarNotificacion('Transferencia registrada correctamente', 'success');
+        cancelarTransferencia();
+        cargarTransferencias();
+        
+    } catch (error) {
+        ocultarLoader('transferencias-loader');
+        console.error('[Transferencias] Error al guardar transferencia:', error);
+        mostrarNotificacion('Error al guardar la transferencia', 'error');
+    }
+}
+
+// ============================================================================
+// FUNCIONES DE GESTIÓN DE TRANSFERENCIAS
+// ============================================================================
+
+/**
+ * Ver detalle de transferencia
+ */
+async function verDetalleTransferencia(transferenceId) {
+    try {
+        mostrarLoader('transferencias-loader');
+        
+        const response = await callAPI('obtenerDetalleTransferencia', { id: transferenceId });
+        
+        ocultarLoader('transferencias-loader');
+        
+        if (response.error) {
+            mostrarNotificacion('Error al cargar el detalle de la transferencia', 'error');
+            return;
+        }
+        
+        const transferencia = response.datos;
+        mostrarModalDetalleTransferencia(transferencia);
+        
+    } catch (error) {
+        ocultarLoader('transferencias-loader');
+        console.error('[Transferencias] Error al cargar detalle:', error);
+        mostrarNotificacion('Error al cargar el detalle de la transferencia', 'error');
+    }
+}
+
+/**
+ * Mostrar modal de detalle de transferencia
+ */
+function mostrarModalDetalleTransferencia(transferencia) {
+    // Crear modal si no existe
+    if (!document.getElementById('modal-detalle-transferencia')) {
+        const modal = document.createElement('div');
+        modal.id = 'modal-detalle-transferencia';
+        modal.className = 'modal-overlay hidden';
+        
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width: 800px;">
+                <div class="modal-header">
+                    <h3 class="modal-title"><i class="fas fa-exchange-alt"></i> Detalle de Transferencia</h3>
+                    <button class="modal-close" onclick="cerrarModalDetalleTransferencia()">&times;</button>
+                </div>
+                <div class="modal-body" id="detalle-transferencia-contenido">
+                    <!-- El contenido se cargará dinámicamente -->
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="imprimirGuiaTransferencia('${transferencia.id}')">
+                        <i class="fas fa-print"></i> Imprimir Guía
+                    </button>
+                    <button class="btn btn-primary" onclick="cerrarModalDetalleTransferencia()">Cerrar</button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+    }
+    
+    // Determinar clase de estado
+    let estadoClass = 'secondary';
+    switch (transferencia.estado) {
+        case 'Completada':
+            estadoClass = 'success';
+            break;
+        case 'En tránsito':
+            estadoClass = 'warning';
+            break;
+        case 'Cancelada':
+            estadoClass = 'danger';
+            break;
+        case 'Pendiente':
+            estadoClass = 'info';
+            break;
+    }
+    
+    // Actualizar contenido
+    const contenido = document.getElementById('detalle-transferencia-contenido');
+    contenido.innerHTML = `
+        <div class="transferencia-detalle">
+            <div class="detalle-header">
+                <div class="detalle-info">
+                    <h4>Transferencia #${transferencia.numero || transferencia.id}</h4>
+                    <span class="badge badge-${estadoClass}">${transferencia.estado}</span>
+                </div>
+                <div class="detalle-fecha">
+                    <small class="text-muted">Registrada el ${new Date(transferencia.fecha).toLocaleString()}</small>
+                </div>
+            </div>
+            
+            <div class="detalle-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="info-section">
+                            <h5><i class="fas fa-building"></i> Obra Origen</h5>
+                            <p><strong>${transferencia.obraOrigen}</strong></p>
+                            <p class="text-muted">${transferencia.direccionOrigen || 'Sin dirección'}</p>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="info-section">
+                            <h5><i class="fas fa-building"></i> Obra Destino</h5>
+                            <p><strong>${transferencia.obraDestino}</strong></p>
+                            <p class="text-muted">${transferencia.direccionDestino || 'Sin dirección'}</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="info-section">
+                            <h5><i class="fas fa-box"></i> Material</h5>
+                            <p><strong>${transferencia.material}</strong></p>
+                            <p class="text-muted">Código: ${transferencia.codigoMaterial || 'N/A'}</p>
+                            <p class="text-muted">Categoría: ${transferencia.categoriaMaterial || 'N/A'}</p>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="info-section">
+                            <h5><i class="fas fa-calculator"></i> Cantidad</h5>
+                            <p class="cantidad-display">${transferencia.cantidad} ${transferencia.unidad}</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="info-section">
+                            <h5><i class="fas fa-user"></i> Responsable</h5>
+                            <p>${transferencia.responsable}</p>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="info-section">
+                            <h5><i class="fas fa-user-tie"></i> Registrado por</h5>
+                            <p>${transferencia.usuarioRegistro || 'Sistema'}</p>
+                        </div>
+                    </div>
+                </div>
+                
+                ${transferencia.motivo ? `
+                <div class="info-section">
+                    <h5><i class="fas fa-comment"></i> Motivo</h5>
+                    <p>${transferencia.motivo}</p>
+                </div>
+                ` : ''}
+                
+                ${transferencia.observaciones ? `
+                <div class="info-section">
+                    <h5><i class="fas fa-sticky-note"></i> Observaciones</h5>
+                    <p>${transferencia.observaciones}</p>
+                </div>
+                ` : ''}
+                
+                ${transferencia.historial && transferencia.historial.length > 0 ? `
+                <div class="info-section">
+                    <h5><i class="fas fa-history"></i> Historial</h5>
+                    <div class="historial-list">
+                        ${transferencia.historial.map(evento => `
+                            <div class="historial-item">
+                                <div class="historial-fecha">${new Date(evento.fecha).toLocaleString()}</div>
+                                <div class="historial-accion">${evento.accion}</div>
+                                <div class="historial-usuario">Por: ${evento.usuario}</div>
+                                ${evento.observaciones ? `<div class="historial-obs">${evento.observaciones}</div>` : ''}
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+                ` : ''}
+            </div>
+        </div>
+    `;
+    
+    // Mostrar modal
+    document.getElementById('modal-detalle-transferencia').classList.remove('hidden');
+}
+
+/**
+ * Cerrar modal de detalle de transferencia
+ */
+function cerrarModalDetalleTransferencia() {
+    document.getElementById('modal-detalle-transferencia').classList.add('hidden');
+}
+
+/**
+ * Confirmar transferencia
+ */
+async function confirmarTransferencia(transferenceId) {
+    if (!confirm('¿Está seguro de confirmar esta transferencia? El material será enviado a la obra destino.')) {
+        return;
+    }
+    
+    try {
+        mostrarLoader('transferencias-loader');
+        
+        const response = await callAPI('confirmarTransferencia', { id: transferenceId });
+        
+        ocultarLoader('transferencias-loader');
+        
+        if (response.error) {
+            mostrarNotificacion(response.message || 'Error al confirmar la transferencia', 'error');
+            return;
+        }
+        
+        mostrarNotificacion('Transferencia confirmada correctamente', 'success');
+        cargarTransferencias();
+        
+    } catch (error) {
+        ocultarLoader('transferencias-loader');
+        console.error('[Transferencias] Error al confirmar transferencia:', error);
+        mostrarNotificacion('Error al confirmar la transferencia', 'error');
+    }
+}
+
+/**
+ * Completar transferencia
+ */
+async function completarTransferencia(transferenceId) {
+    if (!confirm('¿Confirma que la transferencia ha sido completada y el material recibido en destino?')) {
+        return;
+    }
+    
+    try {
+        mostrarLoader('transferencias-loader');
+        
+        const response = await callAPI('completarTransferencia', { id: transferenceId });
+        
+        ocultarLoader('transferencias-loader');
+        
+        if (response.error) {
+            mostrarNotificacion(response.message || 'Error al completar la transferencia', 'error');
+            return;
+        }
+        
+        mostrarNotificacion('Transferencia completada correctamente', 'success');
+        cargarTransferencias();
+        
+    } catch (error) {
+        ocultarLoader('transferencias-loader');
+        console.error('[Transferencias] Error al completar transferencia:', error);
+        mostrarNotificacion('Error al completar la transferencia', 'error');
+    }
+}
+
+/**
+ * Cancelar transferencia (item)
+ */
+async function cancelarTransferenciaItem(transferenceId) {
+    const motivo = prompt('Ingrese el motivo de la cancelación:');
+    if (motivo === null) return;
+    
+    if (!motivo.trim()) {
+        mostrarNotificacion('Debe ingresar un motivo para la cancelación', 'error');
+        return;
+    }
+    
+    try {
+        mostrarLoader('transferencias-loader');
+        
+        const response = await callAPI('cancelarTransferencia', { 
+            id: transferenceId,
+            motivo: motivo.trim()
+        });
+        
+        ocultarLoader('transferencias-loader');
+        
+        if (response.error) {
+            mostrarNotificacion(response.message || 'Error al cancelar la transferencia', 'error');
+            return;
+        }
+        
+        mostrarNotificacion('Transferencia cancelada correctamente', 'success');
+        cargarTransferencias();
+        
+    } catch (error) {
+        ocultarLoader('transferencias-loader');
+        console.error('[Transferencias] Error al cancelar transferencia:', error);
+        mostrarNotificacion('Error al cancelar la transferencia', 'error');
+    }
+}
+
+/**
+ * Imprimir guía de transferencia
+ */
+async function imprimirGuiaTransferencia(transferenceId) {
+    try {
+        mostrarLoader('transferencias-loader');
+        
+        const response = await callAPI('generarGuiaTransferencia', { id: transferenceId });
+        
+        ocultarLoader('transferencias-loader');
+        
+        if (response.error) {
+            mostrarNotificacion('Error al generar la guía de transferencia', 'error');
+            return;
+        }
+        
+        // Abrir en nueva ventana para imprimir
+        const ventanaImpresion = window.open('', '_blank');
+        ventanaImpresion.document.write(response.html);
+        ventanaImpresion.document.close();
+        ventanaImpresion.print();
+        
+    } catch (error) {
+        ocultarLoader('transferencias-loader');
+        console.error('[Transferencias] Error al generar guía:', error);
+        mostrarNotificacion('Error al generar la guía de transferencia', 'error');
+    }
+}
+
+/**
+ * Editar transferencia
+ */
+function editarTransferencia(transferenceId) {
+    const transferencia = transferenciasData.find(t => t.id === transferenceId);
+    if (!transferencia) {
+        mostrarNotificacion('Transferencia no encontrada', 'error');
+        return;
+    }
+    
+    // Cargar datos en el formulario
+    document.getElementById('obra-origen').value = transferencia.obraOrigenId;
+    document.getElementById('obra-destino').value = transferencia.obraDestinoId;
+    document.getElementById('cantidad-transferencia').value = transferencia.cantidad;
+    document.getElementById('responsable-transferencia').value = transferencia.responsable;
+    document.getElementById('motivo-transferencia').value = transferencia.motivo || '';
+    
+    // Cargar materiales de la obra origen y seleccionar el material
+    cargarMaterialesDisponiblesObraOrigen().then(() => {
+        document.getElementById('material-transferencia').value = transferencia.materialId;
+    });
+    
+    // Mostrar formulario
+    document.getElementById('formulario-transferencia').classList.remove('hidden');
+    
+    // Cambiar el botón de guardar por actualizar
+    const btnGuardar = document.querySelector('#formulario-transferencia .btn-primary');
+    btnGuardar.textContent = 'Actualizar Transferencia';
+    btnGuardar.onclick = () => actualizarTransferencia(transferenceId);
+}
+
+/**
+ * Actualizar transferencia
+ */
+async function actualizarTransferencia(transferenceId) {
+    if (!validarFormularioTransferencia()) {
+        return;
+    }
+    
+    const transferencia = {
+        id: transferenceId,
+        obraOrigenId: document.getElementById('obra-origen').value,
+        obraDestinoId: document.getElementById('obra-destino').value,
+        materialId: document.getElementById('material-transferencia').value,
+        cantidad: parseInt(document.getElementById('cantidad-transferencia').value),
+        responsable: document.getElementById('responsable-transferencia').value.trim(),
+        motivo: document.getElementById('motivo-transferencia').value.trim()
+    };
+    
+    try {
+        mostrarLoader('transferencias-loader');
+        
+        const response = await callAPI('actualizarTransferencia', transferencia);
+        
+        ocultarLoader('transferencias-loader');
+        
+        if (response.error) {
+            mostrarNotificacion(response.message || 'Error al actualizar la transferencia', 'error');
+            return;
+        }
+        
+        mostrarNotificacion('Transferencia actualizada correctamente', 'success');
+        cancelarTransferencia();
+        cargarTransferencias();
+        
+        // Restaurar botón de guardar
+        const btnGuardar = document.querySelector('#formulario-transferencia .btn-primary');
+        btnGuardar.textContent = 'Guardar Transferencia';
+        btnGuardar.onclick = guardarTransferencia;
+        
+    } catch (error) {
+        ocultarLoader('transferencias-loader');
+        console.error('[Transferencias] Error al actualizar transferencia:', error);
+        mostrarNotificacion('Error al actualizar la transferencia', 'error');
+    }
+}
+
+// ============================================================================
+// FUNCIONES DE UTILIDAD
+// ============================================================================
+
+/**
+ * Mostrar loader
+ */
+function mostrarLoader(loaderId) {
+    const loader = document.getElementById(loaderId);
+    if (loader) {
+        loader.classList.remove('hidden');
+    }
+}
+
+/**
+ * Ocultar loader
+ */
+function ocultarLoader(loaderId) {
+    const loader = document.getElementById(loaderId);
+    if (loader) {
+        loader.classList.add('hidden');
+    }
+}
+
+// ============================================================================
+// INICIALIZACIÓN
+// ============================================================================
+
+// Auto-inicialización cuando se carga el DOM
+document.addEventListener('DOMContentLoaded', function() {
+    if (document.getElementById('transferencias')) {
+        inicializarTransferencias();
+    }
+});
+
+// Exportar funciones globalmente
+window.transferenciasModule = {
+    inicializarTransferencias,
+    cargarTransferencias,
+    mostrarFormularioTransferencia,
+    guardarTransferencia,
+    cancelarTransferencia,
+    verDetalleTransferencia,
+    confirmarTransferencia,
+    completarTransferencia,
+    cancelarTransferenciaItem,
+    imprimirGuiaTransferencia,
+    editarTransferencia,
+    filtrarTransferencias
+};
+
+console.log('[Transferencias] Módulo de transferencias cargado correctamente');
+</script>

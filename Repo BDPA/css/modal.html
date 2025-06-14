@@ -1,0 +1,108 @@
+<style>
+    /* Estilos específicos para el modal de maquetación */
+    .maquetacion-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 20px;
+    }
+
+    .maquetacion-section {
+        border: 1px solid #ddd;
+        border-radius: var(--border-radius);
+        padding: 20px;
+        margin-bottom: 20px;
+        background-color: #fff;
+    }
+
+    .maquetacion-section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+    }
+
+    .maquetacion-section-title {
+        font-weight: 600;
+        color: var(--dark-color);
+        margin: 0;
+    }
+
+    .item-body {
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px dashed #ddd;
+    }
+
+    .checkbox-group {
+        margin-bottom: 15px;
+    }
+
+    .step-navigation {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 30px;
+        padding-top: 20px;
+        border-top: 1px solid #eee;
+    }
+
+    /* Estilos para la tabla resumen en vista previa */
+    .resumen-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 20px;
+    }
+
+    .resumen-table th {
+        background-color: var(--primary-color);
+        color: white;
+        padding: 12px 15px;
+        text-align: left;
+    }
+
+    .resumen-table td {
+        padding: 10px 15px;
+        border-bottom: 1px solid #ddd;
+    }
+
+    .resumen-table tr:nth-child(even) {
+        background-color: #f8f9fa;
+    }
+
+    .resumen-table tr:hover {
+        background-color: #f1f1f1;
+    }
+
+    /* Estilos responsive para modal de maquetación */
+    @media (max-width: 768px) {
+        .maquetacion-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .step-navigation {
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .step-navigation .btn {
+            width: 100%;
+            margin-right: 0;
+            margin-bottom: 10px;
+        }
+        
+        .maquetacion-section {
+            padding: 15px;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .maquetacion-section-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 10px;
+        }
+        
+        .item-body {
+            padding-top: 15px;
+        }
+    }
+</style>

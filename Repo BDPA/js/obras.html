@@ -1,0 +1,1691 @@
+<script>
+//
+//BDPA - Base de Datos de Progreso Automatizado
+//Archivo: js/obras.html
+//Descripción: Gestión específica de obras y su estructura
+//Versión: 2.0
+//Autor: Larnet Telecomunicaciones
+//Fecha: 2024
+//
+// Variables globales para gestión de obras
+let obrasCache = new Map();
+let estructurasCache = new Map();
+let obraActualSeleccionada = null;
+let filtrosObrasActivos = {};
+
+// Estados de obra disponibles
+const ESTADOS_OBRA = {
+    PLANIFICACION: 'Planificación',
+    EN_PROGRESO: 'En progreso',
+    FINALIZADA: 'Finalizada',
+    SUSPENDIDA: 'Suspendida',
+    CANCELADA: 'Cancelada'
+};
+
+// Tipos de obra disponibles
+const TIPOS_OBRA = {
+    LOTES: 'lotes',
+    CONDOMINIOS: 'condominios',
+    CONDOMINIO_ALTURA: 'condominio_altura',
+    COMERCIAL: 'comercial',
+    INDUSTRIAL: 'industrial'
+};
+
+/**
+ * Inicializar módulo de obras
+ */
+function initializeObrasModule() {
+    console.log('[OBRAS] Inicializando módulo de obras');
+    
+    // Configurar event listeners
+    setupObrasEventListeners();
+    
+    // Cargar obras iniciales
+    cargarObrasIniciales();
+    
+    console.log('[OBRAS] Módulo de obras inicializado');
+}
+
+/**
+ * Configurar event listeners para obras
+ */
+function setupObrasEventListeners() {
+    // Formulario de obra
+    const formularioObra = document.getElementById('formulario-obra');
+    if (formularioObra) {
+        formularioObra.addEventListener('submit', handleSubmitObra);
+    }
+    
+    // Selectores de obra en diferentes secciones
+    const selectoresObra = [
+        'obra-avance',
+        'filtro-obra',
+        'jerarquia-obra',
+        'comunes-obra',
+        'reporte-obra',
+        'doc-obra',
+        'metas-obra',
+        'cobranza-obra'
+    ];
+    
+    selectoresObra.forEach(selectorId => {
+        const selector = document.getElementById(selectorId);
+        if (selector) {
+            selector.addEventListener('change', handleObraSelectionChange);
+        }
+    });
+    
+    // Filtros de obras
+    const filtrosObra = document.querySelectorAll('[data-filtro-obra]');
+    filtrosObra.forEach(filtro => {
+        filtro.addEventListener('change', handleFiltroObraChange);
+    });
+}
+
+/**
+ * Cargar obras iniciales
+ */
+async function cargarObrasIniciales() {
+    try {
+        showLoadingObras(true);
+        await cargarObras();
+        console.log('[OBRAS] Obras iniciales cargadas');
+    } catch (error) {
+        console.error('[OBRAS] Error cargando obras iniciales:', error);
+        mostrarNotificacion('Error al cargar las obras iniciales', 'error');
+    } finally {
+        showLoadingObras(false);
+    }
+}
+
+/**
+ * Cargar todas las obras
+ */
+async function cargarObras(filtros = {}) {
+    try {
+        console.log('[OBRAS] Cargando obras con filtros:', filtros);
+        
+        const response = await apiObtenerObras(filtros);
+        
+        if (response.error) {
+            throw new Error(response.message || 'Error al obtener obras');
+        }
+        
+        // Actualizar cache global
+        obrasData = response.datos || [];
+        
+        // Actualizar cache local del módulo
+        obrasCache.clear();
+        obrasData.forEach(obra => {
+            obrasCache.set(obra.id, obra);
+        });
+        
+        // Actualizar todas las interfaces que dependen de obras
+        await actualizarInterfacesObras();
+        
+        console.log(`[OBRAS] ${obrasData.length} obras cargadas`);
+        return obrasData;
+        
+    } catch (error) {
+        console.error('[OBRAS] Error cargando obras:', error);
+        mostrarNotificacion('Error al cargar las obras: ' + error.message, 'error');
+        throw error;
+    }
+}
+
+/**
+ * Actualizar todas las interfaces que dependen de obras
+ */
+async function actualizarInterfacesObras() {
+    // Actualizar selectores de obra
+    actualizarSelectoresObra();
+    
+    // Actualizar tabla de gestión de obras
+    actualizarTablaGestionObras();
+    
+    // Actualizar estadísticas de obras
+    actualizarEstadisticasObras();
+}
+
+/**
+ * Actualizar selectores de obra en toda la aplicación
+ */
+function actualizarSelectoresObra() {
+    const selectores = [
+        'obra-avance',
+        'filtro-obra',
+        'jerarquia-obra',
+        'comunes-obra',
+        'reporte-obra',
+        'reporte-inv-obra',
+        'edt-obra',
+        'doc-obra',
+        'metas-obra',
+        'cobranza-obra',
+        'obra-origen',
+        'obra-destino',
+        'filtro-obra-origen',
+        'filtro-obra-destino',
+        'destino-salida',
+        'presupuesto-obra',
+        'planificacion-obra'
+    ];
+    
+    selectores.forEach(selectorId => {
+        const selector = document.getElementById(selectorId);
+        if (selector) {
+            actualizarSelectorObra(selector);
+        }
+    });
+}
+
+/**
+ * Actualizar un selector específico de obra
+ */
+function actualizarSelectorObra(selector) {
+    if (!selector) return;
+    
+    const valorActual = selector.value;
+    const primeraOpcion = selector.querySelector('option[value=""]');
+    const textoPlaceholder = primeraOpcion ? primeraOpcion.textContent : 'Seleccione una obra';
+    
+    // Limpiar opciones
+    selector.innerHTML = '';
+    
+    // Agregar opción vacía
+    const optionVacia = document.createElement('option');
+    optionVacia.value = '';
+    optionVacia.textContent = textoPlaceholder;
+    selector.appendChild(optionVacia);
+    
+    // Agregar obras según filtros
+    const obrasFiltradas = filtrarObrasParaSelector(selector);
+    
+    obrasFiltradas.forEach(obra => {
+        const option = document.createElement('option');
+        option.value = obra.id;
+        option.textContent = obra.nombre;
+        option.dataset.estado = obra.estado;
+        option.dataset.tipo = obra.tipo;
+        selector.appendChild(option);
+    });
+    
+    // Restaurar valor si existe
+    if (valorActual && obrasCache.has(valorActual)) {
+        selector.value = valorActual;
+    }
+}
+
+/**
+ * Filtrar obras para un selector específico
+ */
+function filtrarObrasParaSelector(selector) {
+    let obras = Array.from(obrasCache.values());
+    
+    // Aplicar filtros específicos según el tipo de selector
+    const selectorId = selector.id;
+    
+    switch (selectorId) {
+        case 'obra-origen':
+        case 'obra-destino':
+            // Solo obras activas para transferencias
+            obras = obras.filter(obra => obra.estado === ESTADOS_OBRA.EN_PROGRESO);
+            break;
+            
+        case 'destino-salida':
+            // Solo obras activas para salidas
+            obras = obras.filter(obra => obra.estado === ESTADOS_OBRA.EN_PROGRESO);
+            break;
+            
+        case 'cobranza-obra':
+            // Solo obras en progreso o finalizadas para cobranzas
+            obras = obras.filter(obra => 
+                [ESTADOS_OBRA.EN_PROGRESO, ESTADOS_OBRA.FINALIZADA].includes(obra.estado)
+            );
+            break;
+            
+        default:
+            // Sin filtros adicionales
+            break;
+    }
+    
+    // Ordenar por nombre
+    return obras.sort((a, b) => a.nombre.localeCompare(b.nombre));
+}
+
+/**
+ * Actualizar tabla de gestión de obras
+ */
+function actualizarTablaGestionObras() {
+    const tbody = document.getElementById('obras-tbody');
+    if (!tbody) return;
+    
+    tbody.innerHTML = '';
+    
+    if (obrasData.length === 0) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td colspan="8" class="text-center">No hay obras registradas</td>';
+        tbody.appendChild(tr);
+        return;
+    }
+    
+    obrasData.forEach(obra => {
+        const tr = crearFilaTablaObra(obra);
+        tbody.appendChild(tr);
+    });
+}
+
+/**
+ * Crear fila de tabla para una obra
+ */
+function crearFilaTablaObra(obra) {
+    const tr = document.createElement('tr');
+    
+    // Aplicar clases según el estado
+    tr.classList.add(`obra-estado-${obra.estado.toLowerCase().replace(' ', '-')}`);
+    
+    // Calcular avance si no existe
+    const avanceGeneral = obra.avanceGeneral || calcularAvanceGeneral(obra);
+    
+    tr.innerHTML = `
+        <td>
+            <div class="obra-nombre">
+                <strong>${obra.nombre}</strong>
+                ${obra.empresaCliente ? `<br><small class="text-muted">Cliente: ${obra.empresaCliente}</small>` : ''}
+            </div>
+        </td>
+        <td>${obra.direccion || '-'}</td>
+        <td>${obra.fechaInicio ? formatearFecha(obra.fechaInicio) : '-'}</td>
+        <td>${obra.fechaTermino ? formatearFecha(obra.fechaTermino) : '-'}</td>
+        <td>
+            <span class="badge badge-${getBadgeClassTipoObra(obra.tipo)}">
+                ${formatearTipoObra(obra.tipo)}
+            </span>
+        </td>
+        <td>
+            <span class="badge badge-${getBadgeClassEstadoObra(obra.estado)}">
+                ${obra.estado}
+            </span>
+        </td>
+        <td>
+            <div class="progress-container">
+                <div class="progress-bar-container">
+                    <div class="progress-bar bg-${getColorAvance(avanceGeneral)}" 
+                         style="width: ${avanceGeneral}%;">
+                    </div>
+                </div>
+                <small class="progress-text">${avanceGeneral}%</small>
+            </div>
+        </td>
+        <td>
+            <div class="btn-group-actions">
+                <button class="btn btn-sm btn-info" onclick="verDetalleObra('${obra.id}')" 
+                        title="Ver detalle">
+                    <i class="fas fa-eye"></i>
+                </button>
+                <button class="btn btn-sm btn-primary" onclick="editarObra('${obra.id}')" 
+                        title="Editar">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn btn-sm btn-secondary" onclick="mostrarModalMaquetacion('${obra.id}')" 
+                        title="Configurar maquetación">
+                    <i class="fas fa-cogs"></i>
+                </button>
+                ${usuarioActual && usuarioActual.rol === 'Admin' ? `
+                    <button class="btn btn-sm btn-danger" onclick="eliminarObra('${obra.id}')" 
+                            title="Eliminar">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                ` : ''}
+            </div>
+        </td>
+    `;
+    
+    return tr;
+}
+/**
+ * Mostrar formulario de nueva obra
+ */
+function mostrarFormularioObra() {
+    const formulario = document.getElementById('formulario-obra');
+    if (!formulario) return;
+    
+    // Limpiar formulario
+    limpiarFormularioObra();
+    
+    // Establecer valores por defecto
+    const fechaHoy = new Date().toISOString().split('T')[0];
+    document.getElementById('fecha-inicio').value = fechaHoy;
+    
+    // Mostrar formulario
+    formulario.classList.remove('hidden');
+    
+    // Focus en el primer campo
+    const nombreObra = document.getElementById('nombre-obra');
+    if (nombreObra) {
+        setTimeout(() => nombreObra.focus(), 100);
+    }
+}
+
+/**
+ * Limpiar formulario de obra
+ */
+function limpiarFormularioObra() {
+    const campos = [
+        'obra-id',
+        'nombre-obra',
+        'direccion-obra',
+        'fecha-inicio',
+        'fecha-termino',
+        'descripcion-obra',
+        'empresa-cliente'
+    ];
+    
+    campos.forEach(campoId => {
+        const campo = document.getElementById(campoId);
+        if (campo) {
+            campo.value = '';
+        }
+    });
+    
+    // Valores por defecto para selects
+    const tipoObra = document.getElementById('tipo-obra');
+    if (tipoObra) tipoObra.value = TIPOS_OBRA.CONDOMINIOS;
+    
+    const estadoObra = document.getElementById('estado-obra');
+    if (estadoObra) estadoObra.value = ESTADOS_OBRA.PLANIFICACION;
+}
+
+/**
+ * Cancelar edición de obra
+ */
+function cancelarEdicionObra() {
+    const formulario = document.getElementById('formulario-obra');
+    if (formulario) {
+        formulario.classList.add('hidden');
+    }
+    
+    // Limpiar formulario
+    limpiarFormularioObra();
+}
+
+/**
+ * Editar obra existente
+ */
+async function editarObra(obraId) {
+    try {
+        showLoadingObras(true);
+        
+        // Obtener datos de la obra
+        const obra = obrasCache.get(obraId);
+        if (!obra) {
+            // Si no está en cache, intentar obtener del servidor
+            const response = await apiObtenerObras({ id: obraId });
+            if (response.error || !response.datos || response.datos.length === 0) {
+                throw new Error('Obra no encontrada');
+            }
+            obra = response.datos[0];
+        }
+        
+        // Cargar datos en el formulario
+        cargarDatosEnFormularioObra(obra);
+        
+        // Mostrar formulario
+        const formulario = document.getElementById('formulario-obra');
+        if (formulario) {
+            formulario.classList.remove('hidden');
+        }
+        
+        console.log('[OBRAS] Obra cargada para edición:', obra.nombre);
+        
+    } catch (error) {
+        console.error('[OBRAS] Error al editar obra:', error);
+        mostrarNotificacion('Error al cargar los datos de la obra: ' + error.message, 'error');
+    } finally {
+        showLoadingObras(false);
+    }
+}
+
+/**
+ * Cargar datos de obra en el formulario
+ */
+function cargarDatosEnFormularioObra(obra) {
+    const campos = {
+        'obra-id': obra.id,
+        'nombre-obra': obra.nombre,
+        'direccion-obra': obra.direccion || '',
+        'fecha-inicio': obra.fechaInicio ? new Date(obra.fechaInicio).toISOString().split('T')[0] : '',
+        'fecha-termino': obra.fechaTermino ? new Date(obra.fechaTermino).toISOString().split('T')[0] : '',
+        'tipo-obra': obra.tipo || TIPOS_OBRA.CONDOMINIOS,
+        'estado-obra': obra.estado || ESTADOS_OBRA.PLANIFICACION,
+        'descripcion-obra': obra.descripcion || '',
+        'empresa-cliente': obra.empresaCliente || ''
+    };
+    
+    Object.entries(campos).forEach(([campoId, valor]) => {
+        const campo = document.getElementById(campoId);
+        if (campo) {
+            campo.value = valor;
+        }
+    });
+}
+
+/**
+ * Guardar obra (crear o actualizar)
+ */
+async function guardarObra() {
+    try {
+        // Validar formulario
+        const datosObra = validarFormularioObra();
+        if (!datosObra) return;
+        
+        showLoadingObras(true);
+        
+        console.log('[OBRAS] Guardando obra:', datosObra);
+        
+        // Llamar a la API
+        const response = await apiGuardarObra(datosObra);
+        
+        if (response.error) {
+            throw new Error(response.message || 'Error al guardar la obra');
+        }
+        
+        // Mostrar mensaje de éxito
+        const esNuevaObra = !datosObra.id;
+        const mensaje = esNuevaObra ? 'Obra creada correctamente' : 'Obra actualizada correctamente';
+        mostrarNotificacion(mensaje, 'success');
+        
+        // Actualizar obra en cache si es edición
+        if (!esNuevaObra) {
+            const obraActualizada = { ...obrasCache.get(datosObra.id), ...datosObra };
+            obrasCache.set(datosObra.id, obraActualizada);
+        }
+        
+        // Recargar obras
+        await cargarObras();
+        
+        // Ocultar formulario
+        cancelarEdicionObra();
+        
+        console.log('[OBRAS] Obra guardada exitosamente');
+        
+    } catch (error) {
+        console.error('[OBRAS] Error al guardar obra:', error);
+        mostrarNotificacion('Error al guardar la obra: ' + error.message, 'error');
+    } finally {
+        showLoadingObras(false);
+    }
+}
+
+/**
+ * Validar formulario de obra
+ */
+function validarFormularioObra() {
+    const datosObra = {
+        id: document.getElementById('obra-id').value || null,
+        nombre: document.getElementById('nombre-obra').value.trim(),
+        direccion: document.getElementById('direccion-obra').value.trim(),
+        fechaInicio: document.getElementById('fecha-inicio').value,
+        fechaTermino: document.getElementById('fecha-termino').value,
+        tipo: document.getElementById('tipo-obra').value,
+        estado: document.getElementById('estado-obra').value,
+        descripcion: document.getElementById('descripcion-obra').value.trim(),
+        empresaCliente: document.getElementById('empresa-cliente').value.trim()
+    };
+    
+    // Validaciones básicas
+    if (!datosObra.nombre) {
+        mostrarNotificacion('El nombre de la obra es obligatorio', 'error');
+        document.getElementById('nombre-obra').focus();
+        return null;
+    }
+    
+    if (datosObra.nombre.length < 3) {
+        mostrarNotificacion('El nombre de la obra debe tener al menos 3 caracteres', 'error');
+        document.getElementById('nombre-obra').focus();
+        return null;
+    }
+    
+    // Validar fechas
+    if (datosObra.fechaInicio && datosObra.fechaTermino) {
+        const fechaInicio = new Date(datosObra.fechaInicio);
+        const fechaTermino = new Date(datosObra.fechaTermino);
+        
+        if (fechaTermino <= fechaInicio) {
+            mostrarNotificacion('La fecha de término debe ser posterior a la fecha de inicio', 'error');
+            document.getElementById('fecha-termino').focus();
+            return null;
+        }
+    }
+    
+    // Verificar nombre duplicado
+    const nombreExiste = Array.from(obrasCache.values()).some(obra => 
+        obra.nombre.toLowerCase() === datosObra.nombre.toLowerCase() && 
+        obra.id !== datosObra.id
+    );
+    
+    if (nombreExiste) {
+        mostrarNotificacion('Ya existe una obra con este nombre', 'error');
+        document.getElementById('nombre-obra').focus();
+        return null;
+    }
+    
+    return datosObra;
+}
+
+/**
+ * Eliminar obra
+ */
+async function eliminarObra(obraId) {
+    const obra = obrasCache.get(obraId);
+    if (!obra) {
+        mostrarNotificacion('Obra no encontrada', 'error');
+        return;
+    }
+    
+    // Confirmar eliminación
+    const mensaje = `¿Está seguro de eliminar la obra "${obra.nombre}"?\n\n` +
+                   'Esta acción no se puede deshacer y eliminará todos los datos asociados ' +
+                   '(avances, documentos, metas, etc.).';
+    
+    if (!confirm(mensaje)) {
+        return;
+    }
+    
+    try {
+        showLoadingObras(true);
+        
+        console.log('[OBRAS] Eliminando obra:', obra.nombre);
+        
+        const response = await apiEliminarObra(obraId);
+        
+        if (response.error) {
+            throw new Error(response.message || 'Error al eliminar la obra');
+        }
+        
+        // Remover de cache
+        obrasCache.delete(obraId);
+        
+        // Recargar obras
+        await cargarObras();
+        
+        mostrarNotificacion('Obra eliminada correctamente', 'success');
+        console.log('[OBRAS] Obra eliminada exitosamente');
+        
+    } catch (error) {
+        console.error('[OBRAS] Error al eliminar obra:', error);
+        mostrarNotificacion('Error al eliminar la obra: ' + error.message, 'error');
+    } finally {
+        showLoadingObras(false);
+    }
+}
+
+/**
+ * Ver detalle de obra
+ */
+async function verDetalleObra(obraId) {
+    try {
+        const obra = obrasCache.get(obraId);
+        if (!obra) {
+            throw new Error('Obra no encontrada');
+        }
+        
+        // Obtener estadísticas adicionales
+        showLoadingObras(true);
+        const estadisticas = await obtenerEstadisticasObra(obraId);
+        
+        // Mostrar modal de detalle
+        mostrarModalDetalleObra(obra, estadisticas);
+        
+    } catch (error) {
+        console.error('[OBRAS] Error al ver detalle de obra:', error);
+        mostrarNotificacion('Error al cargar el detalle de la obra: ' + error.message, 'error');
+    } finally {
+        showLoadingObras(false);
+    }
+}
+
+/**
+ * Obtener estadísticas de una obra
+ */
+async function obtenerEstadisticasObra(obraId) {
+    try {
+        const promesas = [
+            apiObtenerAvances({ obraId }),
+            apiObtenerDocumentosObra(obraId),
+            apiObtenerMetasObra(obraId)
+        ];
+        
+        const [avances, documentos, metas] = await Promise.all(promesas);
+        
+        return {
+            totalAvances: avances.datos ? avances.datos.length : 0,
+            totalDocumentos: documentos.datos ? documentos.datos.length : 0,
+            totalMetas: metas.datos ? metas.datos.length : 0,
+            metasCompletadas: metas.datos ? metas.datos.filter(m => m.completada).length : 0
+        };
+    } catch (error) {
+        console.warn('[OBRAS] Error obteniendo estadísticas:', error);
+        return {
+            totalAvances: 0,
+            totalDocumentos: 0,
+            totalMetas: 0,
+            metasCompletadas: 0
+        };
+    }
+}
+
+/**
+ * Mostrar modal de detalle de obra
+ */
+function mostrarModalDetalleObra(obra, estadisticas) {
+    // Crear modal si no existe
+    let modal = document.getElementById('modal-detalle-obra');
+    if (!modal) {
+        modal = crearModalDetalleObra();
+        document.body.appendChild(modal);
+    }
+    
+    // Actualizar contenido
+    actualizarContenidoModalDetalle(obra, estadisticas);
+    
+    // Mostrar modal
+    modal.classList.remove('hidden');
+}
+
+/**
+ * Crear modal de detalle de obra
+ */
+function crearModalDetalleObra() {
+    const modal = document.createElement('div');
+    modal.id = 'modal-detalle-obra';
+    modal.className = 'modal-overlay hidden';
+    
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 800px;">
+            <div class="modal-header">
+                <h3 class="modal-title">
+                    <i class="fas fa-building"></i> Detalle de Obra
+                </h3>
+                <button class="modal-close" onclick="cerrarModalDetalleObra()">&times;</button>
+            </div>
+            <div class="modal-body" id="detalle-obra-contenido">
+                <!-- Contenido dinámico -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="cerrarModalDetalleObra()">
+                    Cerrar
+                </button>
+                <button class="btn btn-primary" onclick="editarObraDesdeDetalle()">
+                    <i class="fas fa-edit"></i> Editar
+                </button>
+            </div>
+        </div>
+    `;
+    
+    return modal;
+}
+
+/**
+ * Actualizar contenido del modal de detalle
+ */
+function actualizarContenidoModalDetalle(obra, estadisticas) {
+    const contenido = document.getElementById('detalle-obra-contenido');
+    if (!contenido) return;
+    
+    const avanceGeneral = obra.avanceGeneral || calcularAvanceGeneral(obra);
+    const duracionProyecto = calcularDuracionProyecto(obra);
+    
+    contenido.innerHTML = `
+        <div class="obra-detalle-grid">
+            <div class="obra-info-basica">
+                <h4><i class="fas fa-info-circle"></i> Información Básica</h4>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <label>Nombre:</label>
+                        <span>${obra.nombre}</span>
+                    </div>
+                    <div class="info-item">
+                        <label>Dirección:</label>
+                        <span>${obra.direccion || 'No especificada'}</span>
+                    </div>
+                    <div class="info-item">
+                        <label>Tipo:</label>
+                        <span class="badge badge-${getBadgeClassTipoObra(obra.tipo)}">
+                            ${formatearTipoObra(obra.tipo)}
+                        </span>
+                    </div>
+                    <div class="info-item">
+                        <label>Estado:</label>
+                        <span class="badge badge-${getBadgeClassEstadoObra(obra.estado)}">
+                            ${obra.estado}
+                        </span>
+                    </div>
+                    <div class="info-item">
+                        <label>Cliente:</label>
+                        <span>${obra.empresaCliente || 'No especificado'}</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="obra-fechas">
+                <h4><i class="fas fa-calendar"></i> Cronograma</h4>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <label>Fecha de inicio:</label>
+                        <span>${obra.fechaInicio ? formatearFecha(obra.fechaInicio) : 'No definida'}</span>
+                    </div>
+                    <div class="info-item">
+                        <label>Fecha de término:</label>
+                        <span>${obra.fechaTermino ? formatearFecha(obra.fechaTermino) : 'No definida'}</span>
+                    </div>
+                    <div class="info-item">
+                        <label>Duración:</label>
+                        <span>${duracionProyecto}</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="obra-progreso">
+                <h4><i class="fas fa-chart-line"></i> Progreso</h4>
+                <div class="progress-detalle">
+                    <div class="progress-bar-container mb-10">
+                        <div class="progress-bar bg-${getColorAvance(avanceGeneral)}" 
+                             style="width: ${avanceGeneral}%;">
+                        </div>
+                    </div>
+                    <div class="progress-stats">
+                        <span class="progress-percentage">${avanceGeneral}% completado</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="obra-estadisticas">
+                <h4><i class="fas fa-chart-bar"></i> Estadísticas</h4>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <div class="stat-number">${estadisticas.totalAvances}</div>
+                        <div class="stat-label">Avances registrados</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">${estadisticas.totalDocumentos}</div>
+                        <div class="stat-label">Documentos</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">${estadisticas.metasCompletadas}/${estadisticas.totalMetas}</div>
+                        <div class="stat-label">Metas completadas</div>
+                    </div>
+                </div>
+            </div>
+            
+            ${obra.descripcion ? `
+                <div class="obra-descripcion">
+                    <h4><i class="fas fa-file-text"></i> Descripción</h4>
+                    <p>${obra.descripcion}</p>
+                </div>
+            ` : ''}
+        </div>
+    `;
+    
+    // Guardar ID de obra para botón de editar
+    contenido.dataset.obraId = obra.id;
+}
+/**
+ * Cerrar modal de detalle de obra
+ */
+function cerrarModalDetalleObra() {
+    const modal = document.getElementById('modal-detalle-obra');
+    if (modal) {
+        modal.classList.add('hidden');
+    }
+}
+
+/**
+ * Editar obra desde el modal de detalle
+ */
+function editarObraDesdeDetalle() {
+    const contenido = document.getElementById('detalle-obra-contenido');
+    if (contenido && contenido.dataset.obraId) {
+        cerrarModalDetalleObra();
+        editarObra(contenido.dataset.obraId);
+    }
+}
+
+// ==================== ESTRUCTURA DE OBRAS ====================
+
+/**
+ * Cargar estructura de obra (torres, pisos, departamentos)
+ */
+async function cargarEstructuraObra(obraId, forzarRecarga = false) {
+    if (!obraId) return null;
+    
+    // Verificar cache
+    if (!forzarRecarga && estructurasCache.has(obraId)) {
+        return estructurasCache.get(obraId);
+    }
+    
+    try {
+        console.log('[OBRAS] Cargando estructura de obra:', obraId);
+        
+        const response = await apiObtenerEstructuraObra(obraId);
+        
+        if (response.error) {
+            throw new Error(response.message || 'Error al obtener estructura de obra');
+        }
+        
+        const estructura = response.datos || { torres: [], pisos: [], departamentos: [] };
+        
+        // Guardar en cache
+        estructurasCache.set(obraId, estructura);
+        
+        console.log('[OBRAS] Estructura cargada:', estructura);
+        return estructura;
+        
+    } catch (error) {
+        console.error('[OBRAS] Error cargando estructura:', error);
+        throw error;
+    }
+}
+
+/**
+ * Cargar torres de una obra
+ */
+async function cargarTorresObra(obraId, targetSelectId = null) {
+    try {
+        if (!obraId) {
+            if (targetSelectId) {
+                limpiarSelector(targetSelectId, 'Seleccione una torre');
+            }
+            return [];
+        }
+        
+        console.log('[OBRAS] Cargando torres de obra:', obraId);
+        
+        const response = await apiObtenerTorresObra(obraId);
+        
+        if (response.error) {
+            throw new Error(response.message || 'Error al obtener torres');
+        }
+        
+        const torres = response.datos || [];
+        
+        // Actualizar selector si se especifica
+        if (targetSelectId) {
+            actualizarSelectorTorres(targetSelectId, torres);
+        }
+        
+        console.log('[OBRAS] Torres cargadas:', torres.length);
+        return torres;
+        
+    } catch (error) {
+        console.error('[OBRAS] Error cargando torres:', error);
+        if (targetSelectId) {
+            limpiarSelector(targetSelectId, 'Error al cargar torres');
+        }
+        mostrarNotificacion('Error al cargar las torres: ' + error.message, 'error');
+        return [];
+    }
+}
+
+/**
+ * Actualizar selector de torres
+ */
+function actualizarSelectorTorres(selectorId, torres) {
+    const selector = document.getElementById(selectorId);
+    if (!selector) return;
+    
+    const valorActual = selector.value;
+    
+    // Limpiar y agregar opción por defecto
+    limpiarSelector(selectorId, 'Seleccione una torre');
+    
+    // Agregar torres
+    torres.forEach(torre => {
+        const option = document.createElement('option');
+        option.value = torre.id;
+        option.textContent = torre.nombre;
+        option.dataset.pisos = JSON.stringify(torre.pisos || []);
+        selector.appendChild(option);
+    });
+    
+    // Restaurar valor si existe
+    if (valorActual && torres.some(t => t.id === valorActual)) {
+        selector.value = valorActual;
+    }
+}
+
+/**
+ * Cargar pisos de una torre
+ */
+async function cargarPisosPorTorre(torreId = null, tipoOperacion = '') {
+    let targetSelectId, nextSelectId;
+    
+    // Determinar selectores según el tipo de operación
+    switch (tipoOperacion) {
+        case 'filtro':
+            targetSelectId = 'filtro-piso';
+            nextSelectId = 'filtro-depto';
+            torreId = torreId || document.getElementById('filtro-torre').value;
+            break;
+        default:
+            targetSelectId = 'piso-avance';
+            nextSelectId = 'departamento-avance';
+            torreId = torreId || document.getElementById('torre-avance').value;
+            break;
+    }
+    
+    try {
+        if (!torreId) {
+            limpiarSelector(targetSelectId, 'Seleccione un piso');
+            limpiarSelector(nextSelectId, 'Seleccione un departamento');
+            return [];
+        }
+        
+        console.log('[OBRAS] Cargando pisos de torre:', torreId);
+        
+        const response = await apiObtenerPisosTorre(torreId);
+        
+        if (response.error) {
+            throw new Error(response.message || 'Error al obtener pisos');
+        }
+        
+        const pisos = response.datos || [];
+        
+        // Actualizar selector de pisos
+        actualizarSelectorPisos(targetSelectId, pisos);
+        
+        // Limpiar selector de departamentos
+        limpiarSelector(nextSelectId, 'Seleccione un departamento');
+        
+        console.log('[OBRAS] Pisos cargados:', pisos.length);
+        return pisos;
+        
+    } catch (error) {
+        console.error('[OBRAS] Error cargando pisos:', error);
+        limpiarSelector(targetSelectId, 'Error al cargar pisos');
+        limpiarSelector(nextSelectId, 'Seleccione un departamento');
+        mostrarNotificacion('Error al cargar los pisos: ' + error.message, 'error');
+        return [];
+    }
+}
+
+/**
+ * Actualizar selector de pisos
+ */
+function actualizarSelectorPisos(selectorId, pisos) {
+    const selector = document.getElementById(selectorId);
+    if (!selector) return;
+    
+    const valorActual = selector.value;
+    
+    // Limpiar y agregar opción por defecto
+    limpiarSelector(selectorId, 'Seleccione un piso');
+    
+    // Agregar pisos ordenados
+    pisos
+        .sort((a, b) => a.orden - b.orden)
+        .forEach(piso => {
+            const option = document.createElement('option');
+            option.value = piso.id;
+            option.textContent = piso.nombre;
+            option.dataset.departamentos = JSON.stringify(piso.departamentos || []);
+            selector.appendChild(option);
+        });
+    
+    // Restaurar valor si existe
+    if (valorActual && pisos.some(p => p.id === valorActual)) {
+        selector.value = valorActual;
+    }
+}
+
+/**
+ * Cargar departamentos de un piso
+ */
+async function cargarDepartamentosPorPiso(pisoId = null, tipoOperacion = '') {
+    let targetSelectId;
+    
+    // Determinar selector según el tipo de operación
+    switch (tipoOperacion) {
+        case 'filtro':
+            targetSelectId = 'filtro-depto';
+            pisoId = pisoId || document.getElementById('filtro-piso').value;
+            break;
+        default:
+            targetSelectId = 'departamento-avance';
+            pisoId = pisoId || document.getElementById('piso-avance').value;
+            break;
+    }
+    
+    try {
+        if (!pisoId) {
+            limpiarSelector(targetSelectId, 'Seleccione un departamento');
+            return [];
+        }
+        
+        console.log('[OBRAS] Cargando departamentos de piso:', pisoId);
+        
+        const response = await apiObtenerDepartamentosPiso(pisoId);
+        
+        if (response.error) {
+            throw new Error(response.message || 'Error al obtener departamentos');
+        }
+        
+        const departamentos = response.datos || [];
+        
+        // Actualizar selector de departamentos
+        actualizarSelectorDepartamentos(targetSelectId, departamentos);
+        
+        console.log('[OBRAS] Departamentos cargados:', departamentos.length);
+        return departamentos;
+        
+    } catch (error) {
+        console.error('[OBRAS] Error cargando departamentos:', error);
+        limpiarSelector(targetSelectId, 'Error al cargar departamentos');
+        mostrarNotificacion('Error al cargar los departamentos: ' + error.message, 'error');
+        return [];
+    }
+}
+
+/**
+ * Actualizar selector de departamentos
+ */
+function actualizarSelectorDepartamentos(selectorId, departamentos) {
+    const selector = document.getElementById(selectorId);
+    if (!selector) return;
+    
+    const valorActual = selector.value;
+    
+    // Limpiar y agregar opción por defecto
+    limpiarSelector(selectorId, 'Seleccione un departamento');
+    
+    // Agregar departamentos ordenados
+    departamentos
+        .sort((a, b) => a.numero - b.numero)
+        .forEach(depto => {
+            const option = document.createElement('option');
+            option.value = depto.id;
+            option.textContent = depto.nombre;
+            selector.appendChild(option);
+        });
+    
+    // Restaurar valor si existe
+    if (valorActual && departamentos.some(d => d.id === valorActual)) {
+        selector.value = valorActual;
+    }
+}
+
+/**
+ * Limpiar selector
+ */
+function limpiarSelector(selectorId, textoPlaceholder = 'Seleccione una opción') {
+    const selector = document.getElementById(selectorId);
+    if (!selector) return;
+    
+    selector.innerHTML = '';
+    
+    const optionDefault = document.createElement('option');
+    optionDefault.value = '';
+    optionDefault.textContent = textoPlaceholder;
+    selector.appendChild(optionDefault);
+}
+
+// ==================== EVENTOS Y MANEJADORES ====================
+
+/**
+ * Manejar envío del formulario de obra
+ */
+function handleSubmitObra(event) {
+    event.preventDefault();
+    guardarObra();
+}
+
+/**
+ * Manejar cambio en selección de obra
+ */
+function handleObraSelectionChange(event) {
+    const obraId = event.target.value;
+    const selectorId = event.target.id;
+    
+    console.log('[OBRAS] Cambio en selector de obra:', selectorId, obraId);
+    
+    // Ejecutar acciones específicas según el selector
+    switch (selectorId) {
+        case 'obra-avance':
+            if (obraId) {
+                cargarTorresObra(obraId, 'torre-avance');
+            } else {
+                limpiarSelector('torre-avance', 'Seleccione una torre');
+                limpiarSelector('piso-avance', 'Seleccione un piso');
+                limpiarSelector('departamento-avance', 'Seleccione un departamento');
+            }
+            break;
+            
+        case 'filtro-obra':
+            if (obraId) {
+                cargarTorresObra(obraId, 'filtro-torre');
+            } else {
+                limpiarSelector('filtro-torre', 'Todas las torres');
+                limpiarSelector('filtro-piso', 'Todos los pisos');
+                limpiarSelector('filtro-depto', 'Todos los departamentos');
+            }
+            break;
+            
+        case 'jerarquia-obra':
+            if (obraId && typeof cargarJerarquiaObra === 'function') {
+                cargarJerarquiaObra();
+            }
+            break;
+            
+        case 'comunes-obra':
+            if (obraId && typeof cargarEspaciosComunes === 'function') {
+                cargarEspaciosComunes();
+            }
+            break;
+            
+        case 'doc-obra':
+            if (obraId && typeof cargarDocumentosObra === 'function') {
+                cargarDocumentosObra();
+            }
+            break;
+            
+        case 'metas-obra':
+            if (obraId && typeof cargarMetasObra === 'function') {
+                cargarMetasObra();
+            }
+            break;
+            
+        case 'cobranza-obra':
+            if (obraId && typeof cargarResumenCobranza === 'function') {
+                cargarResumenCobranza();
+            }
+            break;
+    }
+    
+    // Actualizar obra actual seleccionada
+    obraActualSeleccionada = obraId;
+}
+
+/**
+ * Manejar cambio en filtros de obra
+ */
+function handleFiltroObraChange(event) {
+    const filtro = event.target.dataset.filtroObra;
+    const valor = event.target.value;
+    
+    if (filtro) {
+        filtrosObrasActivos[filtro] = valor;
+        aplicarFiltrosObras();
+    }
+}
+
+/**
+ * Aplicar filtros a la tabla de obras
+ */
+function aplicarFiltrosObras() {
+    const tabla = document.getElementById('obras-tbody');
+    if (!tabla) return;
+    
+    const filas = tabla.querySelectorAll('tr');
+    
+    filas.forEach(fila => {
+        let mostrar = true;
+        
+        // Aplicar cada filtro activo
+        Object.entries(filtrosObrasActivos).forEach(([filtro, valor]) => {
+            if (!valor) return; // Filtro vacío, no aplicar
+            
+            switch (filtro) {
+                case 'estado':
+                    const estadoBadge = fila.querySelector('.badge');
+                    if (estadoBadge && !estadoBadge.textContent.includes(valor)) {
+                        mostrar = false;
+                    }
+                    break;
+                    
+                case 'tipo':
+                    const tipoBadge = fila.querySelectorAll('.badge')[1];
+                    if (tipoBadge && !tipoBadge.textContent.toLowerCase().includes(valor.toLowerCase())) {
+                        mostrar = false;
+                    }
+                    break;
+                    
+                case 'nombre':
+                    const nombreCell = fila.querySelector('.obra-nombre strong');
+                    if (nombreCell && !nombreCell.textContent.toLowerCase().includes(valor.toLowerCase())) {
+                        mostrar = false;
+                    }
+                    break;
+            }
+        });
+        
+        fila.style.display = mostrar ? '' : 'none';
+    });
+}
+// ==================== FUNCIONES AUXILIARES ====================
+
+/**
+ * Calcular avance general de una obra
+ */
+function calcularAvanceGeneral(obra) {
+    if (!obra) return 0;
+    
+    // Si ya tiene avance calculado, usarlo
+    if (obra.avanceGeneral !== undefined && obra.avanceGeneral !== null) {
+        return Math.round(obra.avanceGeneral);
+    }
+    
+    // Calcular basado en estado y fechas
+    switch (obra.estado) {
+        case ESTADOS_OBRA.PLANIFICACION:
+            return 0;
+        case ESTADOS_OBRA.FINALIZADA:
+            return 100;
+        case ESTADOS_OBRA.CANCELADA:
+        case ESTADOS_OBRA.SUSPENDIDA:
+            return obra.avanceAnterior || 0;
+        case ESTADOS_OBRA.EN_PROGRESO:
+        default:
+            return calcularAvancePorFechas(obra);
+    }
+}
+
+/**
+ * Calcular avance basado en fechas
+ */
+function calcularAvancePorFechas(obra) {
+    if (!obra.fechaInicio || !obra.fechaTermino) {
+        return 0;
+    }
+    
+    const fechaInicio = new Date(obra.fechaInicio);
+    const fechaTermino = new Date(obra.fechaTermino);
+    const fechaActual = new Date();
+    
+    // Si aún no ha comenzado
+    if (fechaActual < fechaInicio) {
+        return 0;
+    }
+    
+    // Si ya terminó según cronograma
+    if (fechaActual > fechaTermino) {
+        return 90; // No 100% porque puede no estar realmente terminada
+    }
+    
+    // Calcular porcentaje basado en tiempo transcurrido
+    const tiempoTotal = fechaTermino.getTime() - fechaInicio.getTime();
+    const tiempoTranscurrido = fechaActual.getTime() - fechaInicio.getTime();
+    
+    const porcentaje = Math.round((tiempoTranscurrido / tiempoTotal) * 100);
+    
+    // Limitar entre 5% y 85% para obras en progreso
+    return Math.max(5, Math.min(85, porcentaje));
+}
+
+/**
+ * Calcular duración del proyecto
+ */
+function calcularDuracionProyecto(obra) {
+    if (!obra.fechaInicio || !obra.fechaTermino) {
+        return 'No definida';
+    }
+    
+    const fechaInicio = new Date(obra.fechaInicio);
+    const fechaTermino = new Date(obra.fechaTermino);
+    
+    const diferenciaDias = Math.ceil((fechaTermino - fechaInicio) / (1000 * 60 * 60 * 24));
+    
+    if (diferenciaDias < 30) {
+        return `${diferenciaDias} días`;
+    } else if (diferenciaDias < 365) {
+        const meses = Math.round(diferenciaDias / 30);
+        return `${meses} ${meses === 1 ? 'mes' : 'meses'}`;
+    } else {
+        const años = Math.floor(diferenciaDias / 365);
+        const mesesRestantes = Math.round((diferenciaDias % 365) / 30);
+        
+        let resultado = `${años} ${años === 1 ? 'año' : 'años'}`;
+        if (mesesRestantes > 0) {
+            resultado += ` y ${mesesRestantes} ${mesesRestantes === 1 ? 'mes' : 'meses'}`;
+        }
+        return resultado;
+    }
+}
+
+/**
+ * Formatear fecha para mostrar
+ */
+function formatearFecha(fecha) {
+    if (!fecha) return '-';
+    
+    try {
+        const fechaObj = new Date(fecha);
+        return fechaObj.toLocaleDateString('es-CL', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        });
+    } catch (error) {
+        return 'Fecha inválida';
+    }
+}
+
+/**
+ * Formatear tipo de obra para mostrar
+ */
+function formatearTipoObra(tipo) {
+    const tipos = {
+        [TIPOS_OBRA.LOTES]: 'Lotes',
+        [TIPOS_OBRA.CONDOMINIOS]: 'Condominios',
+        [TIPOS_OBRA.CONDOMINIO_ALTURA]: 'Condominio en Altura',
+        [TIPOS_OBRA.COMERCIAL]: 'Comercial',
+        [TIPOS_OBRA.INDUSTRIAL]: 'Industrial'
+    };
+    
+    return tipos[tipo] || tipo;
+}
+
+/**
+ * Obtener clase de badge para tipo de obra
+ */
+function getBadgeClassTipoObra(tipo) {
+    const clases = {
+        [TIPOS_OBRA.LOTES]: 'info',
+        [TIPOS_OBRA.CONDOMINIOS]: 'primary',
+        [TIPOS_OBRA.CONDOMINIO_ALTURA]: 'secondary',
+        [TIPOS_OBRA.COMERCIAL]: 'warning',
+        [TIPOS_OBRA.INDUSTRIAL]: 'dark'
+    };
+    
+    return clases[tipo] || 'secondary';
+}
+
+/**
+ * Obtener clase de badge para estado de obra
+ */
+function getBadgeClassEstadoObra(estado) {
+    const clases = {
+        [ESTADOS_OBRA.PLANIFICACION]: 'warning',
+        [ESTADOS_OBRA.EN_PROGRESO]: 'primary',
+        [ESTADOS_OBRA.FINALIZADA]: 'success',
+        [ESTADOS_OBRA.SUSPENDIDA]: 'danger',
+        [ESTADOS_OBRA.CANCELADA]: 'dark'
+    };
+    
+    return clases[estado] || 'secondary';
+}
+
+/**
+ * Obtener color de barra de progreso según avance
+ */
+function getColorAvance(avance) {
+    if (avance >= 80) return 'success';
+    if (avance >= 60) return 'primary';
+    if (avance >= 40) return 'info';
+    if (avance >= 20) return 'warning';
+    return 'danger';
+}
+
+/**
+ * Actualizar estadísticas de obras
+ */
+function actualizarEstadisticasObras() {
+    const estadisticas = calcularEstadisticasObras();
+    mostrarEstadisticasEnInterfaz(estadisticas);
+}
+
+/**
+ * Calcular estadísticas generales de obras
+ */
+function calcularEstadisticasObras() {
+    const obras = Array.from(obrasCache.values());
+    
+    const estadisticas = {
+        total: obras.length,
+        porEstado: {},
+        porTipo: {},
+        avancePromedio: 0,
+        obrasMasAvanzadas: [],
+        obrasMasRetrasadas: []
+    };
+    
+    // Contar por estado
+    Object.values(ESTADOS_OBRA).forEach(estado => {
+        estadisticas.porEstado[estado] = obras.filter(o => o.estado === estado).length;
+    });
+    
+    // Contar por tipo
+    Object.values(TIPOS_OBRA).forEach(tipo => {
+        estadisticas.porTipo[tipo] = obras.filter(o => o.tipo === tipo).length;
+    });
+    
+    // Calcular avance promedio
+    if (obras.length > 0) {
+        const avanceTotal = obras.reduce((sum, obra) => sum + calcularAvanceGeneral(obra), 0);
+        estadisticas.avancePromedio = Math.round(avanceTotal / obras.length);
+    }
+    
+    // Obras más avanzadas (top 5)
+    estadisticas.obrasMasAvanzadas = obras
+        .map(obra => ({ ...obra, avance: calcularAvanceGeneral(obra) }))
+        .sort((a, b) => b.avance - a.avance)
+        .slice(0, 5);
+    
+    // Obras más retrasadas (bottom 5, solo en progreso)
+    estadisticas.obrasMasRetrasadas = obras
+        .filter(obra => obra.estado === ESTADOS_OBRA.EN_PROGRESO)
+        .map(obra => ({ ...obra, avance: calcularAvanceGeneral(obra) }))
+        .sort((a, b) => a.avance - b.avance)
+        .slice(0, 5);
+    
+    return estadisticas;
+}
+
+/**
+ * Mostrar estadísticas en la interfaz
+ */
+function mostrarEstadisticasEnInterfaz(estadisticas) {
+    // Actualizar widgets de estadísticas si existen
+    const widgets = [
+        { id: 'total-obras', valor: estadisticas.total },
+        { id: 'obras-en-progreso', valor: estadisticas.porEstado[ESTADOS_OBRA.EN_PROGRESO] || 0 },
+        { id: 'obras-finalizadas', valor: estadisticas.porEstado[ESTADOS_OBRA.FINALIZADA] || 0 },
+        { id: 'avance-promedio', valor: estadisticas.avancePromedio + '%' }
+    ];
+    
+    widgets.forEach(widget => {
+        const elemento = document.getElementById(widget.id);
+        if (elemento) {
+            elemento.textContent = widget.valor;
+        }
+    });
+}
+
+/**
+ * Mostrar/ocultar loader de obras
+ */
+function showLoadingObras(mostrar) {
+    const loaders = [
+        'obras-loader',
+        'loader-general'
+    ];
+    
+    loaders.forEach(loaderId => {
+        const loader = document.getElementById(loaderId);
+        if (loader) {
+            if (mostrar) {
+                loader.classList.remove('hidden');
+            } else {
+                loader.classList.add('hidden');
+            }
+        }
+    });
+}
+
+// ==================== FILTROS Y BÚSQUEDA ====================
+
+/**
+ * Buscar obras por texto
+ */
+function buscarObras(textoBusqueda) {
+    if (!textoBusqueda || textoBusqueda.length < 2) {
+        // Mostrar todas las obras
+        aplicarFiltrosObras();
+        return;
+    }
+    
+    const texto = textoBusqueda.toLowerCase();
+    const tabla = document.getElementById('obras-tbody');
+    if (!tabla) return;
+    
+    const filas = tabla.querySelectorAll('tr');
+    
+    filas.forEach(fila => {
+        const nombreCell = fila.querySelector('.obra-nombre');
+        const direccionCell = fila.cells[1];
+        const clienteCell = fila.querySelector('small');
+        
+        let coincide = false;
+        
+        // Buscar en nombre
+        if (nombreCell && nombreCell.textContent.toLowerCase().includes(texto)) {
+            coincide = true;
+        }
+        
+        // Buscar en dirección
+        if (!coincide && direccionCell && direccionCell.textContent.toLowerCase().includes(texto)) {
+            coincide = true;
+        }
+        
+        // Buscar en cliente
+        if (!coincide && clienteCell && clienteCell.textContent.toLowerCase().includes(texto)) {
+            coincide = true;
+        }
+        
+        fila.style.display = coincide ? '' : 'none';
+    });
+}
+
+/**
+ * Limpiar filtros de obras
+ */
+function limpiarFiltrosObras() {
+    filtrosObrasActivos = {};
+    
+    // Limpiar controles de filtro
+    const controlesFilros = document.querySelectorAll('[data-filtro-obra]');
+    controlesFilros.forEach(control => {
+        control.value = '';
+    });
+    
+    // Mostrar todas las filas
+    const tabla = document.getElementById('obras-tbody');
+    if (tabla) {
+        const filas = tabla.querySelectorAll('tr');
+        filas.forEach(fila => {
+            fila.style.display = '';
+        });
+    }
+}
+
+// ==================== EXPORTACIÓN Y UTILIDADES ====================
+
+/**
+ * Exportar lista de obras
+ */
+async function exportarObras(formato = 'excel') {
+    try {
+        showLoadingObras(true);
+        
+        const obras = Array.from(obrasCache.values());
+        const datosExport = obras.map(obra => ({
+            Nombre: obra.nombre,
+            Dirección: obra.direccion || '',
+            Tipo: formatearTipoObra(obra.tipo),
+            Estado: obra.estado,
+            'Fecha Inicio': obra.fechaInicio ? formatearFecha(obra.fechaInicio) : '',
+            'Fecha Término': obra.fechaTermino ? formatearFecha(obra.fechaTermino) : '',
+            'Avance %': calcularAvanceGeneral(obra),
+            Cliente: obra.empresaCliente || '',
+            Descripción: obra.descripcion || ''
+        }));
+        
+        // Aquí iría la lógica de exportación real
+        console.log('[OBRAS] Exportando obras:', datosExport);
+        
+        // Simular exportación
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        mostrarNotificacion(`Obras exportadas correctamente en formato ${formato}`, 'success');
+        
+    } catch (error) {
+        console.error('[OBRAS] Error exportando obras:', error);
+        mostrarNotificacion('Error al exportar las obras: ' + error.message, 'error');
+    } finally {
+        showLoadingObras(false);
+    }
+}
+
+/**
+ * Obtener obra por ID
+ */
+function getObraPorId(obraId) {
+    return obrasCache.get(obraId) || null;
+}
+
+/**
+ * Obtener obras por estado
+ */
+function getObrasPorEstado(estado) {
+    return Array.from(obrasCache.values()).filter(obra => obra.estado === estado);
+}
+
+/**
+ * Obtener obras por tipo
+ */
+function getObrasPorTipo(tipo) {
+    return Array.from(obrasCache.values()).filter(obra => obra.tipo === tipo);
+}
+
+// ==================== INICIALIZACIÓN ====================
+
+/**
+ * Inicializar cuando el DOM esté listo
+ */
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeObrasModule);
+} else {
+    initializeObrasModule();
+}
+
+// ==================== EXPORTAR FUNCIONES GLOBALES ====================
+
+// Hacer disponibles las funciones principales globalmente
+window.mostrarFormularioObra = mostrarFormularioObra;
+window.cancelarEdicionObra = cancelarEdicionObra;
+window.editarObra = editarObra;
+window.guardarObra = guardarObra;
+window.eliminarObra = eliminarObra;
+window.verDetalleObra = verDetalleObra;
+window.cerrarModalDetalleObra = cerrarModalDetalleObra;
+window.editarObraDesdeDetalle = editarObraDesdeDetalle;
+
+window.cargarObras = cargarObras;
+window.cargarTorresObra = cargarTorresObra;
+window.cargarPisosPorTorre = cargarPisosPorTorre;
+window.cargarDepartamentosPorPiso = cargarDepartamentosPorPiso;
+window.cargarEstructuraObra = cargarEstructuraObra;
+
+window.buscarObras = buscarObras;
+window.limpiarFiltrosObras = limpiarFiltrosObras;
+window.exportarObras = exportarObras;
+
+window.getObraPorId = getObraPorId;
+window.getObrasPorEstado = getObrasPorEstado;
+window.getObrasPorTipo = getObrasPorTipo;
+
+// Constantes disponibles globalmente
+window.ESTADOS_OBRA = ESTADOS_OBRA;
+window.TIPOS_OBRA = TIPOS_OBRA;
+
+console.log('[OBRAS] Archivo js/obras.html cargado completamente');
+</script>

@@ -1,0 +1,2265 @@
+<script>
+// ============================================================================
+// BDPA - js/reportes.html - PARTE 1: Funciones principales de reportes
+// ============================================================================
+// Variables globales para reportes
+let datosReporteAvances = null;
+let datosReporteInventario = null;
+let datosReporteEDT = null;
+let configReportes = {
+    formatoExportacion: 'excel',
+    incluirGraficos: true,
+    incluirDetalles: true
+};
+
+// Función para mostrar tabs de reportes
+function mostrarTabReporte(tab) {
+    // Ocultar todos los tabs
+    document.querySelectorAll('#reportes .tab-content').forEach(content => {
+        content.classList.add('hidden');
+    });
+    
+    // Desactivar todos los tabs
+    document.querySelectorAll('#reportes .nav-link').forEach(link => {
+        link.classList.remove('active');
+    });
+    
+    // Mostrar el tab seleccionado
+    document.getElementById('reporte-' + tab).classList.remove('hidden');
+    
+    // Activar el tab seleccionado
+    document.querySelector(`#reportes .nav-link[onclick="mostrarTabReporte('${tab}')"]`).classList.add('active');
+    
+    // Cargar datos según el tab
+    switch (tab) {
+        case 'avances':
+            inicializarReporteAvances();
+            break;
+        case 'inventario':
+            inicializarReporteInventario();
+            break;
+        case 'edt':
+            inicializarReporteEDT();
+            break;
+        case 'usuarios':
+            inicializarReporteUsuarios();
+            break;
+        case 'obras':
+            inicializarReporteObras();
+            break;
+    }
+}
+
+// ============================================================================
+// REPORTES DE AVANCES
+// ============================================================================
+
+// Función para inicializar reporte de avances
+function inicializarReporteAvances() {
+    // Cargar obras en selector si no están cargadas
+    if (!obrasData || obrasData.length === 0) {
+        cargarObras();
+    }
+    
+    // Establecer fechas por defecto
+    const hoy = new Date();
+    const hace30Dias = new Date();
+    hace30Dias.setDate(hoy.getDate() - 30);
+    
+    if (!document.getElementById('reporte-fecha-desde').value) {
+        document.getElementById('reporte-fecha-desde').value = hace30Dias.toISOString().split('T')[0];
+    }
+    if (!document.getElementById('reporte-fecha-hasta').value) {
+        document.getElementById('reporte-fecha-hasta').value = hoy.toISOString().split('T')[0];
+    }
+}
+
+// Función para generar reporte de avances
+async function generarReporteAvances() {
+    const obraId = document.getElementById('reporte-obra').value;
+    const categoria = document.getElementById('reporte-categoria').value;
+    const fechaDesde = document.getElementById('reporte-fecha-desde').value;
+    const fechaHasta = document.getElementById('reporte-fecha-hasta').value;
+    
+    const filtros = {};
+    if (obraId) filtros.obraId = obraId;
+    if (categoria) filtros.categoria = categoria;
+    if (fechaDesde) filtros.fechaDesde = fechaDesde;
+    if (fechaHasta) filtros.fechaHasta = fechaHasta;
+    
+    try {
+        // Mostrar loader
+        document.getElementById('reporte-avances-result').innerHTML = '<div class="loader"></div>';
+        
+        const response = await callAPI('generarReporteAvances', { filtros });
+        
+        if (response.error) {
+            mostrarNotificacion("Error al generar el reporte de avances", "error");
+            document.getElementById('reporte-avances-result').innerHTML = '<p class="text-danger">Error al generar el reporte.</p>';
+            return;
+        }
+        
+        datosReporteAvances = response.datos;
+        
+        // Construir visualización del reporte
+        mostrarVisualizacionReporteAvances(datosReporteAvances, filtros);
+        
+    } catch (error) {
+        document.getElementById('reporte-avances-result').innerHTML = '<p class="text-danger">Error al generar el reporte.</p>';
+        mostrarNotificacion("Error al generar el reporte de avances", "error");
+    }
+}
+
+// Función para mostrar visualización del reporte de avances
+function mostrarVisualizacionReporteAvances(reporte, filtros) {
+    let html = '';
+    
+    // Título del reporte
+    const obraNombre = filtros.obraId ? obrasData.find(o => o.id === filtros.obraId)?.nombre || 'Obra seleccionada' : 'Todas las obras';
+    html += `<h3>Reporte de Avances - ${obraNombre}</h3>`;
+    
+    const fechaDesdeTexto = filtros.fechaDesde ? new Date(filtros.fechaDesde).toLocaleDateString() : 'Desde el inicio';
+    const fechaHastaTexto = filtros.fechaHasta ? new Date(filtros.fechaHasta).toLocaleDateString() : 'Hasta hoy';
+    html += `<p><strong>Período:</strong> ${fechaDesdeTexto} - ${fechaHastaTexto}</p>`;
+    
+    if (filtros.categoria) {
+        html += `<p><strong>Categoría:</strong> ${filtros.categoria}</p>`;
+    }
+    
+    // Resumen ejecutivo
+    html += `
+        <div class="mt-20">
+            <h4>Resumen Ejecutivo</h4>
+            <div class="stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
+                <div class="stat-card" style="padding: 15px; background: #f8f9fa; border-radius: 8px; text-align: center;">
+                    <h5>Total de Avances</h5>
+                    <p style="font-size: 24px; font-weight: bold; color: var(--primary-color);">${reporte.totalAvances}</p>
+                </div>
+                <div class="stat-card" style="padding: 15px; background: #f8f9fa; border-radius: 8px; text-align: center;">
+                    <h5>Avance Promedio</h5>
+                    <p style="font-size: 24px; font-weight: bold; color: var(--secondary-color);">${reporte.avancePromedio}%</p>
+                </div>
+                <div class="stat-card" style="padding: 15px; background: #f8f9fa; border-radius: 8px; text-align: center;">
+                    <h5>Obras Activas</h5>
+                    <p style="font-size: 24px; font-weight: bold; color: var(--info-color);">${reporte.obrasActivas}</p>
+                </div>
+                <div class="stat-card" style="padding: 15px; background: #f8f9fa; border-radius: 8px; text-align: center;">
+                    <h5>Productividad</h5>
+                    <p style="font-size: 24px; font-weight: bold; color: var(--warning-color);">${reporte.productividad}/día</p>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Gráfico de avance por categoría
+    if (reporte.avancePorCategoria && Object.keys(reporte.avancePorCategoria).length > 0) {
+        html += `
+            <div class="mt-20">
+                <h4>Avance por Categoría</h4>
+                <div class="categoria-charts" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
+        `;
+        
+        const categorias = ['alam', 'inal', 'fo', 'mediciones', 'otros'];
+        const colores = ['#3498db', '#e74c3c', '#f39c12', '#2ecc71', '#9b59b6'];
+        
+        categorias.forEach((categoria, index) => {
+            const avance = reporte.avancePorCategoria[categoria] || 0;
+            const color = colores[index];
+            
+            html += `
+                <div class="categoria-chart" style="text-align: center; padding: 15px; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                    <h5>${categoria.toUpperCase()}</h5>
+                    <div class="circular-progress" style="position: relative; width: 120px; height: 120px; margin: 0 auto; border-radius: 50%; background: conic-gradient(${color} ${avance * 3.6}deg, #eee 0deg);">
+                        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 18px; font-weight: bold;">${avance}%</div>
+                    </div>
+                    <p style="margin-top: 10px; color: #666;">${reporte.detallesPorCategoria?.[categoria]?.cantidad || 0} items</p>
+                </div>
+            `;
+        });
+        
+        html += `
+                </div>
+            </div>
+        `;
+    }
+    
+    // Timeline de avances recientes
+    if (reporte.timelineAvances && reporte.timelineAvances.length > 0) {
+        html += `
+            <div class="mt-20">
+                <h4>Timeline de Avances Recientes</h4>
+                <div class="timeline-container" style="max-height: 400px; overflow-y: auto;">
+        `;
+        
+        reporte.timelineAvances.forEach(avance => {
+            const fecha = new Date(avance.fecha);
+            const horaLocal = fecha.toLocaleString();
+            
+            html += `
+                <div class="timeline-item" style="display: flex; padding: 10px; border-left: 3px solid var(--primary-color); margin-bottom: 10px; background: #f8f9fa;">
+                    <div class="timeline-date" style="min-width: 150px; font-weight: bold; color: var(--primary-color);">
+                        ${horaLocal}
+                    </div>
+                    <div class="timeline-content">
+                        <strong>${avance.obraNombre}</strong> - ${avance.ubicacion}<br>
+                        <span class="badge badge-secondary">${avance.categoria}</span>
+                        ${avance.avances}<br>
+                        <small>Por: ${avance.usuario}</small>
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += `
+                </div>
+            </div>
+        `;
+    }
+    
+    // Top performers
+    if (reporte.topPerformers && reporte.topPerformers.length > 0) {
+        html += `
+            <div class="mt-20">
+                <h4>Top Performers del Período</h4>
+                <div class="performers-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
+        `;
+        
+        reporte.topPerformers.forEach((performer, index) => {
+            const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '👤';
+            
+            html += `
+                <div class="performer-card" style="padding: 15px; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center;">
+                    <div style="font-size: 24px; margin-bottom: 10px;">${medal}</div>
+                    <h5>${performer.nombre}</h5>
+                    <p><strong>${performer.avancesRegistrados}</strong> avances</p>
+                    <p><strong>${performer.obrasActivas}</strong> obras activas</p>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar bg-success" style="width: ${performer.eficiencia}%;">${performer.eficiencia}% eficiencia</div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += `
+                </div>
+            </div>
+        `;
+    }
+    
+    // Tabla detallada de avances
+    if (reporte.detalleAvances && reporte.detalleAvances.length > 0) {
+        html += `
+            <div class="mt-20">
+                <h4>Detalle de Avances (Últimos 50)</h4>
+                <div class="table-container">
+                    <table class="resumen-table">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Obra</th>
+                                <th>Ubicación</th>
+                                <th>Categoría</th>
+                                <th>Avances</th>
+                                <th>Usuario</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+        `;
+        
+        reporte.detalleAvances.slice(0, 50).forEach(avance => {
+            let badgeClass = 'primary';
+            if (avance.categoria === 'alam') badgeClass = 'primary';
+            else if (avance.categoria === 'inal') badgeClass = 'danger';
+            else if (avance.categoria === 'fo') badgeClass = 'warning';
+            else if (avance.categoria === 'mediciones') badgeClass = 'success';
+            else badgeClass = 'secondary';
+            
+            html += `
+                <tr>
+                    <td>${new Date(avance.fecha).toLocaleString()}</td>
+                    <td>${avance.obraNombre}</td>
+                    <td>${avance.ubicacion}</td>
+                    <td><span class="badge badge-${badgeClass}">${avance.categoria}</span></td>
+                    <td>${avance.avances}</td>
+                    <td>${avance.usuario}</td>
+                </tr>
+            `;
+        });
+        
+        html += `
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Mostrar el reporte generado
+    document.getElementById('reporte-avances-result').innerHTML = html;
+    
+    // Mostrar notificación de éxito
+    mostrarNotificacion('Reporte de avances generado correctamente', 'success');
+}
+// ============================================================================
+// BDPA - js/reportes.html - PARTE 2: Exportación y reportes de inventario
+// ============================================================================
+
+// Función para exportar reporte de avances
+async function exportarReporteAvances() {
+    if (!datosReporteAvances) {
+        mostrarNotificacion("Primero debe generar el reporte de avances", "warning");
+        return;
+    }
+    
+    const obraId = document.getElementById('reporte-obra').value;
+    const categoria = document.getElementById('reporte-categoria').value;
+    const fechaDesde = document.getElementById('reporte-fecha-desde').value;
+    const fechaHasta = document.getElementById('reporte-fecha-hasta').value;
+    const formato = document.getElementById('formato-exportacion-avances')?.value || 'excel';
+    
+    const filtros = {};
+    if (obraId) filtros.obraId = obraId;
+    if (categoria) filtros.categoria = categoria;
+    if (fechaDesde) filtros.fechaDesde = fechaDesde;
+    if (fechaHasta) filtros.fechaHasta = fechaHasta;
+    
+    try {
+        // Mostrar notificación
+        mostrarNotificacion("Preparando exportación del reporte...", "info");
+        
+        const response = await callAPI('exportarReporteAvances', { 
+            filtros, 
+            formato,
+            incluirGraficos: configReportes.incluirGraficos,
+            incluirDetalles: configReportes.incluirDetalles
+        });
+        
+        if (response.error) {
+            mostrarNotificacion("Error al exportar el reporte", "error");
+            return;
+        }
+        
+        // Iniciar descarga
+        if (response.urlArchivo) {
+            const nombreArchivo = `reporte_avances_${new Date().toISOString().split('T')[0]}.${formato === 'pdf' ? 'pdf' : 'xlsx'}`;
+            const link = document.createElement('a');
+            link.href = response.urlArchivo;
+            link.download = nombreArchivo;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            mostrarNotificacion("Reporte exportado correctamente", "success");
+        } else {
+            mostrarNotificacion("No se pudo generar el archivo de exportación", "error");
+        }
+    } catch (error) {
+        mostrarNotificacion("Error al exportar el reporte", "error");
+    }
+}
+
+// Función para enviar reporte de avances por correo
+async function enviarReporteAvancesPorCorreo() {
+    if (!datosReporteAvances) {
+        mostrarNotificacion("Primero debe generar el reporte de avances", "warning");
+        return;
+    }
+    
+    const obraId = document.getElementById('reporte-obra').value;
+    const categoria = document.getElementById('reporte-categoria').value;
+    const fechaDesde = document.getElementById('reporte-fecha-desde').value;
+    const fechaHasta = document.getElementById('reporte-fecha-hasta').value;
+    
+    // Solicitar dirección de correo para envío
+    const email = prompt("Ingrese la dirección de correo electrónico para enviar el reporte:");
+    
+    if (!email) return;
+    
+    // Validar formato de correo básico
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+        mostrarNotificacion("Por favor ingrese una dirección de correo válida", "error");
+        return;
+    }
+    
+    const filtros = {};
+    if (obraId) filtros.obraId = obraId;
+    if (categoria) filtros.categoria = categoria;
+    if (fechaDesde) filtros.fechaDesde = fechaDesde;
+    if (fechaHasta) filtros.fechaHasta = fechaHasta;
+    
+    try {
+        // Mostrar notificación
+        mostrarNotificacion("Enviando reporte por correo...", "info");
+        
+        const response = await callAPI('enviarReporteAvancesPorCorreo', {
+            filtros,
+            email,
+            incluirGraficos: configReportes.incluirGraficos
+        });
+        
+        if (response.error) {
+            mostrarNotificacion(response.message || "Error al enviar el reporte por correo", "error");
+            return;
+        }
+        
+        mostrarNotificacion("Reporte enviado correctamente a " + email, "success");
+    } catch (error) {
+        mostrarNotificacion("Error al enviar el reporte por correo", "error");
+    }
+}
+
+// ============================================================================
+// REPORTES DE INVENTARIO
+// ============================================================================
+
+// Función para inicializar reporte de inventario
+function inicializarReporteInventario() {
+    // Cargar obras y categorías en selectores si no están cargadas
+    if (!obrasData || obrasData.length === 0) {
+        cargarObras();
+    }
+    if (!categoriasData || categoriasData.length === 0) {
+        cargarCategorias();
+    }
+}
+
+// Función para generar reporte de inventario
+async function generarReporteInventario() {
+    const categoriaId = document.getElementById('reporte-inv-categoria').value;
+    const obraId = document.getElementById('reporte-inv-obra').value;
+    const soloStockBajo = document.getElementById('reporte-stock-bajo').checked;
+    const incluirMovimientos = document.getElementById('incluir-movimientos-inv').checked;
+    
+    const filtros = {};
+    if (categoriaId) filtros.categoriaId = categoriaId;
+    if (obraId) filtros.obraId = obraId;
+    if (soloStockBajo) filtros.stockBajo = true;
+    if (incluirMovimientos) filtros.incluirMovimientos = true;
+    
+    try {
+        // Mostrar loader
+        document.getElementById('reporte-inventario-result').innerHTML = '<div class="loader"></div>';
+        
+        const response = await callAPI('generarReporteInventario', { filtros });
+        
+        if (response.error) {
+            mostrarNotificacion("Error al generar el reporte de inventario", "error");
+            document.getElementById('reporte-inventario-result').innerHTML = '<p class="text-danger">Error al generar el reporte.</p>';
+            return;
+        }
+        
+        datosReporteInventario = response.datos;
+        
+        // Construir visualización del reporte
+        mostrarVisualizacionReporteInventario(datosReporteInventario, filtros);
+        
+    } catch (error) {
+        document.getElementById('reporte-inventario-result').innerHTML = '<p class="text-danger">Error al generar el reporte.</p>';
+        mostrarNotificacion("Error al generar el reporte de inventario", "error");
+    }
+}
+
+// Función para mostrar visualización del reporte de inventario
+function mostrarVisualizacionReporteInventario(reporte, filtros) {
+    let html = '';
+    
+    // Título del reporte
+    const obraNombre = filtros.obraId ? obrasData.find(o => o.id === filtros.obraId)?.nombre || 'Obra seleccionada' : 'Todas las obras';
+    const categoriaNombre = filtros.categoriaId ? categoriasData.find(c => c.id === filtros.categoriaId)?.nombre || 'Categoría seleccionada' : 'Todas las categorías';
+    
+    html += `<h3>Reporte de Inventario - ${obraNombre}</h3>`;
+    html += `<p><strong>Categoría:</strong> ${categoriaNombre}</p>`;
+    if (filtros.stockBajo) {
+        html += `<p><span class="badge badge-warning">Solo items con stock bajo</span></p>`;
+    }
+    
+    // Resumen ejecutivo
+    html += `
+        <div class="mt-20">
+            <h4>Resumen Ejecutivo</h4>
+            <div class="stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
+                <div class="stat-card" style="padding: 15px; background: #f8f9fa; border-radius: 8px; text-align: center;">
+                    <h5>Total de Items</h5>
+                    <p style="font-size: 24px; font-weight: bold; color: var(--primary-color);">${reporte.totalItems}</p>
+                </div>
+                <div class="stat-card" style="padding: 15px; background: #f8f9fa; border-radius: 8px; text-align: center;">
+                    <h5>Items con Stock Bajo</h5>
+                    <p style="font-size: 24px; font-weight: bold; color: var(--warning-color);">${reporte.itemsStockBajo}</p>
+                </div>
+                <div class="stat-card" style="padding: 15px; background: #f8f9fa; border-radius: 8px; text-align: center;">
+                    <h5>Items Sin Stock</h5>
+                    <p style="font-size: 24px; font-weight: bold; color: var(--danger-color);">${reporte.itemsSinStock}</p>
+                </div>
+                <div class="stat-card" style="padding: 15px; background: #f8f9fa; border-radius: 8px; text-align: center;">
+                    <h5>Valor Total</h5>
+                    <p style="font-size: 24px; font-weight: bold; color: var(--secondary-color);">$${reporte.valorTotal.toLocaleString()}</p>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Distribución por categoría
+    if (reporte.porCategoria && Object.keys(reporte.porCategoria).length > 0) {
+        html += `
+            <div class="mt-20">
+                <h4>Distribución por Categoría</h4>
+                <div class="categoria-inventory-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
+        `;
+        
+        Object.keys(reporte.porCategoria).forEach(categoria => {
+            const datos = reporte.porCategoria[categoria];
+            const porcentaje = reporte.totalItems > 0 ? Math.round((datos.cantidad / reporte.totalItems) * 100) : 0;
+            
+            html += `
+                <div class="categoria-inventory-card" style="padding: 15px; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                    <h5>${categoria}</h5>
+                    <p><strong>Cantidad:</strong> ${datos.cantidad} items (${porcentaje}%)</p>
+                    <p><strong>Valor:</strong> $${datos.valor.toLocaleString()}</p>
+                    <p><strong>Stock Bajo:</strong> ${datos.stockBajo} items</p>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar bg-primary" style="width: ${porcentaje}%;"></div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += `
+                </div>
+            </div>
+        `;
+    }
+    
+    // Items críticos (sin stock o stock bajo)
+    if (reporte.itemsCriticos && reporte.itemsCriticos.length > 0) {
+        html += `
+            <div class="mt-20">
+                <h4>Items Críticos (Requieren Atención)</h4>
+                <div class="table-container">
+                    <table class="resumen-table">
+                        <thead>
+                            <tr>
+                                <th>Código</th>
+                                <th>Nombre</th>
+                                <th>Categoría</th>
+                                <th>Stock Actual</th>
+                                <th>Stock Mínimo</th>
+                                <th>Estado</th>
+                                <th>Ubicación</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+        `;
+        
+        reporte.itemsCriticos.forEach(item => {
+            const estadoStock = item.stock <= 0 ? 'Sin stock' : 'Stock bajo';
+            const badgeClass = item.stock <= 0 ? 'badge-danger' : 'badge-warning';
+            
+            html += `
+                <tr>
+                    <td>${item.codigo}</td>
+                    <td>${item.nombre}</td>
+                    <td>${item.categoria}</td>
+                    <td>${item.stock} ${item.unidad}</td>
+                    <td>${item.stockMinimo} ${item.unidad}</td>
+                    <td><span class="badge ${badgeClass}">${estadoStock}</span></td>
+                    <td>${item.ubicacion || '-'}</td>
+                </tr>
+            `;
+        });
+        
+        html += `
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Movimientos recientes (si se incluyen)
+    if (filtros.incluirMovimientos && reporte.movimientosRecientes && reporte.movimientosRecientes.length > 0) {
+        html += `
+            <div class="mt-20">
+                <h4>Movimientos Recientes (Últimos 30 días)</h4>
+                <div class="table-container">
+                    <table class="resumen-table">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Tipo</th>
+                                <th>Material</th>
+                                <th>Cantidad</th>
+                                <th>Origen/Destino</th>
+                                <th>Usuario</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+        `;
+        
+        reporte.movimientosRecientes.slice(0, 50).forEach(movimiento => {
+            let badgeClass = 'primary';
+            if (movimiento.tipo === 'entrada') badgeClass = 'success';
+            else if (movimiento.tipo === 'salida') badgeClass = 'warning';
+            else if (movimiento.tipo === 'transferencia') badgeClass = 'info';
+            
+            html += `
+                <tr>
+                    <td>${new Date(movimiento.fecha).toLocaleString()}</td>
+                    <td><span class="badge badge-${badgeClass}">${movimiento.tipo.toUpperCase()}</span></td>
+                    <td>${movimiento.materialNombre}</td>
+                    <td>${movimiento.cantidad} ${movimiento.unidad}</td>
+                    <td>${movimiento.origenDestino || '-'}</td>
+                    <td>${movimiento.usuario}</td>
+                </tr>
+            `;
+        });
+        
+        html += `
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Tabla detallada de inventario
+    if (reporte.items && reporte.items.length > 0) {
+        html += `
+            <div class="mt-20">
+                <h4>Detalle Completo de Inventario</h4>
+                <div class="table-container" style="max-height: 500px; overflow-y: auto;">
+                    <table class="resumen-table">
+                        <thead>
+                            <tr>
+                                <th>Código</th>
+                                <th>Nombre</th>
+                                <th>Categoría</th>
+                                <th>Stock</th>
+                                <th>Mínimo</th>
+                                <th>Estado</th>
+                                <th>Ubicación</th>
+                                <th>Valor Unit.</th>
+                                <th>Valor Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+        `;
+        
+        reporte.items.forEach(item => {
+            const estadoStock = item.stock <= 0 ? 'Sin stock' : 
+                              item.stock <= item.stockMinimo ? 'Stock bajo' : 'OK';
+            const badgeClass = item.stock <= 0 ? 'badge-danger' : 
+                              item.stock <= item.stockMinimo ? 'badge-warning' : 'badge-success';
+            
+            const valorTotal = (item.valorUnitario || 0) * item.stock;
+            
+            html += `
+                <tr>
+                    <td>${item.codigo}</td>
+                    <td>${item.nombre}</td>
+                    <td>${item.categoria}</td>
+                    <td>${item.stock} ${item.unidad}</td>
+                    <td>${item.stockMinimo} ${item.unidad}</td>
+                    <td><span class="badge ${badgeClass}">${estadoStock}</span></td>
+                    <td>${item.ubicacion || '-'}</td>
+                    <td>$${(item.valorUnitario || 0).toLocaleString()}</td>
+                    <td>$${valorTotal.toLocaleString()}</td>
+                </tr>
+            `;
+        });
+        
+        html += `
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Mostrar el reporte generado
+    document.getElementById('reporte-inventario-result').innerHTML = html;
+    
+    // Mostrar notificación de éxito
+    mostrarNotificacion('Reporte de inventario generado correctamente', 'success');
+}
+// ============================================================================
+// BDPA - js/reportes.html - PARTE 3: Exportación inventario, EDT y usuarios
+// ============================================================================
+
+// Función para exportar reporte de inventario
+async function exportarReporteInventario() {
+    if (!datosReporteInventario) {
+        mostrarNotificacion("Primero debe generar el reporte de inventario", "warning");
+        return;
+    }
+    
+    const categoriaId = document.getElementById('reporte-inv-categoria').value;
+    const obraId = document.getElementById('reporte-inv-obra').value;
+    const soloStockBajo = document.getElementById('reporte-stock-bajo').checked;
+    const formato = document.getElementById('formato-exportacion-inventario')?.value || 'excel';
+    
+    const filtros = {};
+    if (categoriaId) filtros.categoriaId = categoriaId;
+    if (obraId) filtros.obraId = obraId;
+    if (soloStockBajo) filtros.stockBajo = true;
+    
+    try {
+        // Mostrar notificación
+        mostrarNotificacion("Preparando exportación del reporte...", "info");
+        
+        const response = await callAPI('exportarReporteInventario', { 
+            filtros, 
+            formato,
+            incluirGraficos: configReportes.incluirGraficos
+        });
+        
+        if (response.error) {
+            mostrarNotificacion("Error al exportar el reporte", "error");
+            return;
+        }
+        
+        // Iniciar descarga
+        if (response.urlArchivo) {
+            const nombreArchivo = `reporte_inventario_${new Date().toISOString().split('T')[0]}.${formato === 'pdf' ? 'pdf' : 'xlsx'}`;
+            const link = document.createElement('a');
+            link.href = response.urlArchivo;
+            link.download = nombreArchivo;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            mostrarNotificacion("Reporte exportado correctamente", "success");
+        } else {
+            mostrarNotificacion("No se pudo generar el archivo de exportación", "error");
+        }
+    } catch (error) {
+        mostrarNotificacion("Error al exportar el reporte", "error");
+    }
+}
+
+// Función para enviar reporte de inventario por correo
+async function enviarReporteInventarioPorCorreo() {
+    if (!datosReporteInventario) {
+        mostrarNotificacion("Primero debe generar el reporte de inventario", "warning");
+        return;
+    }
+    
+    const email = prompt("Ingrese la dirección de correo electrónico para enviar el reporte:");
+    
+    if (!email) return;
+    
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+        mostrarNotificacion("Por favor ingrese una dirección de correo válida", "error");
+        return;
+    }
+    
+    const categoriaId = document.getElementById('reporte-inv-categoria').value;
+    const obraId = document.getElementById('reporte-inv-obra').value;
+    const soloStockBajo = document.getElementById('reporte-stock-bajo').checked;
+    
+    const filtros = {};
+    if (categoriaId) filtros.categoriaId = categoriaId;
+    if (obraId) filtros.obraId = obraId;
+    if (soloStockBajo) filtros.stockBajo = true;
+    
+    try {
+        mostrarNotificacion("Enviando reporte por correo...", "info");
+        
+        const response = await callAPI('enviarReporteInventarioPorCorreo', {
+            filtros,
+            email
+        });
+        
+        if (response.error) {
+            mostrarNotificacion(response.message || "Error al enviar el reporte por correo", "error");
+            return;
+        }
+        
+        mostrarNotificacion("Reporte enviado correctamente a " + email, "success");
+    } catch (error) {
+        mostrarNotificacion("Error al enviar el reporte por correo", "error");
+    }
+}
+
+// ============================================================================
+// REPORTES EDT (Estructura de Desglose de Trabajo)
+// ============================================================================
+
+// Función para inicializar reporte EDT
+function inicializarReporteEDT() {
+    if (!obrasData || obrasData.length === 0) {
+        cargarObras();
+    }
+}
+
+// Función para cargar EDT de la obra
+async function cargarEDTObra() {
+    const obraId = document.getElementById('edt-obra').value;
+    
+    if (!obraId) {
+        document.getElementById('edt-container').classList.add('hidden');
+        return;
+    }
+    
+    try {
+        // Mostrar loader
+        document.getElementById('edt-container').classList.add('hidden');
+        const loaderElement = document.createElement('div');
+        loaderElement.className = 'loader';
+        loaderElement.id = 'edt-loader';
+        document.getElementById('reporte-edt').appendChild(loaderElement);
+        
+        const response = await callAPI('obtenerEDTObra', { obraId });
+        
+        // Ocultar loader
+        document.getElementById('reporte-edt').removeChild(document.getElementById('edt-loader'));
+        
+        if (response.error) {
+            mostrarNotificacion("Error al cargar la EDT de la obra", "error");
+            return;
+        }
+        
+        datosReporteEDT = response.datos;
+        
+        // Actualizar nombre de la obra
+        const obra = obrasData.find(o => o.id === obraId);
+        document.getElementById('edt-obra-nombre').textContent = obra ? obra.nombre : obraId;
+        
+        // Mostrar contenedor EDT
+        document.getElementById('edt-container').classList.remove('hidden');
+        
+        // Cargar vista inicial
+        cambiarVistaEDT();
+        
+    } catch (error) {
+        if (document.getElementById('edt-loader')) {
+            document.getElementById('reporte-edt').removeChild(document.getElementById('edt-loader'));
+        }
+        mostrarNotificacion("Error al cargar la EDT de la obra", "error");
+    }
+}
+
+// Función para cambiar vista de EDT
+function cambiarVistaEDT() {
+    const vistaTipo = document.getElementById('edt-vista').value;
+    const container = document.getElementById('edt-tree');
+    container.innerHTML = '';
+    
+    if (!datosReporteEDT) return;
+    
+    switch (vistaTipo) {
+        case 'categorias':
+            generarEDTPorCategorias(container, datosReporteEDT);
+            break;
+        case 'torres':
+            generarEDTPorTorres(container, datosReporteEDT);
+            break;
+        case 'avance':
+            generarEDTPorAvance(container, datosReporteEDT);
+            break;
+        case 'completa':
+            generarEDTCompleta(container, datosReporteEDT);
+            break;
+    }
+}
+
+// Función para generar EDT por categorías
+function generarEDTPorCategorias(container, edtData) {
+    const categorias = {};
+    
+    edtData.items.forEach(item => {
+        if (!categorias[item.categoria]) {
+            categorias[item.categoria] = {
+                nombre: item.categoria,
+                items: [],
+                avanceTotal: 0,
+                itemsTotal: 0
+            };
+        }
+        
+        categorias[item.categoria].items.push(item);
+        categorias[item.categoria].itemsTotal++;
+        categorias[item.categoria].avanceTotal += item.avance;
+    });
+    
+    Object.keys(categorias).forEach(key => {
+        const cat = categorias[key];
+        cat.avancePromedio = cat.itemsTotal > 0 ? Math.round(cat.avanceTotal / cat.itemsTotal) : 0;
+    });
+    
+    Object.keys(categorias).sort().forEach(key => {
+        const categoria = categorias[key];
+        const nodo = document.createElement('div');
+        nodo.className = 'edt-node';
+        
+        const header = document.createElement('div');
+        header.className = 'edt-node-header';
+        header.innerHTML = `
+            <div>
+                <span class="edt-node-toggle">+</span>
+                <strong>${categoria.nombre}</strong> (${categoria.itemsTotal} items)
+            </div>
+            <div>
+                <span>Avance: ${categoria.avancePromedio}%</span>
+                <div class="progress-bar-container" style="width: 100px; display: inline-block; margin-left: 10px;">
+                    <div class="progress-bar bg-${
+                        categoria.avancePromedio >= 75 ? 'success' : 
+                        categoria.avancePromedio >= 50 ? 'primary' : 
+                        categoria.avancePromedio >= 25 ? 'warning' : 'danger'
+                    }" style="width: ${categoria.avancePromedio}%;"></div>
+                </div>
+            </div>
+        `;
+        
+        header.addEventListener('click', function() {
+            nodo.classList.toggle('expanded');
+            const toggle = this.querySelector('.edt-node-toggle');
+            toggle.textContent = nodo.classList.contains('expanded') ? '-' : '+';
+        });
+        
+        nodo.appendChild(header);
+        
+        const children = document.createElement('div');
+        children.className = 'edt-node-children';
+        
+        categoria.items.sort((a, b) => a.nombre.localeCompare(b.nombre)).forEach(item => {
+            const itemNode = document.createElement('div');
+            itemNode.className = 'edt-node';
+            
+            itemNode.innerHTML = `
+                <div class="edt-node-header">
+                    <div>
+                        <span>${item.codigo || 'N/A'}</span> - ${item.nombre}
+                    </div>
+                    <div>
+                        <span>Avance: ${item.avance}%</span>
+                        <div class="progress-bar-container" style="width: 100px; display: inline-block; margin-left: 10px;">
+                            <div class="progress-bar bg-${
+                                item.avance >= 75 ? 'success' : 
+                                item.avance >= 50 ? 'primary' : 
+                                item.avance >= 25 ? 'warning' : 'danger'
+                            }" style="width: ${item.avance}%;"></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            children.appendChild(itemNode);
+        });
+        
+        nodo.appendChild(children);
+        container.appendChild(nodo);
+    });
+}
+
+// Función para generar EDT por torres
+function generarEDTPorTorres(container, edtData) {
+    const torres = {};
+    
+    edtData.items.forEach(item => {
+        if (!item.torre) return;
+        
+        if (!torres[item.torre]) {
+            torres[item.torre] = {
+                nombre: item.torre,
+                items: [],
+                avanceTotal: 0,
+                itemsTotal: 0
+            };
+        }
+        
+        torres[item.torre].items.push(item);
+        torres[item.torre].itemsTotal++;
+        torres[item.torre].avanceTotal += item.avance;
+    });
+    
+    Object.keys(torres).forEach(key => {
+        const torre = torres[key];
+        torre.avancePromedio = torre.itemsTotal > 0 ? Math.round(torre.avanceTotal / torre.itemsTotal) : 0;
+    });
+    
+    Object.keys(torres).sort().forEach(key => {
+        const torre = torres[key];
+        const nodo = document.createElement('div');
+        nodo.className = 'edt-node';
+        
+        const header = document.createElement('div');
+        header.className = 'edt-node-header';
+        header.innerHTML = `
+            <div>
+                <span class="edt-node-toggle">+</span>
+                <strong>Torre: ${torre.nombre}</strong> (${torre.itemsTotal} items)
+            </div>
+            <div>
+                <span>Avance: ${torre.avancePromedio}%</span>
+                <div class="progress-bar-container" style="width: 100px; display: inline-block; margin-left: 10px;">
+                    <div class="progress-bar bg-${
+                        torre.avancePromedio >= 75 ? 'success' : 
+                        torre.avancePromedio >= 50 ? 'primary' : 
+                        torre.avancePromedio >= 25 ? 'warning' : 'danger'
+                    }" style="width: ${torre.avancePromedio}%;"></div>
+                </div>
+            </div>
+        `;
+        
+        header.addEventListener('click', function() {
+            nodo.classList.toggle('expanded');
+            const toggle = this.querySelector('.edt-node-toggle');
+            toggle.textContent = nodo.classList.contains('expanded') ? '-' : '+';
+        });
+        
+        nodo.appendChild(header);
+        
+        const children = document.createElement('div');
+        children.className = 'edt-node-children';
+        
+        torre.items.sort((a, b) => a.nombre.localeCompare(b.nombre)).forEach(item => {
+            const itemNode = document.createElement('div');
+            itemNode.className = 'edt-node';
+            
+            itemNode.innerHTML = `
+                <div class="edt-node-header">
+                    <div>
+                        <span>${item.codigo || 'N/A'}</span> - ${item.nombre}
+                    </div>
+                    <div>
+                        <span>Avance: ${item.avance}%</span>
+                        <div class="progress-bar-container" style="width: 100px; display: inline-block; margin-left: 10px;">
+                            <div class="progress-bar bg-${
+                                item.avance >= 75 ? 'success' : 
+                                item.avance >= 50 ? 'primary' : 
+                                item.avance >= 25 ? 'warning' : 'danger'
+                            }" style="width: ${item.avance}%;"></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            children.appendChild(itemNode);
+        });
+        
+        nodo.appendChild(children);
+        container.appendChild(nodo);
+    });
+}
+
+// Función para expandir todo EDT
+function expandirTodoEDT() {
+    const nodos = document.querySelectorAll('#edt-tree .edt-node');
+    nodos.forEach(nodo => {
+        nodo.classList.add('expanded');
+        const toggle = nodo.querySelector('.edt-node-toggle');
+        if (toggle) toggle.textContent = '-';
+    });
+}
+
+// Función para contraer todo EDT
+function contraerTodoEDT() {
+    const nodos = document.querySelectorAll('#edt-tree .edt-node');
+    nodos.forEach(nodo => {
+        nodo.classList.remove('expanded');
+        const toggle = nodo.querySelector('.edt-node-toggle');
+        if (toggle) toggle.textContent = '+';
+    });
+}
+
+// Función para exportar EDT
+async function exportarEDT() {
+    const obraId = document.getElementById('edt-obra').value;
+    const vistaTipo = document.getElementById('edt-vista').value;
+    
+    if (!obraId) {
+        mostrarNotificacion("Seleccione una obra para exportar su EDT", "error");
+        return;
+    }
+    
+    try {
+        mostrarNotificacion("Preparando exportación de EDT...", "info");
+        
+        const response = await callAPI('exportarEDTObra', { 
+            obraId,
+            vistaTipo 
+        });
+        
+        if (response.error) {
+            mostrarNotificacion("Error al exportar la EDT", "error");
+            return;
+        }
+        
+        if (response.urlArchivo) {
+            const link = document.createElement('a');
+            link.href = response.urlArchivo;
+            link.download = `EDT_${vistaTipo}_${new Date().toISOString().split('T')[0]}.xlsx`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            mostrarNotificacion("EDT exportada correctamente", "success");
+        } else {
+            mostrarNotificacion("No se pudo generar el archivo de exportación", "error");
+        }
+    } catch (error) {
+        mostrarNotificacion("Error al exportar la EDT", "error");
+    }
+}
+
+// ============================================================================
+// REPORTES DE USUARIOS
+// ============================================================================
+
+// Función para inicializar reporte de usuarios
+function inicializarReporteUsuarios() {
+    // Establecer fechas por defecto para actividad
+    const hoy = new Date();
+    const hace30Dias = new Date();
+    hace30Dias.setDate(hoy.getDate() - 30);
+    
+    if (!document.getElementById('reporte-usuarios-fecha-desde').value) {
+        document.getElementById('reporte-usuarios-fecha-desde').value = hace30Dias.toISOString().split('T')[0];
+    }
+    if (!document.getElementById('reporte-usuarios-fecha-hasta').value) {
+        document.getElementById('reporte-usuarios-fecha-hasta').value = hoy.toISOString().split('T')[0];
+    }
+}
+
+// Función para generar reporte de usuarios
+async function generarReporteUsuarios() {
+    const rolFiltro = document.getElementById('reporte-usuarios-rol').value;
+    const estadoFiltro = document.getElementById('reporte-usuarios-estado').value;
+    const fechaDesde = document.getElementById('reporte-usuarios-fecha-desde').value;
+    const fechaHasta = document.getElementById('reporte-usuarios-fecha-hasta').value;
+    const incluirActividad = document.getElementById('incluir-actividad-usuarios').checked;
+    
+    const filtros = {};
+    if (rolFiltro) filtros.rol = rolFiltro;
+    if (estadoFiltro) filtros.estado = estadoFiltro;
+    if (fechaDesde) filtros.fechaDesde = fechaDesde;
+    if (fechaHasta) filtros.fechaHasta = fechaHasta;
+    if (incluirActividad) filtros.incluirActividad = true;
+    
+    try {
+        document.getElementById('reporte-usuarios-result').innerHTML = '<div class="loader"></div>';
+        
+        const response = await callAPI('generarReporteUsuarios', { filtros });
+        
+        if (response.error) {
+            mostrarNotificacion("Error al generar el reporte de usuarios", "error");
+            document.getElementById('reporte-usuarios-result').innerHTML = '<p class="text-danger">Error al generar el reporte.</p>';
+            return;
+        }
+        
+        const reporte = response.datos;
+        mostrarVisualizacionReporteUsuarios(reporte, filtros);
+        
+    } catch (error) {
+        document.getElementById('reporte-usuarios-result').innerHTML = '<p class="text-danger">Error al generar el reporte.</p>';
+        mostrarNotificacion("Error al generar el reporte de usuarios", "error");
+    }
+}
+
+// Función para mostrar visualización del reporte de usuarios
+function mostrarVisualizacionReporteUsuarios(reporte, filtros) {
+    let html = `<h3>Reporte de Usuarios</h3>`;
+    
+    const fechaDesdeTexto = filtros.fechaDesde ? new Date(filtros.fechaDesde).toLocaleDateString() : 'Desde el inicio';
+    const fechaHastaTexto = filtros.fechaHasta ? new Date(filtros.fechaHasta).toLocaleDateString() : 'Hasta hoy';
+    html += `<p><strong>Período de actividad:</strong> ${fechaDesdeTexto} - ${fechaHastaTexto}</p>`;
+    
+    // Resumen por roles
+    html += `
+        <div class="mt-20">
+            <h4>Distribución por Roles</h4>
+            <div class="roles-distribution" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
+    `;
+    
+    ['Admin', 'Supervisor', 'Técnico', 'Ayudante'].forEach(rol => {
+        const cantidad = reporte.porRol[rol] || 0;
+        const porcentaje = reporte.totalUsuarios > 0 ? Math.round((cantidad / reporte.totalUsuarios) * 100) : 0;
+        const color = rol === 'Admin' ? '#e74c3c' : rol === 'Supervisor' ? '#f39c12' : rol === 'Técnico' ? '#2ecc71' : '#3498db';
+        
+        html += `
+            <div class="role-card" style="padding: 15px; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center;">
+                <h5>${rol}</h5>
+                <p style="font-size: 24px; font-weight: bold; color: ${color};">${cantidad}</p>
+                <p>${porcentaje}% del total</p>
+                <div class="progress-bar-container">
+                    <div class="progress-bar" style="width: ${porcentaje}%; background-color: ${color};"></div>
+                </div>
+            </div>
+        `;
+    });
+    
+    html += `</div></div>`;
+    
+    // Top usuarios más activos
+    if (reporte.usuariosMasActivos && reporte.usuariosMasActivos.length > 0) {
+        html += `
+            <div class="mt-20">
+                <h4>Usuarios Más Activos</h4>
+                <div class="table-container">
+                    <table class="resumen-table">
+                        <thead>
+                            <tr>
+                                <th>Usuario</th>
+                                <th>Rol</th>
+                                <th>Avances Registrados</th>
+                                <th>Últimos Accesos</th>
+                                <th>Actividad</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+        `;
+        
+        reporte.usuariosMasActivos.forEach(usuario => {
+            let rolClass = usuario.rol === 'Admin' ? 'danger' : usuario.rol === 'Supervisor' ? 'warning' : usuario.rol === 'Técnico' ? 'success' : 'info';
+            
+            html += `
+                <tr>
+                    <td>${usuario.nombre} ${usuario.apellido}</td>
+                    <td><span class="badge badge-${rolClass}">${usuario.rol}</span></td>
+                    <td>${usuario.avancesRegistrados}</td>
+                    <td>${usuario.ultimosAccesos}</td>
+                    <td>
+                        <div class="progress-bar-container">
+                            <div class="progress-bar bg-success" style="width: ${usuario.nivelActividad}%;">${usuario.nivelActividad}%</div>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        });
+        
+        html += `</tbody></table></div></div>`;
+    }
+    
+    document.getElementById('reporte-usuarios-result').innerHTML = html;
+    mostrarNotificacion('Reporte de usuarios generado correctamente', 'success');
+}
+// ============================================================================
+// BDPA - js/reportes.html - PARTE 4: Reportes de obras y funciones auxiliares
+// ============================================================================
+
+// ============================================================================
+// REPORTES DE OBRAS
+// ============================================================================
+
+// Función para inicializar reporte de obras
+function inicializarReporteObras() {
+    // Establecer fechas por defecto
+    const hoy = new Date();
+    const hace90Dias = new Date();
+    hace90Dias.setDate(hoy.getDate() - 90);
+    
+    if (!document.getElementById('reporte-obras-fecha-desde').value) {
+        document.getElementById('reporte-obras-fecha-desde').value = hace90Dias.toISOString().split('T')[0];
+    }
+    if (!document.getElementById('reporte-obras-fecha-hasta').value) {
+        document.getElementById('reporte-obras-fecha-hasta').value = hoy.toISOString().split('T')[0];
+    }
+}
+
+// Función para generar reporte de obras
+async function generarReporteObras() {
+    const estadoFiltro = document.getElementById('reporte-obras-estado').value;
+    const tipoFiltro = document.getElementById('reporte-obras-tipo').value;
+    const fechaDesde = document.getElementById('reporte-obras-fecha-desde').value;
+    const fechaHasta = document.getElementById('reporte-obras-fecha-hasta').value;
+    const incluirFinancieros = document.getElementById('incluir-datos-financieros').checked;
+    const incluirRecursos = document.getElementById('incluir-recursos-obras').checked;
+    
+    const filtros = {};
+    if (estadoFiltro) filtros.estado = estadoFiltro;
+    if (tipoFiltro) filtros.tipo = tipoFiltro;
+    if (fechaDesde) filtros.fechaDesde = fechaDesde;
+    if (fechaHasta) filtros.fechaHasta = fechaHasta;
+    if (incluirFinancieros) filtros.incluirFinancieros = true;
+    if (incluirRecursos) filtros.incluirRecursos = true;
+    
+    try {
+        document.getElementById('reporte-obras-result').innerHTML = '<div class="loader"></div>';
+        
+        const response = await callAPI('generarReporteObras', { filtros });
+        
+        if (response.error) {
+            mostrarNotificacion("Error al generar el reporte de obras", "error");
+            document.getElementById('reporte-obras-result').innerHTML = '<p class="text-danger">Error al generar el reporte.</p>';
+            return;
+        }
+        
+        const reporte = response.datos;
+        mostrarVisualizacionReporteObras(reporte, filtros);
+        
+    } catch (error) {
+        document.getElementById('reporte-obras-result').innerHTML = '<p class="text-danger">Error al generar el reporte.</p>';
+        mostrarNotificacion("Error al generar el reporte de obras", "error");
+    }
+}
+
+// Función para mostrar visualización del reporte de obras
+function mostrarVisualizacionReporteObras(reporte, filtros) {
+    let html = `<h3>Reporte General de Obras</h3>`;
+    
+    const fechaDesdeTexto = filtros.fechaDesde ? new Date(filtros.fechaDesde).toLocaleDateString() : 'Sin filtro de fecha';
+    const fechaHastaTexto = filtros.fechaHasta ? new Date(filtros.fechaHasta).toLocaleDateString() : 'Sin filtro de fecha';
+    
+    if (filtros.fechaDesde || filtros.fechaHasta) {
+        html += `<p><strong>Período:</strong> ${fechaDesdeTexto} - ${fechaHastaTexto}</p>`;
+    }
+    
+    // Resumen ejecutivo de obras
+    html += `
+        <div class="mt-20">
+            <h4>Resumen Ejecutivo</h4>
+            <div class="stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
+                <div class="stat-card" style="padding: 15px; background: #f8f9fa; border-radius: 8px; text-align: center;">
+                    <h5>Total de Obras</h5>
+                    <p style="font-size: 24px; font-weight: bold; color: var(--primary-color);">${reporte.totalObras}</p>
+                </div>
+                <div class="stat-card" style="padding: 15px; background: #f8f9fa; border-radius: 8px; text-align: center;">
+                    <h5>Obras Activas</h5>
+                    <p style="font-size: 24px; font-weight: bold; color: var(--secondary-color);">${reporte.obrasActivas}</p>
+                </div>
+                <div class="stat-card" style="padding: 15px; background: #f8f9fa; border-radius: 8px; text-align: center;">
+                    <h5>Obras Finalizadas</h5>
+                    <p style="font-size: 24px; font-weight: bold; color: var(--info-color);">${reporte.obrasFinalizadas}</p>
+                </div>
+                <div class="stat-card" style="padding: 15px; background: #f8f9fa; border-radius: 8px; text-align: center;">
+                    <h5>Avance Promedio</h5>
+                    <p style="font-size: 24px; font-weight: bold; color: var(--warning-color);">${reporte.avancePromedio}%</p>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Distribución por estado
+    if (reporte.distribucionPorEstado) {
+        html += `
+            <div class="mt-20">
+                <h4>Distribución por Estado</h4>
+                <div class="estados-distribution" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
+        `;
+        
+        const estados = ['Planificación', 'En progreso', 'Finalizada', 'Suspendida'];
+        const coloresEstados = ['#3498db', '#2ecc71', '#95a5a6', '#e74c3c'];
+        
+        estados.forEach((estado, index) => {
+            const cantidad = reporte.distribucionPorEstado[estado] || 0;
+            const porcentaje = reporte.totalObras > 0 ? Math.round((cantidad / reporte.totalObras) * 100) : 0;
+            const color = coloresEstados[index];
+            
+            html += `
+                <div class="estado-card" style="padding: 15px; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center;">
+                    <h5>${estado}</h5>
+                    <p style="font-size: 24px; font-weight: bold; color: ${color};">${cantidad}</p>
+                    <p>${porcentaje}% del total</p>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" style="width: ${porcentaje}%; background-color: ${color};"></div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += `</div></div>`;
+    }
+    
+    // Distribución por tipo
+    if (reporte.distribucionPorTipo) {
+        html += `
+            <div class="mt-20">
+                <h4>Distribución por Tipo</h4>
+                <div class="tipos-distribution" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
+        `;
+        
+        Object.keys(reporte.distribucionPorTipo).forEach(tipo => {
+            const cantidad = reporte.distribucionPorTipo[tipo];
+            const porcentaje = reporte.totalObras > 0 ? Math.round((cantidad / reporte.totalObras) * 100) : 0;
+            
+            html += `
+                <div class="tipo-card" style="padding: 15px; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center;">
+                    <h5>${tipo}</h5>
+                    <p style="font-size: 24px; font-weight: bold; color: var(--primary-color);">${cantidad}</p>
+                    <p>${porcentaje}% del total</p>
+                </div>
+            `;
+        });
+        
+        html += `</div></div>`;
+    }
+    
+    // Timeline de obras críticas o con retrasos
+    if (reporte.obrasCriticas && reporte.obrasCriticas.length > 0) {
+        html += `
+            <div class="mt-20">
+                <h4>Obras que Requieren Atención</h4>
+                <div class="table-container">
+                    <table class="resumen-table">
+                        <thead>
+                            <tr>
+                                <th>Obra</th>
+                                <th>Estado</th>
+                                <th>Tipo</th>
+                                <th>Avance</th>
+                                <th>Fecha Límite</th>
+                                <th>Días Restantes</th>
+                                <th>Motivo de Atención</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+        `;
+        
+        reporte.obrasCriticas.forEach(obra => {
+            let estadoBadge = 'primary';
+            if (obra.estado === 'Finalizada') estadoBadge = 'success';
+            else if (obra.estado === 'Suspendida') estadoBadge = 'danger';
+            else if (obra.estado === 'En progreso') estadoBadge = 'warning';
+            
+            let diasRestantesColor = obra.diasRestantes > 30 ? 'success' : obra.diasRestantes > 7 ? 'warning' : 'danger';
+            
+            html += `
+                <tr>
+                    <td>${obra.nombre}</td>
+                    <td><span class="badge badge-${estadoBadge}">${obra.estado}</span></td>
+                    <td>${obra.tipo}</td>
+                    <td>
+                        <div class="progress-bar-container">
+                            <div class="progress-bar bg-${obra.avance >= 75 ? 'success' : obra.avance >= 50 ? 'primary' : 'danger'}" style="width: ${obra.avance}%;">${obra.avance}%</div>
+                        </div>
+                    </td>
+                    <td>${obra.fechaTermino ? new Date(obra.fechaTermino).toLocaleDateString() : 'Sin fecha'}</td>
+                    <td><span class="badge badge-${diasRestantesColor}">${obra.diasRestantes} días</span></td>
+                    <td>${obra.motivoAtencion}</td>
+                </tr>
+            `;
+        });
+        
+        html += `</tbody></table></div></div>`;
+    }
+    
+    // Información financiera (si está habilitada)
+    if (filtros.incluirFinancieros && reporte.datosFinancieros) {
+        html += `
+            <div class="mt-20">
+                <h4>Resumen Financiero</h4>
+                <div class="financial-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
+                    <div class="stat-card" style="padding: 15px; background: #f8f9fa; border-radius: 8px; text-align: center;">
+                        <h5>Valor Total Obras</h5>
+                        <p style="font-size: 20px; font-weight: bold; color: var(--secondary-color);">$${reporte.datosFinancieros.valorTotal.toLocaleString()}</p>
+                    </div>
+                    <div class="stat-card" style="padding: 15px; background: #f8f9fa; border-radius: 8px; text-align: center;">
+                        <h5>Facturado</h5>
+                        <p style="font-size: 20px; font-weight: bold; color: var(--primary-color);">$${reporte.datosFinancieros.facturado.toLocaleString()}</p>
+                    </div>
+                    <div class="stat-card" style="padding: 15px; background: #f8f9fa; border-radius: 8px; text-align: center;">
+                        <h5>Pendiente Facturación</h5>
+                        <p style="font-size: 20px; font-weight: bold; color: var(--warning-color);">$${reporte.datosFinancieros.pendienteFacturacion.toLocaleString()}</p>
+                    </div>
+                    <div class="stat-card" style="padding: 15px; background: #f8f9fa; border-radius: 8px; text-align: center;">
+                        <h5>% Facturado</h5>
+                        <p style="font-size: 20px; font-weight: bold; color: var(--info-color);">${reporte.datosFinancieros.porcentajeFacturado}%</p>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Detalle completo de obras
+    if (reporte.detalleObras && reporte.detalleObras.length > 0) {
+        html += `
+            <div class="mt-20">
+                <h4>Detalle Completo de Obras</h4>
+                <div class="table-container" style="max-height: 500px; overflow-y: auto;">
+                    <table class="resumen-table">
+                        <thead>
+                            <tr>
+                                <th>Nombre</th>
+                                <th>Tipo</th>
+                                <th>Estado</th>
+                                <th>Avance</th>
+                                <th>Inicio</th>
+                                <th>Término Est.</th>
+                                <th>Cliente</th>
+                                <th>Ubicación</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+        `;
+        
+        reporte.detalleObras.forEach(obra => {
+            let estadoBadge = 'primary';
+            if (obra.estado === 'Finalizada') estadoBadge = 'success';
+            else if (obra.estado === 'Suspendida') estadoBadge = 'danger';
+            else if (obra.estado === 'En progreso') estadoBadge = 'warning';
+            
+            html += `
+                <tr>
+                    <td><strong>${obra.nombre}</strong></td>
+                    <td>${obra.tipo}</td>
+                    <td><span class="badge badge-${estadoBadge}">${obra.estado}</span></td>
+                    <td>
+                        <div class="progress-bar-container">
+                            <div class="progress-bar bg-${obra.avance >= 75 ? 'success' : obra.avance >= 50 ? 'primary' : 'danger'}" style="width: ${obra.avance}%;">${obra.avance}%</div>
+                        </div>
+                    </td>
+                    <td>${obra.fechaInicio ? new Date(obra.fechaInicio).toLocaleDateString() : '-'}</td>
+                    <td>${obra.fechaTermino ? new Date(obra.fechaTermino).toLocaleDateString() : '-'}</td>
+                    <td>${obra.cliente || '-'}</td>
+                    <td>${obra.direccion || '-'}</td>
+                </tr>
+            `;
+        });
+        
+        html += `</tbody></table></div></div>`;
+    }
+    
+    document.getElementById('reporte-obras-result').innerHTML = html;
+    mostrarNotificacion('Reporte de obras generado correctamente', 'success');
+}
+
+// ============================================================================
+// FUNCIONES AUXILIARES Y CONFIGURACIÓN DE REPORTES
+// ============================================================================
+
+// Función para configurar opciones de reportes
+function configurarReportes() {
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title"><i class="fas fa-cog"></i> Configuración de Reportes</h3>
+                <button class="modal-close" onclick="cerrarModalConfigReportes()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="formato-exportacion-config">Formato de exportación por defecto:</label>
+                    <select id="formato-exportacion-config">
+                        <option value="excel" ${configReportes.formatoExportacion === 'excel' ? 'selected' : ''}>Excel</option>
+                        <option value="pdf" ${configReportes.formatoExportacion === 'pdf' ? 'selected' : ''}>PDF</option>
+                        <option value="csv" ${configReportes.formatoExportacion === 'csv' ? 'selected' : ''}>CSV</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="incluir-graficos-config" ${configReportes.incluirGraficos ? 'checked' : ''}>
+                        Incluir gráficos en exportaciones
+                    </label>
+                </div>
+                
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="incluir-detalles-config" ${configReportes.incluirDetalles ? 'checked' : ''}>
+                        Incluir detalles completos
+                    </label>
+                </div>
+                
+                <div class="form-group">
+                    <label for="limite-registros-config">Límite de registros en reportes:</label>
+                    <select id="limite-registros-config">
+                        <option value="50">50 registros</option>
+                        <option value="100" selected>100 registros</option>
+                        <option value="500">500 registros</option>
+                        <option value="1000">1000 registros</option>
+                        <option value="0">Sin límite</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="guardarConfigReportes()">Guardar</button>
+                <button class="btn btn-secondary" onclick="cerrarModalConfigReportes()">Cancelar</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    modal.id = 'modal-config-reportes';
+}
+
+// Función para cerrar modal de configuración
+function cerrarModalConfigReportes() {
+    const modal = document.getElementById('modal-config-reportes');
+    if (modal) {
+        document.body.removeChild(modal);
+    }
+}
+
+// Función para guardar configuración de reportes
+function guardarConfigReportes() {
+    configReportes.formatoExportacion = document.getElementById('formato-exportacion-config').value;
+    configReportes.incluirGraficos = document.getElementById('incluir-graficos-config').checked;
+    configReportes.incluirDetalles = document.getElementById('incluir-detalles-config').checked;
+    configReportes.limiteRegistros = parseInt(document.getElementById('limite-registros-config').value);
+    
+    // Guardar en localStorage para persistencia
+    localStorage.setItem('configReportes', JSON.stringify(configReportes));
+    
+    mostrarNotificacion('Configuración de reportes guardada correctamente', 'success');
+    cerrarModalConfigReportes();
+}
+
+// Función para cargar configuración de reportes desde localStorage
+function cargarConfigReportes() {
+    const configGuardada = localStorage.getItem('configReportes');
+    if (configGuardada) {
+        try {
+            configReportes = { ...configReportes, ...JSON.parse(configGuardada) };
+        } catch (error) {
+            console.warn('Error al cargar configuración de reportes:', error);
+        }
+    }
+}
+
+// Función para generar reporte personalizado
+async function generarReportePersonalizado() {
+    const tiposSeleccionados = [];
+    if (document.getElementById('incluir-avances-personalizado').checked) tiposSeleccionados.push('avances');
+    if (document.getElementById('incluir-inventario-personalizado').checked) tiposSeleccionados.push('inventario');
+    if (document.getElementById('incluir-usuarios-personalizado').checked) tiposSeleccionados.push('usuarios');
+    if (document.getElementById('incluir-obras-personalizado').checked) tiposSeleccionados.push('obras');
+    
+    if (tiposSeleccionados.length === 0) {
+        mostrarNotificacion('Seleccione al menos un tipo de reporte para generar', 'warning');
+        return;
+    }
+    
+    const filtros = {
+        fechaDesde: document.getElementById('reporte-personalizado-fecha-desde').value,
+        fechaHasta: document.getElementById('reporte-personalizado-fecha-hasta').value,
+        obraId: document.getElementById('reporte-personalizado-obra').value,
+        tiposReporte: tiposSeleccionados
+    };
+    
+    try {
+        document.getElementById('reporte-personalizado-result').innerHTML = '<div class="loader"></div>';
+        
+        const response = await callAPI('generarReportePersonalizado', { filtros });
+        
+        if (response.error) {
+            mostrarNotificacion("Error al generar el reporte personalizado", "error");
+            document.getElementById('reporte-personalizado-result').innerHTML = '<p class="text-danger">Error al generar el reporte.</p>';
+            return;
+        }
+        
+        mostrarVisualizacionReportePersonalizado(response.datos, filtros);
+        
+    } catch (error) {
+        document.getElementById('reporte-personalizado-result').innerHTML = '<p class="text-danger">Error al generar el reporte.</p>';
+        mostrarNotificacion("Error al generar el reporte personalizado", "error");
+    }
+}
+
+// Función para mostrar reporte personalizado
+function mostrarVisualizacionReportePersonalizado(reporte, filtros) {
+    let html = `<h3>Reporte Personalizado</h3>`;
+    
+    // Mostrar cada sección según los tipos seleccionados
+    filtros.tiposReporte.forEach(tipo => {
+        if (reporte[tipo]) {
+            html += `<hr class="mt-20 mb-20">`;
+            
+            switch (tipo) {
+                case 'avances':
+                    html += `<h4><i class="fas fa-tasks"></i> Resumen de Avances</h4>`;
+                    html += generarResumenAvancesPersonalizado(reporte[tipo]);
+                    break;
+                case 'inventario':
+                    html += `<h4><i class="fas fa-boxes"></i> Resumen de Inventario</h4>`;
+                    html += generarResumenInventarioPersonalizado(reporte[tipo]);
+                    break;
+                case 'usuarios':
+                    html += `<h4><i class="fas fa-users"></i> Resumen de Usuarios</h4>`;
+                    html += generarResumenUsuariosPersonalizado(reporte[tipo]);
+                    break;
+                case 'obras':
+                    html += `<h4><i class="fas fa-building"></i> Resumen de Obras</h4>`;
+                    html += generarResumenObrasPersonalizado(reporte[tipo]);
+                    break;
+            }
+        }
+    });
+    
+    document.getElementById('reporte-personalizado-result').innerHTML = html;
+    mostrarNotificacion('Reporte personalizado generado correctamente', 'success');
+}
+
+// Funciones auxiliares para resúmenes personalizados
+function generarResumenAvancesPersonalizado(datos) {
+    return `
+        <div class="stats-mini-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px;">
+            <div class="mini-stat" style="padding: 10px; background: #f8f9fa; border-radius: 5px; text-align: center;">
+                <strong>${datos.totalAvances}</strong><br><small>Avances</small>
+            </div>
+            <div class="mini-stat" style="padding: 10px; background: #f8f9fa; border-radius: 5px; text-align: center;">
+                <strong>${datos.avancePromedio}%</strong><br><small>Promedio</small>
+            </div>
+        </div>
+    `;
+}
+
+function generarResumenInventarioPersonalizado(datos) {
+    return `
+        <div class="stats-mini-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px;">
+            <div class="mini-stat" style="padding: 10px; background: #f8f9fa; border-radius: 5px; text-align: center;">
+                <strong>${datos.totalItems}</strong><br><small>Items</small>
+            </div>
+            <div class="mini-stat" style="padding: 10px; background: #f8f9fa; border-radius: 5px; text-align: center;">
+                <strong>${datos.itemsStockBajo}</strong><br><small>Stock Bajo</small>
+            </div>
+        </div>
+    `;
+}
+
+function generarResumenUsuariosPersonalizado(datos) {
+    return `
+        <div class="stats-mini-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px;">
+            <div class="mini-stat" style="padding: 10px; background: #f8f9fa; border-radius: 5px; text-align: center;">
+                <strong>${datos.totalUsuarios}</strong><br><small>Usuarios</small>
+            </div>
+            <div class="mini-stat" style="padding: 10px; background: #f8f9fa; border-radius: 5px; text-align: center;">
+                <strong>${datos.usuariosActivos}</strong><br><small>Activos</small>
+            </div>
+        </div>
+    `;
+}
+
+function generarResumenObrasPersonalizado(datos) {
+    return `
+        <div class="stats-mini-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px;">
+            <div class="mini-stat" style="padding: 10px; background: #f8f9fa; border-radius: 5px; text-align: center;">
+                <strong>${datos.totalObras}</strong><br><small>Obras</small>
+            </div>
+            <div class="mini-stat" style="padding: 10px; background: #f8f9fa; border-radius: 5px; text-align: center;">
+                <strong>${datos.obrasActivas}</strong><br><small>Activas</small>
+            </div>
+        </div>
+    `;
+}
+
+// Función para programar reportes automáticos
+async function programarReporteAutomatico() {
+    const tipoReporte = document.getElementById('tipo-reporte-automatico').value;
+    const frecuencia = document.getElementById('frecuencia-reporte').value;
+    const emailDestino = document.getElementById('email-reporte-automatico').value;
+    const horaEnvio = document.getElementById('hora-envio-reporte').value;
+    
+    if (!tipoReporte || !frecuencia || !emailDestino) {
+        mostrarNotificacion('Complete todos los campos requeridos', 'error');
+        return;
+    }
+    
+    // Validar formato de correo
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(emailDestino)) {
+        mostrarNotificacion("Por favor ingrese una dirección de correo válida", "error");
+        return;
+    }
+    
+    const configuracion = {
+        tipoReporte,
+        frecuencia,
+        emailDestino,
+        horaEnvio,
+        activo: true,
+        fechaCreacion: new Date().toISOString()
+    };
+    
+    try {
+        const response = await callAPI('programarReporteAutomatico', configuracion);
+        
+        if (response.error) {
+            mostrarNotificacion("Error al programar el reporte automático", "error");
+            return;
+        }
+        
+        mostrarNotificacion(`Reporte automático programado correctamente. Se enviará ${frecuencia} a ${emailDestino}`, "success");
+        cargarReportesProgramados();
+        
+    } catch (error) {
+        mostrarNotificacion("Error al programar el reporte automático", "error");
+    }
+}
+
+// Cargar configuración al inicializar
+document.addEventListener('DOMContentLoaded', function() {
+    cargarConfigReportes();
+});
+
+// ============================================================================
+// FUNCIONES DE UTILIDAD PARA REPORTES
+// ============================================================================
+
+// Función para formatear números grandes
+function formatearNumero(numero) {
+    if (numero >= 1000000) {
+        return (numero / 1000000).toFixed(1) + 'M';
+    } else if (numero >= 1000) {
+        return (numero / 1000).toFixed(1) + 'K';
+    }
+    return numero.toString();
+}
+
+// Función para calcular tendencia
+function calcularTendencia(valorActual, valorAnterior) {
+    if (!valorAnterior || valorAnterior === 0) return 0;
+    return Math.round(((valorActual - valorAnterior) / valorAnterior) * 100);
+}
+
+// Función para generar colores automáticamente
+function generarColores(cantidad) {
+    const colores = [
+        '#3498db', '#e74c3c', '#2ecc71', '#f39c12', '#9b59b6',
+        '#1abc9c', '#34495e', '#e67e22', '#95a5a6', '#16a085'
+    ];
+    
+    const resultado = [];
+    for (let i = 0; i < cantidad; i++) {
+        resultado.push(colores[i % colores.length]);
+    }
+    return resultado;
+}
+// Continuar desde donde se cortó...
+
+// Función para exportar todos los reportes
+async function exportarTodosLosReportes() {
+   const confirmacion = confirm('¿Está seguro de exportar todos los reportes? Esta operación puede tomar varios minutos.');
+   if (!confirmacion) return;
+   
+   try {
+       mostrarNotificacion('Iniciando exportación masiva de reportes...', 'info');
+       
+       const response = await callAPI('exportarTodosLosReportes', {
+           formato: configReportes.formatoExportacion,
+           incluirGraficos: configReportes.incluirGraficos,
+           fechaGeneracion: new Date().toISOString()
+       });
+       
+       if (response.error) {
+           mostrarNotificacion("Error al exportar los reportes", "error");
+           return;
+       }
+       
+       // Iniciar descarga del archivo comprimido
+       if (response.urlArchivo) {
+           const link = document.createElement('a');
+           link.href = response.urlArchivo;
+           link.download = `reportes_completos_${new Date().toISOString().split('T')[0]}.zip`;
+           document.body.appendChild(link);
+           link.click();
+           document.body.removeChild(link);
+           
+           mostrarNotificacion("Todos los reportes han sido exportados correctamente", "success");
+       } else {
+           mostrarNotificacion("No se pudo generar el archivo de exportación", "error");
+       }
+   } catch (error) {
+       mostrarNotificacion("Error al exportar los reportes", "error");
+   }
+}
+
+// Función para limpiar datos de reportes
+function limpiarDatosReportes() {
+   datosReporteAvances = null;
+   datosReporteInventario = null;
+   datosReporteEDT = null;
+   
+   // Limpiar contenedores de resultados
+   document.getElementById('reporte-avances-result').innerHTML = '';
+   document.getElementById('reporte-inventario-result').innerHTML = '';
+   document.getElementById('reporte-usuarios-result').innerHTML = '';
+   document.getElementById('reporte-obras-result').innerHTML = '';
+   
+   mostrarNotificacion('Datos de reportes limpiados', 'info');
+}
+
+// Función para cargar reportes programados
+async function cargarReportesProgramados() {
+   try {
+       const response = await callAPI('obtenerReportesProgramados');
+       
+       if (response.error) {
+           console.warn("Error al cargar reportes programados:", response.error);
+           return;
+       }
+       
+       const reportes = response.datos;
+       const container = document.getElementById('reportes-programados-lista');
+       
+       if (!container) return;
+       
+       container.innerHTML = '';
+       
+       if (reportes.length === 0) {
+           container.innerHTML = '<p class="text-center">No hay reportes programados.</p>';
+           return;
+       }
+       
+       reportes.forEach(reporte => {
+           const item = document.createElement('div');
+           item.className = 'reporte-programado-item';
+           item.style.cssText = 'padding: 15px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 10px; background: #f8f9fa;';
+           
+           const estadoBadge = reporte.activo ? 
+               '<span class="badge badge-success">Activo</span>' : 
+               '<span class="badge badge-secondary">Inactivo</span>';
+           
+           item.innerHTML = `
+               <div style="display: flex; justify-content: space-between; align-items: center;">
+                   <div>
+                       <strong>${reporte.tipoReporte}</strong> - ${reporte.frecuencia}<br>
+                       <small>Enviar a: ${reporte.emailDestino} a las ${reporte.horaEnvio}</small><br>
+                       ${estadoBadge}
+                   </div>
+                   <div>
+                       <button class="btn btn-sm btn-${reporte.activo ? 'warning' : 'success'}" 
+                               onclick="toggleReporteProgramado('${reporte.id}', ${!reporte.activo})">
+                           ${reporte.activo ? 'Pausar' : 'Activar'}
+                       </button>
+                       <button class="btn btn-sm btn-danger" onclick="eliminarReporteProgramado('${reporte.id}')">
+                           Eliminar
+                       </button>
+                   </div>
+               </div>
+           `;
+           
+           container.appendChild(item);
+       });
+       
+   } catch (error) {
+       console.warn("Error al cargar reportes programados:", error);
+   }
+}
+
+// Función para alternar estado de reporte programado
+async function toggleReporteProgramado(id, activo) {
+   try {
+       const response = await callAPI('actualizarReporteProgramado', { id, activo });
+       
+       if (response.error) {
+           mostrarNotificacion("Error al actualizar el reporte programado", "error");
+           return;
+       }
+       
+       mostrarNotificacion(`Reporte programado ${activo ? 'activado' : 'pausado'} correctamente`, "success");
+       cargarReportesProgramados();
+       
+   } catch (error) {
+       mostrarNotificacion("Error al actualizar el reporte programado", "error");
+   }
+}
+
+// Función para eliminar reporte programado
+async function eliminarReporteProgramado(id) {
+   if (!confirm('¿Está seguro de eliminar este reporte programado?')) {
+       return;
+   }
+   
+   try {
+       const response = await callAPI('eliminarReporteProgramado', { id });
+       
+       if (response.error) {
+           mostrarNotificacion("Error al eliminar el reporte programado", "error");
+           return;
+       }
+       
+       mostrarNotificacion("Reporte programado eliminado correctamente", "success");
+       cargarReportesProgramados();
+       
+   } catch (error) {
+       mostrarNotificacion("Error al eliminar el reporte programado", "error");
+   }
+}
+
+// Función para generar dashboard ejecutivo
+async function generarDashboardEjecutivo() {
+   try {
+       document.getElementById('dashboard-ejecutivo-result').innerHTML = '<div class="loader"></div>';
+       
+       const response = await callAPI('generarDashboardEjecutivo', {
+           periodo: document.getElementById('dashboard-periodo').value,
+           incluirProyecciones: document.getElementById('incluir-proyecciones').checked
+       });
+       
+       if (response.error) {
+           mostrarNotificacion("Error al generar el dashboard ejecutivo", "error");
+           document.getElementById('dashboard-ejecutivo-result').innerHTML = '<p class="text-danger">Error al generar el dashboard.</p>';
+           return;
+       }
+       
+       const dashboard = response.datos;
+       mostrarDashboardEjecutivo(dashboard);
+       
+   } catch (error) {
+       document.getElementById('dashboard-ejecutivo-result').innerHTML = '<p class="text-danger">Error al generar el dashboard.</p>';
+       mostrarNotificacion("Error al generar el dashboard ejecutivo", "error");
+   }
+}
+
+// Función para mostrar dashboard ejecutivo
+function mostrarDashboardEjecutivo(dashboard) {
+   let html = `
+       <div class="dashboard-ejecutivo">
+           <h3><i class="fas fa-tachometer-alt"></i> Dashboard Ejecutivo</h3>
+           <p class="dashboard-fecha">Generado el ${new Date().toLocaleString()}</p>
+           
+           <!-- KPIs Principales -->
+           <div class="kpis-principales" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px;">
+               <div class="kpi-card" style="padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 10px; color: white; text-align: center;">
+                   <h4>Obras Activas</h4>
+                   <p style="font-size: 32px; font-weight: bold; margin: 10px 0;">${dashboard.obrasActivas}</p>
+                   <small>+${dashboard.tendenciaObras}% vs mes anterior</small>
+               </div>
+               
+               <div class="kpi-card" style="padding: 20px; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); border-radius: 10px; color: white; text-align: center;">
+                   <h4>Avance Promedio</h4>
+                   <p style="font-size: 32px; font-weight: bold; margin: 10px 0;">${dashboard.avancePromedio}%</p>
+                   <small>+${dashboard.tendenciaAvance}% vs mes anterior</small>
+               </div>
+               
+               <div class="kpi-card" style="padding: 20px; background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); border-radius: 10px; color: white; text-align: center;">
+                   <h4>Productividad</h4>
+                   <p style="font-size: 32px; font-weight: bold; margin: 10px 0;">${dashboard.productividad}</p>
+                   <small>avances/día</small>
+               </div>
+               
+               <div class="kpi-card" style="padding: 20px; background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); border-radius: 10px; color: white; text-align: center;">
+                   <h4>Eficiencia</h4>
+                   <p style="font-size: 32px; font-weight: bold; margin: 10px 0;">${dashboard.eficiencia}%</p>
+                   <small>vs objetivo</small>
+               </div>
+           </div>
+           
+           <!-- Alertas y Notificaciones -->
+           ${dashboard.alertas.length > 0 ? `
+           <div class="alertas-dashboard" style="margin-bottom: 30px;">
+               <h4><i class="fas fa-exclamation-triangle"></i> Alertas Importantes</h4>
+               <div class="alertas-grid" style="display: grid; gap: 10px;">
+           ` : ''}
+   `;
+   
+   // Agregar alertas
+   if (dashboard.alertas && dashboard.alertas.length > 0) {
+       dashboard.alertas.forEach(alerta => {
+           const tipoClass = alerta.tipo === 'critica' ? 'danger' : alerta.tipo === 'advertencia' ? 'warning' : 'info';
+           html += `
+               <div class="alert alert-${tipoClass}" style="padding: 10px 15px; border-radius: 5px;">
+                   <strong>${alerta.titulo}</strong>: ${alerta.mensaje}
+               </div>
+           `;
+       });
+       html += `</div></div>`;
+   }
+   
+   // Top Obras por Rendimiento
+   if (dashboard.topObras && dashboard.topObras.length > 0) {
+       html += `
+           <div class="top-obras" style="margin-bottom: 30px;">
+               <h4><i class="fas fa-trophy"></i> Top Obras por Rendimiento</h4>
+               <div class="obras-ranking" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px;">
+       `;
+       
+       dashboard.topObras.slice(0, 6).forEach((obra, index) => {
+           const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '⭐';
+           html += `
+               <div class="obra-ranking-card" style="padding: 15px; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); border-left: 4px solid var(--primary-color);">
+                   <div style="display: flex; align-items: center; margin-bottom: 10px;">
+                       <span style="font-size: 24px; margin-right: 10px;">${medal}</span>
+                       <strong>${obra.nombre}</strong>
+                   </div>
+                   <p><strong>Avance:</strong> ${obra.avance}%</p>
+                   <p><strong>Productividad:</strong> ${obra.productividad} avances/semana</p>
+                   <p><strong>Estado:</strong> <span class="badge badge-success">${obra.estado}</span></p>
+               </div>
+           `;
+       });
+       
+       html += `</div></div>`;
+   }
+   
+   // Resumen de Recursos Críticos
+   if (dashboard.recursosCriticos) {
+       html += `
+           <div class="recursos-criticos" style="margin-bottom: 30px;">
+               <h4><i class="fas fa-exclamation-circle"></i> Recursos Críticos</h4>
+               <div class="recursos-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                   <div class="recursos-card" style="padding: 15px; background: #fff3cd; border-radius: 8px; border: 1px solid #ffeaa7;">
+                       <h5>Inventario Bajo Stock</h5>
+                       <p style="font-size: 24px; font-weight: bold; color: #856404;">${dashboard.recursosCriticos.inventarioBajo}</p>
+                       <small>items requieren reposición</small>
+                   </div>
+                   <div class="recursos-card" style="padding: 15px; background: #f8d7da; border-radius: 8px; border: 1px solid #f5c6cb;">
+                       <h5>Obras Retrasadas</h5>
+                       <p style="font-size: 24px; font-weight: bold; color: #721c24;">${dashboard.recursosCriticos.obrasRetrasadas}</p>
+                       <small>obras requieren atención</small>
+                   </div>
+               </div>
+           </div>
+       `;
+   }
+   
+   // Proyecciones (si están habilitadas)
+   if (dashboard.proyecciones) {
+       html += `
+           <div class="proyecciones" style="margin-bottom: 30px;">
+               <h4><i class="fas fa-chart-line"></i> Proyecciones</h4>
+               <div class="proyecciones-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px;">
+                   <div class="proyeccion-card" style="padding: 15px; background: #e3f2fd; border-radius: 8px;">
+                       <h5>Finalización Estimada</h5>
+                       <p><strong>Obras Activas:</strong> ${dashboard.proyecciones.finalizacionPromedio}</p>
+                       <p><strong>Proyecto Completo:</strong> ${dashboard.proyecciones.finalizacionTotal}</p>
+                   </div>
+                   <div class="proyeccion-card" style="padding: 15px; background: #e8f5e8; border-radius: 8px;">
+                       <h5>Recursos Necesarios</h5>
+                       <p><strong>Personal adicional:</strong> ${dashboard.proyecciones.personalAdicional}</p>
+                       <p><strong>Presupuesto restante:</strong> $${dashboard.proyecciones.presupuestoRestante.toLocaleString()}</p>
+                   </div>
+               </div>
+           </div>
+       `;
+   }
+   
+   html += `</div>`;
+   
+   document.getElementById('dashboard-ejecutivo-result').innerHTML = html;
+   mostrarNotificacion('Dashboard ejecutivo generado correctamente', 'success');
+}
+
+// Función para actualizar dashboard en tiempo real
+function actualizarDashboardTiempoReal() {
+   const elemento = document.getElementById('dashboard-ejecutivo-result');
+   if (elemento && elemento.innerHTML.includes('dashboard-ejecutivo')) {
+       generarDashboardEjecutivo();
+   }
+}
+
+// Función para programar actualizaciones automáticas del dashboard
+function programarActualizacionDashboard() {
+   // Actualizar cada 5 minutos si el dashboard está visible
+   setInterval(() => {
+       actualizarDashboardTiempoReal();
+   }, 300000); // 5 minutos
+}
+
+// ============================================================================
+// FUNCIONES DE ANÁLISIS AVANZADO
+// ============================================================================
+
+// Función para generar análisis de tendencias
+async function generarAnalisisTendencias() {
+   const periodo = document.getElementById('analisis-periodo').value;
+   const metrica = document.getElementById('analisis-metrica').value;
+   
+   try {
+       const response = await callAPI('generarAnalisisTendencias', { periodo, metrica });
+       
+       if (response.error) {
+           mostrarNotificacion("Error al generar análisis de tendencias", "error");
+           return;
+       }
+       
+       const analisis = response.datos;
+       mostrarAnalisisTendencias(analisis);
+       
+   } catch (error) {
+       mostrarNotificacion("Error al generar análisis de tendencias", "error");
+   }
+}
+
+// Función para mostrar análisis de tendencias
+function mostrarAnalisisTendencias(analisis) {
+   let html = `
+       <h4><i class="fas fa-chart-line"></i> Análisis de Tendencias</h4>
+       <div class="tendencias-resumen" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
+   `;
+   
+   // Mostrar métricas de tendencia
+   ['crecimiento', 'volatilidad', 'prediccion'].forEach(metrica => {
+       if (analisis[metrica]) {
+           html += `
+               <div class="metrica-tendencia" style="padding: 15px; background: #f8f9fa; border-radius: 8px; text-align: center;">
+                   <h5>${metrica.charAt(0).toUpperCase() + metrica.slice(1)}</h5>
+                   <p style="font-size: 20px; font-weight: bold;">${analisis[metrica].valor}</p>
+                   <small>${analisis[metrica].descripcion}</small>
+               </div>
+           `;
+       }
+   });
+   
+   html += `</div>`;
+   
+   // Recomendaciones basadas en el análisis
+   if (analisis.recomendaciones && analisis.recomendaciones.length > 0) {
+       html += `
+           <div class="recomendaciones-analisis">
+               <h5><i class="fas fa-lightbulb"></i> Recomendaciones</h5>
+               <ul>
+       `;
+       
+       analisis.recomendaciones.forEach(recomendacion => {
+           html += `<li>${recomendacion}</li>`;
+       });
+       
+       html += `</ul></div>`;
+   }
+   
+   document.getElementById('analisis-tendencias-result').innerHTML = html;
+}
+
+// Inicializar módulo de reportes
+document.addEventListener('DOMContentLoaded', function() {
+   // Cargar configuración de reportes
+   cargarConfigReportes();
+   
+   // Cargar reportes programados si el contenedor existe
+   if (document.getElementById('reportes-programados-lista')) {
+       cargarReportesProgramados();
+   }
+   
+   // Programar actualizaciones del dashboard
+   programarActualizacionDashboard();
+   
+   // Establecer intervalos de actualización automática para algunos reportes
+   setInterval(() => {
+       // Auto-actualizar reportes que están visibles cada 10 minutos
+       const reportesVisibles = document.querySelectorAll('.tab-content:not(.hidden)');
+       reportesVisibles.forEach(tab => {
+           if (tab.id === 'reporte-avances' && datosReporteAvances) {
+               // Solo regenerar si han pasado más de 10 minutos desde la última actualización
+               const ultimaActualizacion = tab.dataset.ultimaActualizacion;
+               const ahora = Date.now();
+               if (!ultimaActualizacion || (ahora - parseInt(ultimaActualizacion)) > 600000) {
+                   generarReporteAvances();
+                   tab.dataset.ultimaActualizacion = ahora.toString();
+               }
+           }
+       });
+   }, 600000); // 10 minutos
+});
+
+// ============================================================================
+// EXPORTACIÓN DE FUNCIONES PARA USO GLOBAL
+// ============================================================================
+
+// Hacer disponibles las funciones principales globalmente
+window.reportesFunctions = {
+   mostrarTabReporte,
+   generarReporteAvances,
+   exportarReporteAvances,
+   enviarReporteAvancesPorCorreo,
+   generarReporteInventario,
+   exportarReporteInventario,
+   enviarReporteInventarioPorCorreo,
+   cargarEDTObra,
+   cambiarVistaEDT,
+   expandirTodoEDT,
+   contraerTodoEDT,
+   exportarEDT,
+   generarReporteUsuarios,
+   generarReporteObras,
+   configurarReportes,
+   generarReportePersonalizado,
+   programarReporteAutomatico,
+   generarDashboardEjecutivo,
+   limpiarDatosReportes,
+   exportarTodosLosReportes
+};
+</script>

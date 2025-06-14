@@ -1,0 +1,4119 @@
+<script>
+    // Variables globales para almacenar datos
+    let usuarioActual = null;
+    let tokenSesion = null;
+    let obrasData = [];
+    let materialesData = [];
+    let categoriasData = [];
+    let usuariosData = [];
+    let transferenciasItems = [];
+    let paginaActual = 1;
+
+    // Variables específicas para maquetación
+    let shaftsPorTorrePiso = [];
+    let dispositivosPorShaft = [];
+
+    // Función principal para llamar a la API
+    async function callAPI(accion, datos = {}) {
+        try {
+            // Mostrar loader si existe
+            const loaderElement = document.getElementById('login-loader') || 
+                                 document.getElementById('obras-loader') || 
+                                 document.getElementById('usuarios-loader');
+            if (loaderElement) loaderElement.classList.remove('hidden');
+            
+            const response = await new Promise((resolve, reject) => {
+                google.script.run
+                    .withSuccessHandler(resolve)
+                    .withFailureHandler(reject)
+                    .procesarAPI(accion, datos, tokenSesion);
+            });
+            
+            // Ocultar loader
+            if (loaderElement) loaderElement.classList.add('hidden');
+            
+            return response;
+        } catch (error) {
+            // Ocultar loader y mostrar error
+            const loaderElement = document.getElementById('login-loader') || 
+                                 document.getElementById('obras-loader') || 
+                                 document.getElementById('usuarios-loader');
+            if (loaderElement) loaderElement.classList.add('hidden');
+            
+            console.error("Error en API:", error);
+            mostrarNotificacion("Error de conexión. Intente nuevamente.", "error");
+            throw error;
+        }
+    }
+
+    // Función para mostrar notificaciones
+    function mostrarNotificacion(mensaje, tipo = 'info') {
+        // Crear elemento de notificación
+        const notificacion = document.createElement('div');
+        notificacion.className = `notification ${tipo}`;
+        notificacion.textContent = mensaje;
+        
+        // Agregar al DOM
+        document.body.appendChild(notificacion);
+        
+        // Eliminar después de 4 segundos
+        setTimeout(() => {
+            if (notificacion.parentNode) {
+                notificacion.parentNode.removeChild(notificacion);
+            }
+        }, 4000);
+    }
+
+    // Función para volver al menú principal
+    function volverAlMenu() {
+        // Ocultar todas las secciones
+        const secciones = document.querySelectorAll('.container');
+        secciones.forEach(s => s.classList.add('hidden'));
+        
+        // Mostrar el menú principal
+        document.getElementById('main-menu-container').classList.remove('hidden');
+    }
+
+    // Función para mostrar secciones
+    function mostrarSeccion(seccion) {
+        // Ocultar todas las secciones
+        const secciones = document.querySelectorAll('.container');
+        secciones.forEach(s => s.classList.add('hidden'));
+        
+        // Mostrar la sección seleccionada
+        document.getElementById(seccion).classList.remove('hidden');
+        
+        // Ejecutar carga de datos según la sección
+        switch(seccion) {
+            case 'registrar-avance':
+                cargarObras();
+                break;
+            case 'consultar-avances':
+                cargarObras();
+                mostrarTabAvances('lista');
+                break;
+            case 'gestion-obras':
+                cargarObras();
+                break;
+            case 'gestion-inventario':
+                cargarCategorias();
+                cargarMateriales();
+                mostrarTabInventario('consultar');
+                break;
+            case 'gestion-usuarios':
+                cargarUsuarios();
+                break;
+            case 'reportes':
+                cargarObras();
+                cargarCategorias();
+                mostrarTabReporte('avances');
+                break;
+            case 'documentacion':
+                cargarObras();
+                break;
+            case 'planificacion-metas':
+                cargarObras();
+                break;
+            case 'cobranzas':
+                cargarObras();
+                break;
+            case 'transferencias':
+                cargarObras();
+                cargarMateriales();
+                break;
+        }
+    }
+
+    // Función para mostrar tabs en diferentes secciones
+    function mostrarTabAvances(tab) {
+        // Ocultar todos los tabs
+        document.querySelectorAll('#consultar-avances .tab-content').forEach(content => {
+            content.classList.add('hidden');
+        });
+        
+        // Desactivar todos los tabs
+        document.querySelectorAll('#consultar-avances .nav-link').forEach(link => {
+            link.classList.remove('active');
+        });
+        
+        // Mostrar el tab seleccionado
+        document.getElementById('tab-' + tab + '-avances').classList.remove('hidden');
+        
+        // Activar el tab seleccionado
+        document.querySelector(`#consultar-avances .nav-link[onclick="mostrarTabAvances('${tab}')"]`).classList.add('active');
+        
+        // Cargar datos según el tab
+        switch (tab) {
+            case 'lista':
+                filtrarAvances();
+                break;
+            case 'jerarquia':
+                cargarJerarquiaObra();
+                break;
+            case 'espacios-comunes':
+                cargarEspaciosComunes();
+                break;
+        }
+    }
+
+    function mostrarTabInventario(tab) {
+        // Ocultar todos los tabs
+        document.querySelectorAll('#gestion-inventario .tab-content').forEach(content => {
+            content.classList.add('hidden');
+        });
+        
+        // Desactivar todos los tabs
+        document.querySelectorAll('#gestion-inventario .nav-link').forEach(link => {
+            link.classList.remove('active');
+        });
+        
+        // Mostrar el tab seleccionado
+        document.getElementById('inventario-' + tab).classList.remove('hidden');
+        
+        // Activar el tab seleccionado
+        document.querySelector(`#gestion-inventario .nav-link[onclick="mostrarTabInventario('${tab}')"]`).classList.add('active');
+        
+        // Cargar datos según el tab
+        switch (tab) {
+            case 'consultar':
+                cargarMateriales();
+                break;
+            case 'entradas':
+                cargarMateriales();
+                break;
+            case 'salidas':
+                cargarMateriales();
+                cargarObras();
+                break;
+            case 'movimientos':
+                cargarMovimientosInventario();
+                cargarMateriales();
+                break;
+        }
+    }
+
+    function mostrarTabReporte(tab) {
+        // Ocultar todos los tabs
+        document.querySelectorAll('#reportes .tab-content').forEach(content => {
+            content.classList.add('hidden');
+        });
+        
+        // Desactivar todos los tabs
+        document.querySelectorAll('#reportes .nav-link').forEach(link => {
+            link.classList.remove('active');
+        });
+        
+        // Mostrar el tab seleccionado
+        document.getElementById('reporte-' + tab).classList.remove('hidden');
+        
+        // Activar el tab seleccionado
+        document.querySelector(`#reportes .nav-link[onclick="mostrarTabReporte('${tab}')"]`).classList.add('active');
+    }
+// Función para iniciar sesión
+    async function iniciarSesion() {
+        const username = document.getElementById('username').value;
+        const password = document.getElementById('password').value;
+
+        if (!username || !password) {
+            mostrarNotificacion("Por favor, complete todos los campos.", "error");
+            return;
+        }
+
+        try {
+            const response = await callAPI('iniciarSesion', { username, password });
+
+            if (!response.success) {
+                mostrarNotificacion(response.message, "error");
+                return;
+            }
+
+            // Guardar datos de sesión
+            usuarioActual = response.usuario;
+            tokenSesion = response.token;
+
+            // Actualizar interfaz
+            document.getElementById('current-user').textContent = usuarioActual.nombre + ' ' + usuarioActual.apellido;
+            document.getElementById('current-role').textContent = usuarioActual.rol;
+
+            // Aplicar controles de acceso según el rol
+            aplicarControlAcceso();
+
+            // Mostrar menú principal
+            document.getElementById('login-container').classList.add('hidden');
+            document.getElementById('main-menu-container').classList.remove('hidden');
+
+            // Cargar datos iniciales
+            await Promise.all([
+                cargarObras(),
+                cargarCategorias()
+            ]);
+
+            // Verificar si necesita cambiar contraseña
+            if (usuarioActual.requiereCambioContrasena) {
+                mostrarModalContrasena();
+            }
+
+            // Mostrar notificación
+            mostrarNotificacion("Sesión iniciada correctamente.", "success");
+        } catch (error) {
+            mostrarNotificacion("Error al iniciar sesión.", "error");
+        }
+    }
+
+    // Función para aplicar controles de acceso según el rol
+    function aplicarControlAcceso() {
+        if (!usuarioActual) return;
+        
+        // Elementos a controlar
+        const elementosControl = [
+            { id: 'registrar-avance-btn', roles: ['Admin', 'Supervisor', 'Técnico'] },
+            { id: 'gestion-obras-btn', roles: ['Admin', 'Supervisor'] },
+            { id: 'gestion-inventario-btn', roles: ['Admin', 'Supervisor'] },
+            { id: 'gestion-usuarios-btn', roles: ['Admin'] },
+            { id: 'configuracion-btn', roles: ['Admin'] },
+            { id: 'planificacion-metas-btn', roles: ['Admin', 'Supervisor'] },
+            { id: 'cobranzas-btn', roles: ['Admin', 'Supervisor'] },
+            { id: 'transferencias-btn', roles: ['Admin', 'Supervisor'] }
+        ];
+        
+        // Verificar cada elemento
+        elementosControl.forEach(elemento => {
+            const el = document.getElementById(elemento.id);
+            if (!el) return;
+            
+            if (elemento.roles.includes(usuarioActual.rol)) {
+                el.style.display = 'flex';
+            } else {
+                el.style.display = 'none';
+            }
+        });
+    }
+
+    // Función para cerrar sesión
+    async function cerrarSesion() {
+        try {
+            await callAPI('cerrarSesion');
+            
+            // Reiniciar variables
+            usuarioActual = null;
+            tokenSesion = null;
+            
+            // Volver a pantalla de login
+            document.getElementById('main-menu-container').classList.add('hidden');
+            document.getElementById('login-container').classList.remove('hidden');
+            
+            // Limpiar campos
+            document.getElementById('username').value = '';
+            document.getElementById('password').value = '';
+            
+            // Ocultar todas las secciones
+            const secciones = document.querySelectorAll('.container:not(#login-container)');
+            secciones.forEach(seccion => seccion.classList.add('hidden'));
+            
+            mostrarNotificacion("Sesión cerrada correctamente.", "success");
+        } catch (error) {
+            mostrarNotificacion("Error al cerrar sesión.", "error");
+        }
+    }
+
+    // Función para cambiar contraseña
+    async function cambiarContrasena() {
+        const contrasenaActual = document.getElementById('contrasena-actual').value;
+        const nuevaContrasena = document.getElementById('contrasena-nueva').value;
+        const confirmarContrasena = document.getElementById('contrasena-confirmar').value;
+        const errorElement = document.getElementById('cambiar-contrasena-error');
+        
+        // Validar que las contraseñas coincidan
+        if (nuevaContrasena !== confirmarContrasena) {
+            errorElement.textContent = 'Las contraseñas no coinciden';
+            errorElement.classList.remove('hidden');
+            return;
+        }
+        
+        // Validar longitud mínima
+        if (nuevaContrasena.length < 8) {
+            errorElement.textContent = 'La contraseña debe tener al menos 8 caracteres';
+            errorElement.classList.remove('hidden');
+            return;
+        }
+        
+        try {
+            const response = await callAPI('cambiarContrasena', {
+                contrasenaActual: contrasenaActual,
+                nuevaContrasena: nuevaContrasena
+            });
+            
+            if (response.success) {
+                mostrarNotificacion("Contraseña cambiada correctamente.", "success");
+                cerrarModalContrasena();
+            } else {
+                errorElement.textContent = response.message;
+                errorElement.classList.remove('hidden');
+            }
+        } catch (error) {
+            errorElement.textContent = 'Error al cambiar la contraseña';
+            errorElement.classList.remove('hidden');
+        }
+    }
+
+    // Funciones para modal de cambio de contraseña
+    function mostrarModalContrasena() {
+        const modal = document.getElementById('modal-cambiar-contrasena');
+        if (modal) {
+            modal.classList.remove('hidden');
+            
+            // Limpiar campos
+            document.getElementById('contrasena-actual').value = '';
+            document.getElementById('contrasena-nueva').value = '';
+            document.getElementById('contrasena-confirmar').value = '';
+            
+            const errorElement = document.getElementById('cambiar-contrasena-error');
+            if (errorElement) errorElement.classList.add('hidden');
+        }
+    }
+
+    function cerrarModalContrasena() {
+        const modal = document.getElementById('modal-cambiar-contrasena');
+        if (modal) {
+            modal.classList.add('hidden');
+        }
+    }
+
+    // Función para cerrar modal de detalle de avance
+    function cerrarModalDetalleAvance() {
+        document.getElementById('modal-detalle-avance').classList.add('hidden');
+    }
+async function cargarObras() {
+        try {
+            const response = await callAPI('obtenerObras');
+            if (response.error) {
+                mostrarNotificacion("Error al cargar las obras.", "error");
+                return;
+            }
+            
+            obrasData = response.datos;
+            
+            // Actualizar selectores de obras
+            const selectores = [
+                'obra-avance',
+                'filtro-obra',
+                'jerarquia-obra',
+                'comunes-obra',
+                'reporte-obra',
+                'reporte-inv-obra',
+                'edt-obra',
+                'doc-obra',
+                'metas-obra',
+                'cobranza-obra',
+                'obra-origen',
+                'obra-destino',
+                'filtro-obra-origen',
+                'filtro-obra-destino',
+                'destino-salida',
+                'presupuesto-obra',
+                'planificacion-obra'
+            ];
+            
+            selectores.forEach(selector => {
+                const select = document.getElementById(selector);
+                if (!select) return;
+                
+                // Mantener primera opción
+                const primeraOpcion = select.options[0];
+                select.innerHTML = '';
+                select.appendChild(primeraOpcion);
+                
+                // Agregar obras
+                obrasData.forEach(obra => {
+                    const option = document.createElement('option');
+                    option.value = obra.id;
+                    option.textContent = obra.nombre;
+                    select.appendChild(option);
+                });
+            });
+            
+            // Actualizar tabla de obras si está visible
+            if (!document.getElementById('gestion-obras').classList.contains('hidden')) {
+                const tbody = document.getElementById('obras-tbody');
+                tbody.innerHTML = '';
+                
+                obrasData.forEach(obra => {
+                    const tr = document.createElement('tr');
+                    
+                    // Aplicar clase según el estado
+                    if (obra.estado === 'Finalizada') {
+                        tr.classList.add('bg-success');
+                    } else if (obra.estado === 'Suspendida') {
+                        tr.classList.add('bg-warning');
+                    }
+                    
+                    tr.innerHTML = `
+                        <td>${obra.nombre}</td>
+                        <td>${obra.direccion || '-'}</td>
+                        <td>${obra.fechaInicio ? new Date(obra.fechaInicio).toLocaleDateString() : '-'}</td>
+                        <td>${obra.fechaTermino ? new Date(obra.fechaTermino).toLocaleDateString() : '-'}</td>
+                        <td>${obra.tipo}</td>
+                        <td><span class="badge badge-${obra.estado === 'Finalizada' ? 'secondary' : 
+                            obra.estado === 'En progreso' ? 'primary' : 
+                            obra.estado === 'Suspendida' ? 'danger' : 'warning'}">${obra.estado}</span></td>
+                        <td>
+                            <div class="progress-bar-container">
+                                <div class="progress-bar bg-${
+                                    obra.avanceGeneral >= 75 ? 'success' : 
+                                    obra.avanceGeneral >= 50 ? 'primary' : 
+                                    obra.avanceGeneral >= 25 ? 'warning' : 'danger'
+                                }" 
+                                style="width: ${obra.avanceGeneral}%;">${obra.avanceGeneral}%</div>
+                            </div>
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-primary" onclick="editarObra('${obra.id}')">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn btn-sm btn-secondary" onclick="mostrarModalMaquetacion('${obra.id}')">
+                                <i class="fas fa-cogs"></i>
+                            </button>
+                            <button class="btn btn-sm btn-danger" onclick="eliminarObra('${obra.id}')">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    `;
+                    
+                    tbody.appendChild(tr);
+                });
+            }
+        } catch (error) {
+            mostrarNotificacion("Error al cargar las obras.", "error");
+        }
+    }
+
+    // Función para cargar categorías
+    async function cargarCategorias() {
+        try {
+            const response = await callAPI('obtenerCategorias');
+            if (response.error) {
+                mostrarNotificacion("Error al cargar las categorías.", "error");
+                return;
+            }
+            
+            categoriasData = response.datos;
+            
+            // Actualizar selectores de categorías
+            const selectores = [
+                'filtro-categoria',
+                'categoria-material',
+                'reporte-inv-categoria'
+            ];
+            
+            selectores.forEach(selector => {
+                const select = document.getElementById(selector);
+                if (!select) return;
+                
+                // Mantener primera opción
+                const primeraOpcion = select.options[0];
+                select.innerHTML = '';
+                select.appendChild(primeraOpcion);
+                
+                // Agregar categorías
+                categoriasData.forEach(categoria => {
+                    const option = document.createElement('option');
+                    option.value = categoria.id;
+                    option.textContent = categoria.nombre;
+                    select.appendChild(option);
+                });
+            });
+            
+            // Actualizar tabla de categorías si está visible
+            if (!document.getElementById('inventario-categorias').classList.contains('hidden')) {
+                const tbody = document.getElementById('categorias-tbody');
+                tbody.innerHTML = '';
+                
+                categoriasData.forEach(categoria => {
+                    const tr = document.createElement('tr');
+                    
+                    // Contar materiales por categoría
+                    const cantidadMateriales = materialesData.filter(m => m.categoriaId == categoria.id).length;
+                    
+                    tr.innerHTML = `
+                        <td>${categoria.nombre}</td>
+                        <td>${categoria.descripcion}</td>
+                        <td>
+                            <div style="width: 20px; height: 20px; background-color: ${categoria.color}; border-radius: 3px;"></div>
+                        </td>
+                        <td>${cantidadMateriales}</td>
+                        <td>
+                            <button class="btn btn-sm btn-primary" onclick="editarCategoria('${categoria.id}')">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn btn-sm btn-danger" onclick="eliminarCategoria('${categoria.id}')">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    `;
+                    
+                    tbody.appendChild(tr);
+                });
+            }
+        } catch (error) {
+            mostrarNotificacion("Error al cargar las categorías.", "error");
+        }
+    }
+
+    // Función para cargar usuarios
+    async function cargarUsuarios() {
+        try {
+            const response = await callAPI('obtenerUsuarios');
+            if (response.error) {
+                mostrarNotificacion("Error al cargar los usuarios.", "error");
+                return;
+            }
+            
+            usuariosData = response.datos;
+            
+            // Actualizar tabla de usuarios
+            const tbody = document.getElementById('usuarios-tbody');
+            tbody.innerHTML = '';
+            
+            usuariosData.forEach(usuario => {
+                const tr = document.createElement('tr');
+                
+                // Determinar clase badge según el rol
+                let badgeClass = 'primary'; // Por defecto
+                if (usuario.rol === 'Admin') {
+                    badgeClass = 'danger';
+                } else if (usuario.rol === 'Supervisor') {
+                    badgeClass = 'warning';
+                } else if (usuario.rol === 'Técnico') {
+                    badgeClass = 'success';
+                } else if (usuario.rol === 'Ayudante') {
+                    badgeClass = 'info';
+                }
+                
+                tr.innerHTML = `
+                    <td>${usuario.nombre} ${usuario.apellido}</td>
+                    <td>${usuario.usuario}</td>
+                    <td><span class="badge badge-${badgeClass}">${usuario.rol}</span></td>
+                    <td>${usuario.email || '-'}</td>
+                    <td>${usuario.ultimoAcceso ? new Date(usuario.ultimoAcceso).toLocaleString() : 'Nunca'}</td>
+                    <td>
+                        <button class="btn btn-sm btn-primary" onclick="editarUsuario('${usuario.id}')">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn btn-sm btn-danger" onclick="eliminarUsuario('${usuario.id}')">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                `;
+                
+                tbody.appendChild(tr);
+            });
+        } catch (error) {
+            mostrarNotificacion("Error al cargar los usuarios.", "error");
+        }
+    }
+
+    // Función para cargar materiales
+    async function cargarMateriales(filtros = {}) {
+        try {
+            const response = await callAPI('obtenerMateriales', { filtros });
+            if (response.error) {
+                mostrarNotificacion("Error al cargar los materiales.", "error");
+                return;
+            }
+            
+            materialesData = response.datos;
+            
+            // Actualizar selectores de materiales
+            const selectores = [
+                'material-entrada',
+                'material-salida',
+                'filtro-material-movimiento',
+                'material-transferencia',
+                'material-presupuesto',
+                'material-programacion'
+            ];
+            
+            selectores.forEach(selector => {
+                const select = document.getElementById(selector);
+                if (!select) return;
+                
+                // Mantener primera opción
+                const primeraOpcion = select.options[0];
+                select.innerHTML = '';
+                select.appendChild(primeraOpcion);
+                
+                // Agregar materiales
+                materialesData.forEach(material => {
+                    const option = document.createElement('option');
+                    option.value = material.id;
+                    option.textContent = `${material.codigo} - ${material.nombre}`;
+                    select.appendChild(option);
+                });
+            });
+            
+            // Actualizar tabla de inventario si está visible
+            if (!document.getElementById('inventario-consultar').classList.contains('hidden')) {
+                const tbody = document.getElementById('inventario-tbody');
+                tbody.innerHTML = '';
+                
+                materialesData.forEach(material => {
+                    const tr = document.createElement('tr');
+                    
+                    // Aplicar clase según el stock
+                    if (material.stock <= 0) {
+                        tr.classList.add('stock-zero');
+                    } else if (material.stock <= material.stockMinimo) {
+                        tr.classList.add('stock-low');
+                    } else {
+                        tr.classList.add('stock-ok');
+                    }
+                    
+                    // Encontrar categoría
+                    const categoria = categoriasData.find(c => c.id === material.categoriaId);
+                    const categoriaNombre = categoria ? categoria.nombre : 'Sin categoría';
+                    const categoriaColor = categoria ? categoria.color : '#999';
+                    
+                    tr.innerHTML = `
+                        <td>${material.codigo}</td>
+                        <td>${material.nombre}</td>
+                        <td>${material.descripcion || '-'}</td>
+                        <td>
+                            <span class="badge" style="background-color: ${categoriaColor}">
+                                ${categoriaNombre}
+                            </span>
+                        </td>
+                        <td class="${material.stock <= material.stockMinimo ? 'text-danger' : ''}">${material.stock}</td>
+                        <td>${material.stockMinimo}</td>
+                        <td>${material.unidad}</td>
+                        <td>${material.ubicacion || '-'}</td>
+                        <td>
+                            <button class="btn btn-sm btn-primary" onclick="editarMaterial('${material.id}')">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn btn-sm btn-success" onclick="mostrarEntradaRapida('${material.id}')">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                            <button class="btn btn-sm btn-warning" onclick="mostrarSalidaRapida('${material.id}')">
+                                <i class="fas fa-minus"></i>
+                            </button>
+                            <button class="btn btn-sm btn-danger" onclick="eliminarMaterial('${material.id}')">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    `;
+                    
+                    tbody.appendChild(tr);
+                });
+            }
+        } catch (error) {
+            mostrarNotificacion("Error al cargar los materiales.", "error");
+        }
+    }
+ function mostrarFormularioObra() {
+        document.getElementById('formulario-obra').classList.remove('hidden');
+        document.getElementById('obra-id').value = '';
+        document.getElementById('nombre-obra').value = '';
+        document.getElementById('direccion-obra').value = '';
+        document.getElementById('fecha-inicio').value = '';
+        document.getElementById('fecha-termino').value = '';
+        document.getElementById('tipo-obra').value = 'condominios';
+        document.getElementById('estado-obra').value = 'Planificación';
+    }
+
+    // Función para cancelar la edición de obra
+    function cancelarEdicionObra() {
+        document.getElementById('formulario-obra').classList.add('hidden');
+    }
+
+    // Función para editar una obra
+    function editarObra(id) {
+        const obra = obrasData.find(o => o.id === id);
+        if (!obra) {
+            mostrarNotificacion("Obra no encontrada", "error");
+            return;
+        }
+        
+        document.getElementById('obra-id').value = obra.id;
+        document.getElementById('nombre-obra').value = obra.nombre;
+        document.getElementById('direccion-obra').value = obra.direccion || '';
+        document.getElementById('fecha-inicio').value = obra.fechaInicio ? new Date(obra.fechaInicio).toISOString().split('T')[0] : '';
+        document.getElementById('fecha-termino').value = obra.fechaTermino ? new Date(obra.fechaTermino).toISOString().split('T')[0] : '';
+        document.getElementById('tipo-obra').value = obra.tipo;
+        document.getElementById('estado-obra').value = obra.estado;
+        
+        document.getElementById('formulario-obra').classList.remove('hidden');
+    }
+
+    // Función para guardar una obra
+    async function guardarObra() {
+        const id = document.getElementById('obra-id').value;
+        const nombre = document.getElementById('nombre-obra').value;
+        const direccion = document.getElementById('direccion-obra').value;
+        const fechaInicio = document.getElementById('fecha-inicio').value;
+        const fechaTermino = document.getElementById('fecha-termino').value;
+        const tipo = document.getElementById('tipo-obra').value;
+        const estado = document.getElementById('estado-obra').value;
+        
+        if (!nombre) {
+            mostrarNotificacion("Por favor ingrese el nombre de la obra", "error");
+            return;
+        }
+        
+        const obra = {
+            id,
+            nombre,
+            direccion,
+            fechaInicio,
+            fechaTermino,
+            tipo,
+            estado
+        };
+        
+        try {
+            document.getElementById('obras-loader').classList.remove('hidden');
+            
+            const response = await callAPI('guardarObra', obra);
+            
+            document.getElementById('obras-loader').classList.add('hidden');
+            
+            if (response.success) {
+                mostrarNotificacion("Obra guardada correctamente", "success");
+                cancelarEdicionObra();
+                await cargarObras();
+            } else {
+                mostrarNotificacion(response.message || "Error al guardar la obra", "error");
+            }
+        } catch (error) {
+            document.getElementById('obras-loader').classList.add('hidden');
+            mostrarNotificacion("Error al guardar la obra", "error");
+        }
+    }
+
+    // Función para eliminar una obra
+    async function eliminarObra(id) {
+        if (!confirm('¿Está seguro de eliminar esta obra? Esta acción no se puede deshacer y eliminará todos los datos asociados.')) {
+            return;
+        }
+        
+        try {
+            document.getElementById('obras-loader').classList.remove('hidden');
+            
+            const response = await callAPI('eliminarObra', { id });
+            
+            document.getElementById('obras-loader').classList.add('hidden');
+            
+            if (response.success) {
+                mostrarNotificacion("Obra eliminada correctamente", "success");
+                await cargarObras();
+            } else {
+                mostrarNotificacion(response.message || "Error al eliminar la obra", "error");
+            }
+        } catch (error) {
+            document.getElementById('obras-loader').classList.add('hidden');
+            mostrarNotificacion("Error al eliminar la obra", "error");
+        }
+    }
+
+    // ============================================
+    // MODAL DE MAQUETACIÓN - FUNCIONES PRINCIPALES
+    // ============================================
+
+    // Variables globales para maquetación (ya declaradas arriba)
+    // let shaftsPorTorrePiso = [];
+    // let dispositivosPorShaft = [];
+
+    // Función para mostrar modal de maquetación
+    function mostrarModalMaquetacion(obraId) {
+        const modal = document.getElementById('modal-maquetacion');
+        
+        // Si se proporciona ID directamente, usar ese
+        // Si no, tomar el ID del formulario de obra actual
+        const idObra = obraId || document.getElementById('obra-id').value;
+        
+        // Limpiar estado previo
+        window.maquetacionModificada = false;
+        window.maquetacionObraId = idObra;
+        
+        // Actualizar título del modal
+        const modalTitle = modal.querySelector('.modal-title');
+        if (modalTitle) {
+            if (idObra) {
+                // Si estamos editando una obra existente
+                const obra = obrasData.find(o => o.id === idObra);
+                if (obra) {
+                    modalTitle.innerHTML = `<i class="fas fa-cogs"></i> Configurar Maquetación - ${obra.nombre}`;
+                    // Cargar datos de la obra en el formulario de maquetación
+                    cargarDatosMaquetacion(obra);
+                } else {
+                    modalTitle.innerHTML = `<i class="fas fa-cogs"></i> Configurar Maquetación`;
+                }
+            } else {
+                // Si es una obra nueva, usar datos del formulario principal
+                const nombreObra = document.getElementById('nombre-obra').value;
+                modalTitle.innerHTML = `<i class="fas fa-cogs"></i> Configurar Maquetación - ${nombreObra}`;
+                
+                // Cargar datos básicos del formulario principal
+                cargarDatosBasicosMaquetacion();
+            }
+        }
+        
+        // Inicializar la primera pestaña
+        mostrarTabMaquetacion('info-basica');
+        
+        // Inicializar opciones de dispositivos en shaft
+        actualizarOpcionesDispositivo();
+        
+        // Mostrar el modal
+        modal.classList.remove('hidden');
+    }
+
+    // Función para cerrar modal de maquetación
+    function cerrarModalMaquetacion() {
+        const modal = document.getElementById('modal-maquetacion');
+        
+        // Verificar si hay cambios pendientes
+        if (window.maquetacionModificada) {
+            if (confirm('Hay cambios sin guardar en la maquetación. ¿Desea guardarlos antes de cerrar?')) {
+                // Intentar guardar los cambios antes de cerrar
+                guardarMaquetacion();
+            }
+            // Resetear la bandera de modificación
+            window.maquetacionModificada = false;
+        }
+        
+        // Ocultar el modal
+        modal.classList.add('hidden');
+    }
+
+    // Cargar datos básicos de la obra desde el formulario principal
+    function cargarDatosBasicosMaquetacion() {
+        // Transferir datos básicos del formulario principal al formulario de maquetación
+        document.getElementById('nombre-obra-maq').value = document.getElementById('nombre-obra').value || '';
+        document.getElementById('direccion-obra-maq').value = document.getElementById('direccion-obra').value || '';
+        document.getElementById('fecha-inicio-maq').value = document.getElementById('fecha-inicio').value || '';
+        document.getElementById('fecha-termino-maq').value = document.getElementById('fecha-termino').value || '';
+        document.getElementById('tipo-obra-maq').value = document.getElementById('tipo-obra').value || 'condominios';
+        document.getElementById('estado-obra-maq').value = document.getElementById('estado-obra').value || 'Planificación';
+    }
+
+    // Cargar datos completos de la obra para maquetación
+    function cargarDatosMaquetacion(obra) {
+        // Cargar datos básicos
+        document.getElementById('nombre-obra-maq').value = obra.nombre || '';
+        document.getElementById('direccion-obra-maq').value = obra.direccion || '';
+        document.getElementById('fecha-inicio-maq').value = obra.fechaInicio || '';
+        document.getElementById('fecha-termino-maq').value = obra.fechaTermino || '';
+        document.getElementById('tipo-obra-maq').value = obra.tipo || 'condominios';
+        document.getElementById('estado-obra-maq').value = obra.estado || 'Planificación';
+        document.getElementById('empresa-cliente-maq').value = obra.empresaCliente || '';
+        
+        // Si la obra tiene configuración de maquetación, cargarla
+        if (obra.maquetacion) {
+            cargarConfiguracionMaquetacion(obra.maquetacion);
+        }
+    }
+
+    // Función para guardar la maquetación
+    function guardarMaquetacion() {
+        try {
+            // Obtener toda la configuración del formulario de maquetación
+            const configuracionMaquetacion = obtenerConfiguracionMaquetacion();
+            
+            // Crear objeto para enviar a la API
+            const datosMaquetacion = {
+                id: window.maquetacionObraId, // Puede ser null si es una obra nueva
+                maquetacion: configuracionMaquetacion,
+                // Datos básicos del formulario de maquetación
+                nombre: document.getElementById('nombre-obra-maq').value,
+                direccion: document.getElementById('direccion-obra-maq').value,
+                fechaInicio: document.getElementById('fecha-inicio-maq').value,
+                fechaTermino: document.getElementById('fecha-termino-maq').value,
+                tipo: document.getElementById('tipo-obra-maq').value,
+                estado: document.getElementById('estado-obra-maq').value,
+                empresaCliente: document.getElementById('empresa-cliente-maq').value
+            };
+            
+            // Mostrar notificación de guardado
+            mostrarNotificacion('Guardando configuración de maquetación...', 'info');
+            
+            // Llamar a la API para guardar
+            callAPI('guardarMaquetacion', datosMaquetacion).then(response => {
+                if (response.success) {
+                    // Si es nueva obra, establecer ID en el formulario principal
+                    if (!datosMaquetacion.id && response.obraId) {
+                        document.getElementById('obra-id').value = response.obraId;
+                    }
+                    
+                    // Transferir otros datos al formulario principal
+                    document.getElementById('nombre-obra').value = datosMaquetacion.nombre;
+                    document.getElementById('direccion-obra').value = datosMaquetacion.direccion;
+                    document.getElementById('fecha-inicio').value = datosMaquetacion.fechaInicio;
+                    document.getElementById('fecha-termino').value = datosMaquetacion.fechaTermino;
+                    document.getElementById('tipo-obra').value = datosMaquetacion.tipo;
+                    document.getElementById('estado-obra').value = datosMaquetacion.estado;
+                    
+                    // Marcar como no modificado
+                    window.maquetacionModificada = false;
+                    
+                    // Notificar éxito
+                    mostrarNotificacion('Maquetación guardada correctamente', 'success');
+                    
+                    // Recargar lista de obras
+                    cargarObras();
+                    
+                    // Opcionalmente, cerrar el modal
+                    if (confirm('¿Desea cerrar el modal de maquetación?')) {
+                        cerrarModalMaquetacion();
+                    }
+                } else {
+                    mostrarNotificacion(response.message || 'Error al guardar la maquetación', 'error');
+                }
+            }).catch(error => {
+                console.error('Error al guardar la maquetación:', error);
+                mostrarNotificacion('Error al guardar la maquetación: ' + error.message, 'error');
+            });
+            
+            return true;
+        } catch (error) {
+            console.error('Error al guardar la maquetación:', error);
+            mostrarNotificacion('Error al guardar la maquetación: ' + error.message, 'error');
+            return false;
+        }
+    }
+
+    // Función para obtener toda la configuración de maquetación
+    function obtenerConfiguracionMaquetacion() {
+        // Información básica
+        const infoBasica = {
+            nombre: document.getElementById('nombre-obra-maq').value,
+            direccion: document.getElementById('direccion-obra-maq').value,
+            fechaInicio: document.getElementById('fecha-inicio-maq').value,
+            fechaTermino: document.getElementById('fecha-termino-maq').value,
+            tipo: document.getElementById('tipo-obra-maq').value,
+            estado: document.getElementById('estado-obra-maq').value,
+            descripcion: document.getElementById('descripcion-obra-maq').value,
+            empresaCliente: document.getElementById('empresa-cliente-maq').value
+        };
+        
+        // Estructura física (infraestructura)
+        const estructuraFisica = {
+            torres: document.getElementById('incluir-torres').checked ? {
+                cantidad: parseInt(document.getElementById('cantidad-torres').value) || 1,
+                nomenclatura: document.getElementById('nomenclatura-torres').value
+            } : null,
+            
+            pisos: document.getElementById('incluir-pisos').checked ? {
+                configuracionGlobal: document.getElementById('configuracion-pisos-global').value === 'global',
+                inicioGlobal: parseInt(document.getElementById('piso-inicio-global').value) || 1,
+                finGlobal: parseInt(document.getElementById('piso-fin-global').value) || 10,
+                nomenclatura: document.getElementById('nomenclatura-pisos-global').value
+            } : null,
+            
+            unidades: document.getElementById('incluir-unidades').checked ? {
+                cantidadPorPiso: parseInt(document.getElementById('unidades-por-piso').value) || 4,
+                nomenclatura: document.getElementById('nomenclatura-unidades').value
+            } : null,
+            
+            ctr: document.getElementById('incluir-ctr').checked ? {
+                tipo: document.getElementById('tipo-ctr').value
+            } : null,
+            
+            shaft: document.getElementById('incluir-shaft').checked ? {
+                configuracionGlobal: document.getElementById('configuracion-shaft').value === 'global',
+                cantidadPorTorre: parseInt(document.getElementById('cantidad-shaft-por-torre').value) || 1
+            } : null,
+            
+            sot: document.getElementById('incluir-sot').checked ? {
+                distribucion: document.getElementById('distribucion-sot').value
+            } : null,
+            
+            camaras: document.getElementById('incluir-camaras').checked ? {
+                cantidad: parseInt(document.getElementById('cantidad-camaras').value) || 2
+            } : null
+        };
+        
+        // Red de telecomunicaciones
+        const redTelecomunicaciones = {
+            tipo: document.getElementById('tipo-red').value,
+            
+            coaxAlambrico: document.getElementById('incluir-coax-ala').checked ? {
+                marca: document.getElementById('marca-coax').value,
+                tipo: document.getElementById('tipo-coax').value,
+                incluyeT1T2: document.getElementById('incluir-t1-t2-alam').checked,
+                troncales: document.getElementById('incluir-troncal-coax').checked ? {
+                    cantidad: parseInt(document.getElementById('cantidad-troncales-coax').value) || 1
+                } : null
+            } : null,
+            
+            coaxInalambrico: document.getElementById('incluir-coax-ina').checked ? {
+                incluyeT1T2: document.getElementById('incluir-t1-t2-inal').checked,
+                troncales: document.getElementById('incluir-troncal-inal').checked ? {
+                    cantidad: parseInt(document.getElementById('cantidad-troncales-inal').value) || 1
+                } : null
+            } : null,
+            
+            fibra: document.getElementById('incluir-fibra').checked ? {
+                tipo: document.getElementById('tipo-fibra').value,
+                distribucion: document.getElementById('distribucion-fibra').value,
+                troncales: document.getElementById('incluir-troncal-fibra').checked ? {
+                    cantidad: parseInt(document.getElementById('cantidad-troncales-fibra').value) || 1
+                } : null
+            } : null,
+            
+            pau: document.getElementById('incluir-pau').checked ? {
+                puntosPorUnidad: parseInt(document.getElementById('puntos-por-unidad').value) || 2,
+                repartidorALAM: document.getElementById('incluir-repartidor-alam').checked ? {
+                    marca: document.getElementById('marca-repartidor-alam').value
+                } : null,
+                repartidorINAL: document.getElementById('incluir-repartidor-inal').checked ? {
+                    marca: document.getElementById('marca-repartidor-inal').value
+                } : null,
+                rosetaFO: document.getElementById('incluir-roseta-fo').checked ? {
+                    marca: document.getElementById('marca-roseta-fo').value
+                } : null
+            } : null,
+            
+            antenas: document.getElementById('incluir-antenas').checked ? {
+                tipo: document.getElementById('tipo-antenas').value,
+                cantidad: parseInt(document.getElementById('cantidad-antenas').value) || 1,
+                ubicacion: document.getElementById('ubicacion-antenas').value
+            } : null,
+            
+            amplificadores: document.getElementById('incluir-amplificadores').checked ? {
+                tipo: document.getElementById('tipo-amplificadores').value,
+                cantidad: parseInt(document.getElementById('cantidad-amplificadores').value) || 2
+            } : null
+        };
+        
+        // Mediciones
+        const mediciones = {
+            certificacion: document.getElementById('incluir-certificacion').checked ? {
+                equipo: document.getElementById('equipo-certificacion').value,
+                parametros: {
+                    atenuacion: document.getElementById('param-atenuacion').checked,
+                    continuidad: document.getElementById('param-continuidad').checked,
+                    potencia: document.getElementById('param-potencia').checked
+                }
+            } : null
+        };
+        
+        // Sistemas integrados
+        const sistemasIntegrados = {
+            redIncendios: document.getElementById('incluir-red-incendios').checked ? {
+                tipoDeteccion: document.getElementById('tipo-deteccion').value,
+                componentes: {
+                    detectores: document.getElementById('componente-detectores').checked,
+                    pulsadores: document.getElementById('componente-pulsadores').checked,
+                    sirenas: document.getElementById('componente-sirenas').checked,
+                    central: document.getElementById('componente-central').checked
+                }
+            } : null,
+            
+            corrientesDebiles: document.getElementById('incluir-corrientes-debiles').checked ? {
+                sistemas: {
+                    cctv: document.getElementById('sistema-cctv').checked,
+                    controlAcceso: document.getElementById('sistema-control-acceso').checked,
+                    intrusion: document.getElementById('sistema-intrusion').checked,
+                    audio: document.getElementById('sistema-audio').checked
+                }
+            } : null,
+            
+            citofonia: document.getElementById('incluir-citofonia').checked ? {
+                tipo: document.getElementById('tipo-citofonia').value,
+                integracion: document.getElementById('integracion-citofonia').value
+            } : null,
+            
+            motoresAcceso: document.getElementById('incluir-motores-acceso').checked ? {
+                tipo: document.getElementById('tipo-motores').value,
+                cantidad: parseInt(document.getElementById('cantidad-motores').value) || 2,
+                control: document.getElementById('control-motores').value
+            } : null
+        };
+        
+        // Incluir datos de las variables globales
+        return {
+            infoBasica,
+            estructuraFisica,
+            redTelecomunicaciones,
+            mediciones,
+            sistemasIntegrados,
+            // Incluir las configuraciones que se manejan en variables globales
+            shaftsPorTorrePiso: window.shaftsPorTorrePiso || [],
+            dispositivosPorShaft: window.dispositivosPorShaft || []
+        };
+    }
+
+    // Marcar que la maquetación ha sido modificada
+    function marcarMaquetacionComoModificada() {
+        window.maquetacionModificada = true;
+    }
+    // ============================================
+    // PARTE 4: GESTIÓN DE USUARIOS
+    // ============================================
+
+    // Función para mostrar el formulario de usuario
+    function mostrarFormularioUsuario() {
+        document.getElementById('formulario-usuario').classList.remove('hidden');
+        document.getElementById('usuario-id').value = '';
+        document.getElementById('nombre-usuario').value = '';
+        document.getElementById('apellido-usuario').value = '';
+        document.getElementById('username-usuario').value = '';
+        document.getElementById('contrasena-usuario').value = '';
+        document.getElementById('rol-usuario').value = 'Técnico';
+        document.getElementById('email-usuario').value = '';
+        
+        // Ocultar información sobre contraseña
+        document.getElementById('contrasena-info').classList.add('hidden');
+    }
+
+    // Función para cancelar la edición de usuario
+    function cancelarEdicionUsuario() {
+        document.getElementById('formulario-usuario').classList.add('hidden');
+    }
+
+    // Función para editar un usuario
+    function editarUsuario(id) {
+        const usuario = usuariosData.find(u => u.id === id);
+        if (!usuario) {
+            mostrarNotificacion("Usuario no encontrado", "error");
+            return;
+        }
+        
+        document.getElementById('usuario-id').value = usuario.id;
+        document.getElementById('nombre-usuario').value = usuario.nombre;
+        document.getElementById('apellido-usuario').value = usuario.apellido;
+        document.getElementById('username-usuario').value = usuario.usuario;
+        document.getElementById('contrasena-usuario').value = '';
+        document.getElementById('rol-usuario').value = usuario.rol;
+        document.getElementById('email-usuario').value = usuario.email || '';
+        
+        // Mostrar información sobre contraseña
+        document.getElementById('contrasena-info').classList.remove('hidden');
+        
+        document.getElementById('formulario-usuario').classList.remove('hidden');
+    }
+
+    // Función para guardar un usuario
+    async function guardarUsuario() {
+        const id = document.getElementById('usuario-id').value;
+        const nombre = document.getElementById('nombre-usuario').value;
+        const apellido = document.getElementById('apellido-usuario').value;
+        const username = document.getElementById('username-usuario').value;
+        const contrasena = document.getElementById('contrasena-usuario').value;
+        const rol = document.getElementById('rol-usuario').value;
+        const email = document.getElementById('email-usuario').value;
+        
+        if (!nombre || !apellido || !username) {
+            mostrarNotificacion("Por favor complete los campos obligatorios", "error");
+            return;
+        }
+        
+        // Si es un nuevo usuario, validar contraseña
+        if (!id && !contrasena) {
+            mostrarNotificacion("Debe ingresar una contraseña para el nuevo usuario", "error");
+            return;
+        }
+        
+        const usuario = {
+            id,
+            nombre,
+            apellido,
+            usuario: username,
+            contrasena,
+            rol,
+            email
+        };
+        
+        try {
+            document.getElementById('usuarios-loader').classList.remove('hidden');
+            
+            const response = await callAPI('guardarUsuario', usuario);
+            
+            document.getElementById('usuarios-loader').classList.add('hidden');
+            
+            if (response.success) {
+                mostrarNotificacion("Usuario guardado correctamente", "success");
+                cancelarEdicionUsuario();
+                await cargarUsuarios();
+            } else {
+                mostrarNotificacion(response.message || "Error al guardar el usuario", "error");
+            }
+        } catch (error) {
+            document.getElementById('usuarios-loader').classList.add('hidden');
+            mostrarNotificacion("Error al guardar el usuario", "error");
+        }
+    }
+
+    // Función para eliminar un usuario
+    async function eliminarUsuario(id) {
+        // No permitir eliminar al usuario actual
+        if (usuarioActual && usuarioActual.id === id) {
+            mostrarNotificacion("No puede eliminar su propio usuario", "error");
+            return;
+        }
+        
+        if (!confirm('¿Está seguro de eliminar este usuario? Esta acción no se puede deshacer.')) {
+            return;
+        }
+        
+        try {
+            document.getElementById('usuarios-loader').classList.remove('hidden');
+            
+            const response = await callAPI('eliminarUsuario', { id });
+            
+            document.getElementById('usuarios-loader').classList.add('hidden');
+            
+            if (response.success) {
+                mostrarNotificacion("Usuario eliminado correctamente", "success");
+                await cargarUsuarios();
+            } else {
+                mostrarNotificacion(response.message || "Error al eliminar el usuario", "error");
+            }
+        } catch (error) {
+            document.getElementById('usuarios-loader').classList.add('hidden');
+            mostrarNotificacion("Error al eliminar el usuario", "error");
+        }
+    }
+
+    // ============================================
+    // PARTE 5: GESTIÓN DE AVANCES
+    // ============================================
+
+    // Función para cargar avances de la obra seleccionada
+    async function cargarAvancesObra() {
+        const obraId = document.getElementById('obra-avance').value;
+        
+        if (!obraId) return;
+        
+        try {
+            const response = await callAPI('obtenerTorresObra', { obraId });
+            
+            if (response.error) {
+                mostrarNotificacion("Error al cargar las torres de la obra", "error");
+                return;
+            }
+            
+            const torres = response.datos;
+            
+            // Actualizar selector de torres
+            const torreSelect = document.getElementById('torre-avance');
+            const primeraOpcion = torreSelect.options[0];
+            torreSelect.innerHTML = '';
+            torreSelect.appendChild(primeraOpcion);
+            
+            torres.forEach(torre => {
+                const option = document.createElement('option');
+                option.value = torre.id;
+                option.textContent = torre.nombre;
+                torreSelect.appendChild(option);
+            });
+            
+            // Limpiar selectores dependientes
+            document.getElementById('piso-avance').innerHTML = '<option value="">Seleccione un piso</option>';
+            document.getElementById('departamento-avance').innerHTML = '<option value="">Seleccione un departamento</option>';
+            document.getElementById('avances-especificos').innerHTML = '';
+        } catch (error) {
+            mostrarNotificacion("Error al cargar las torres de la obra", "error");
+        }
+    }
+
+    // Función para cargar pisos por torre
+    async function cargarPisosPorTorre(tipo = '') {
+        let torreSelect, pisoSelect, deptoSelect;
+        
+        if (tipo === 'filtro') {
+            torreSelect = document.getElementById('filtro-torre');
+            pisoSelect = document.getElementById('filtro-piso');
+            deptoSelect = document.getElementById('filtro-depto');
+        } else {
+            torreSelect = document.getElementById('torre-avance');
+            pisoSelect = document.getElementById('piso-avance');
+            deptoSelect = document.getElementById('departamento-avance');
+        }
+        
+        const torreId = torreSelect.value;
+        
+        if (!torreId) return;
+        
+        try {
+            const response = await callAPI('obtenerPisosTorre', { torreId });
+            
+            if (response.error) {
+                mostrarNotificacion("Error al cargar los pisos de la torre", "error");
+                return;
+            }
+            
+            const pisos = response.datos;
+            
+            // Actualizar selector de pisos
+            const primeraOpcion = pisoSelect.options[0];
+            pisoSelect.innerHTML = '';
+            pisoSelect.appendChild(primeraOpcion);
+            
+            pisos.forEach(piso => {
+                const option = document.createElement('option');
+                option.value = piso.id;
+                option.textContent = piso.nombre;
+                pisoSelect.appendChild(option);
+            });
+            
+            // Limpiar selector de departamentos
+            deptoSelect.innerHTML = '<option value="">Seleccione un departamento</option>';
+            
+            if (tipo !== 'filtro') {
+                document.getElementById('avances-especificos').innerHTML = '';
+            }
+        } catch (error) {
+            mostrarNotificacion("Error al cargar los pisos de la torre", "error");
+        }
+    }
+
+    // Función para cargar departamentos por piso
+    async function cargarDepartamentosPorPiso(tipo = '') {
+        let pisoSelect, deptoSelect;
+        
+        if (tipo === 'filtro') {
+            pisoSelect = document.getElementById('filtro-piso');
+            deptoSelect = document.getElementById('filtro-depto');
+        } else {
+            pisoSelect = document.getElementById('piso-avance');
+            deptoSelect = document.getElementById('departamento-avance');
+        }
+        
+        const pisoId = pisoSelect.value;
+        
+        if (!pisoId) return;
+        
+        try {
+            const response = await callAPI('obtenerDepartamentosPiso', { pisoId });
+            
+            if (response.error) {
+                mostrarNotificacion("Error al cargar los departamentos del piso", "error");
+                return;
+            }
+            
+            const departamentos = response.datos;
+            
+            // Actualizar selector de departamentos
+            const primeraOpcion = deptoSelect.options[0];
+            deptoSelect.innerHTML = '';
+            deptoSelect.appendChild(primeraOpcion);
+            
+            departamentos.forEach(depto => {
+                const option = document.createElement('option');
+                option.value = depto.id;
+                option.textContent = depto.nombre;
+                deptoSelect.appendChild(option);
+            });
+            
+            if (tipo !== 'filtro') {
+                document.getElementById('avances-especificos').innerHTML = '';
+            }
+        } catch (error) {
+            mostrarNotificacion("Error al cargar los departamentos del piso", "error");
+        }
+    }
+
+    // Función para cargar tipos de avances según departamento
+    async function cargarTiposAvance() {
+        const departamentoId = document.getElementById('departamento-avance').value;
+        
+        if (!departamentoId) return;
+        
+        try {
+            const response = await callAPI('obtenerTiposAvance', { departamentoId });
+            
+            if (response.error) {
+                mostrarNotificacion("Error al cargar los tipos de avance", "error");
+                return;
+            }
+            
+            const tiposAvance = response.datos;
+            
+            // Actualizar contenedor de avances específicos
+            const container = document.getElementById('avances-especificos');
+            container.innerHTML = '';
+            
+            tiposAvance.forEach(tipo => {
+                const div = document.createElement('div');
+                div.className = 'avance-item';
+                
+                div.innerHTML = `
+                    <label>
+                        <input type="checkbox" name="avance-${tipo.id}" data-id="${tipo.id}">
+                        ${tipo.nombre}
+                    </label>
+                `;
+                
+                container.appendChild(div);
+            });
+        } catch (error) {
+            mostrarNotificacion("Error al cargar los tipos de avance", "error");
+        }
+    }
+// ============================================
+    // PARTE 6: REGISTRO DE AVANCES
+    // ============================================
+
+    // Función para registrar un avance
+    async function registrarAvance() {
+        const obraId = document.getElementById('obra-avance').value;
+        const torreId = document.getElementById('torre-avance').value;
+        const pisoId = document.getElementById('piso-avance').value;
+        const departamentoId = document.getElementById('departamento-avance').value;
+        const tipoAvanceRadio = document.querySelector('input[name="tipo-avance"]:checked').value;
+        const observaciones = document.getElementById('observaciones').value;
+        
+        let espacioComunId = null;
+        if (tipoAvanceRadio === 'comun') {
+            espacioComunId = document.getElementById('espacio-comun').value;
+            if (!espacioComunId) {
+                mostrarNotificacion("Seleccione un espacio común", "error");
+                return;
+            }
+        } else {
+            if (!departamentoId) {
+                mostrarNotificacion("Seleccione un departamento", "error");
+                return;
+            }
+        }
+        
+        // Obtener avances seleccionados
+        const avancesChecked = document.querySelectorAll('#avances-especificos input[type="checkbox"]:checked');
+        if (avancesChecked.length === 0) {
+            mostrarNotificacion("Debe seleccionar al menos un avance", "error");
+            return;
+        }
+        
+        const avances = Array.from(avancesChecked).map(checkbox => checkbox.dataset.id);
+        
+        // Procesar fotos si existen
+        const fotosInput = document.getElementById('fotos-avance');
+        let fotos = [];
+        
+        if (fotosInput.files.length > 0) {
+            // En un entorno real, aquí se procesarían las imágenes
+            // Simulamos el proceso para este ejemplo
+            fotos = Array.from(fotosInput.files).map(file => ({
+                nombre: file.name,
+                tipo: file.type,
+                tamano: file.size,
+                // En un caso real, aquí iría el contenido de la imagen o su ID
+                contenido: 'imagen_simulada'
+            }));
+        }
+        
+        // Crear objeto de avance
+        const avance = {
+            obraId,
+            torreId,
+            pisoId,
+            departamentoId,
+            espacioComunId,
+            tipoAvance: tipoAvanceRadio,
+            avances,
+            observaciones,
+            fotos
+        };
+        
+        try {
+            // Mostrar loader
+            document.getElementById('avance-loader').classList.remove('hidden');
+            
+            const response = await callAPI('registrarAvance', avance);
+            
+            // Ocultar loader
+            document.getElementById('avance-loader').classList.add('hidden');
+            
+            if (response.success) {
+                mostrarNotificacion("Avance registrado correctamente", "success");
+                
+                // Limpiar formulario
+                document.getElementById('torre-avance').value = '';
+                document.getElementById('piso-avance').innerHTML = '<option value="">Seleccione un piso</option>';
+                document.getElementById('departamento-avance').innerHTML = '<option value="">Seleccione un departamento</option>';
+                document.getElementById('observaciones').value = '';
+                document.getElementById('avances-especificos').innerHTML = '';
+                document.getElementById('fotos-avance').value = '';
+                document.getElementById('fotos-preview').innerHTML = '';
+                
+                // Si era un espacio común, restablecer
+                if (tipoAvanceRadio === 'comun') {
+                    document.getElementById('espacio-comun').value = '';
+                    document.querySelector('input[name="tipo-avance"][value="departamento"]').checked = true;
+                    document.getElementById('espacio-comun-container').classList.add('hidden');
+                }
+            } else {
+                mostrarNotificacion(response.message || "Error al registrar el avance", "error");
+            }
+        } catch (error) {
+            document.getElementById('avance-loader').classList.add('hidden');
+            mostrarNotificacion("Error al registrar el avance", "error");
+        }
+    }
+
+    // Función para alternar entre tipos de avance
+    function toggleTipoAvance(tipo) {
+        if (tipo === 'comun') {
+            document.getElementById('espacio-comun-container').classList.remove('hidden');
+            cargarEspaciosComunesSelector();
+        } else {
+            document.getElementById('espacio-comun-container').classList.add('hidden');
+        }
+    }
+
+    // Función para cargar espacios comunes en el selector
+    async function cargarEspaciosComunesSelector() {
+        const obraId = document.getElementById('obra-avance').value;
+        
+        if (!obraId) {
+            mostrarNotificacion("Primero debe seleccionar una obra", "error");
+            return;
+        }
+        
+        try {
+            const response = await callAPI('obtenerEspaciosComunes', { obraId });
+            
+            if (response.error) {
+                mostrarNotificacion("Error al cargar los espacios comunes", "error");
+                return;
+            }
+            
+            const espaciosComunes = response.datos;
+            
+            // Actualizar selector
+            const select = document.getElementById('espacio-comun');
+            const primeraOpcion = select.options[0];
+            select.innerHTML = '';
+            select.appendChild(primeraOpcion);
+            
+            espaciosComunes.forEach(espacio => {
+                const option = document.createElement('option');
+                option.value = espacio.id;
+                option.textContent = espacio.nombre;
+                select.appendChild(option);
+            });
+        } catch (error) {
+            mostrarNotificacion("Error al cargar los espacios comunes", "error");
+        }
+    }
+
+    // Función para previsualizar fotos seleccionadas
+    function previewFotos(event) {
+        const preview = document.getElementById('fotos-preview');
+        preview.innerHTML = '';
+        
+        if (event.target.files.length > 0) {
+            Array.from(event.target.files).forEach(file => {
+                if (file.type.match('image.*')) {
+                    const reader = new FileReader();
+                    
+                    reader.onload = function(e) {
+                        const img = document.createElement('img');
+                        img.src = e.target.result;
+                        img.className = 'mb-10';
+                        img.style.maxHeight = '150px';
+                        img.style.marginRight = '10px';
+                        preview.appendChild(img);
+                    }
+                    
+                    reader.readAsDataURL(file);
+                }
+            });
+        }
+    }
+
+    // ============================================
+    // PARTE 7: CONSULTA DE AVANCES
+    // ============================================
+
+    // Función para filtrar avances
+    async function filtrarAvances() {
+        const obraId = document.getElementById('filtro-obra').value;
+        const torreId = document.getElementById('filtro-torre').value;
+        const pisoId = document.getElementById('filtro-piso').value;
+        const departamentoId = document.getElementById('filtro-depto').value;
+        const fecha = document.getElementById('filtro-fecha').value;
+        const tipoAvance = document.getElementById('filtro-tipo-avance').value;
+        
+        const filtros = {};
+        if (obraId) filtros.obraId = obraId;
+        if (torreId) filtros.torreId = torreId;
+        if (pisoId) filtros.pisoId = pisoId;
+        if (departamentoId) filtros.departamentoId = departamentoId;
+        if (fecha) filtros.fecha = fecha;
+        if (tipoAvance) filtros.tipoAvance = tipoAvance;
+        
+        try {
+            // Mostrar loader
+            document.getElementById('consulta-loader').classList.remove('hidden');
+            
+            const response = await callAPI('obtenerAvances', {
+                filtros,
+                pagina: paginaActual,
+                limite: 10 // O el valor que prefieras para la paginación
+            });
+            
+            // Ocultar loader
+            document.getElementById('consulta-loader').classList.add('hidden');
+            
+            if (response.error) {
+                mostrarNotificacion("Error al cargar los avances", "error");
+                return;
+            }
+            
+            const avances = response.datos.avances;
+            const totalPaginas = response.datos.totalPaginas;
+            
+            // Actualizar paginación
+            document.getElementById('pagina-actual').textContent = paginaActual;
+            
+            // Actualizar tabla de avances
+            const tbody = document.getElementById('avances-tbody');
+            tbody.innerHTML = '';
+            
+            if (avances.length === 0) {
+                const tr = document.createElement('tr');
+                tr.innerHTML = '<td colspan="8" class="text-center">No se encontraron avances con los filtros seleccionados.</td>';
+                tbody.appendChild(tr);
+            } else {
+                avances.forEach(avance => {
+                    const tr = document.createElement('tr');
+                    
+                    // Formatear lista de avances
+                    let avancesTexto = '';
+                    if (avance.avancesRealizados && avance.avancesRealizados.length > 0) {
+                        avancesTexto = avance.avancesRealizados.map(a => a.nombre).join(', ');
+                    }
+                    
+                    tr.innerHTML = `
+                        <td>${avance.obraNombre}</td>
+                        <td>${avance.torreNombre}</td>
+                        <td>${avance.pisoNombre}</td>
+                        <td>${avance.tipoAvance === 'comun' ? `<span class="badge badge-info">Espacio común: ${avance.espacioComunNombre}</span>` : avance.departamentoNombre}</td>
+                        <td>${avancesTexto}</td>
+                        <td>${new Date(avance.fecha).toLocaleString()}</td>
+                        <td>${avance.usuarioNombre}</td>
+                        <td>
+                            <button class="btn btn-sm btn-info" onclick="verDetalleAvance('${avance.id}')">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </td>
+                    `;
+                    
+                    tbody.appendChild(tr);
+                });
+            }
+        } catch (error) {
+            document.getElementById('consulta-loader').classList.add('hidden');
+            mostrarNotificacion("Error al cargar los avances", "error");
+        }
+    }
+
+    // Función para limpiar filtros de avances
+    function limpiarFiltrosAvances() {
+        document.getElementById('filtro-obra').value = '';
+        document.getElementById('filtro-torre').innerHTML = '<option value="">Todas las torres</option>';
+        document.getElementById('filtro-piso').innerHTML = '<option value="">Todos los pisos</option>';
+        document.getElementById('filtro-depto').innerHTML = '<option value="">Todos los departamentos</option>';
+        document.getElementById('filtro-fecha').value = '';
+        document.getElementById('filtro-tipo-avance').value = '';
+        
+        // Reiniciar paginación
+        paginaActual = 1;
+        
+        // Cargar avances sin filtros
+        filtrarAvances();
+    }
+
+    // Función para cambiar de página en la paginación
+    function cambiarPagina(delta) {
+        const nuevaPagina = paginaActual + delta;
+        if (nuevaPagina < 1) return;
+        
+        paginaActual = nuevaPagina;
+        filtrarAvances();
+    }
+
+    // Función para ver detalle de avance
+    async function verDetalleAvance(id) {
+        try {
+            const response = await callAPI('obtenerDetalleAvance', { id });
+            
+            if (response.error) {
+                mostrarNotificacion("Error al cargar el detalle del avance", "error");
+                return;
+            }
+            
+            const avance = response.datos;
+            
+            // Actualizar contenido del modal
+            const contenido = document.getElementById('detalle-avance-contenido');
+            
+            // Formatear lista de avances
+            let avancesHtml = '<ul class="avances-lista">';
+            if (avance.avancesRealizados && avance.avancesRealizados.length > 0) {
+                avance.avancesRealizados.forEach(a => {
+                    avancesHtml += `<li>${a.nombre}</li>`;
+                });
+            }
+            avancesHtml += '</ul>';
+            
+            // Formatear fotos
+            let fotosHtml = '';
+            if (avance.fotos && avance.fotos.length > 0) {
+                fotosHtml = '<div class="fotos-container mt-20">';
+                avance.fotos.forEach(foto => {
+                    fotosHtml += `<img src="${foto.url}" alt="Foto de avance" class="foto-avance">`;
+                });
+                fotosHtml += '</div>';
+            }
+            
+            contenido.innerHTML = `
+                <div>
+                    <strong>Obra:</strong> ${avance.obraNombre}
+                </div>
+                <div>
+                    <strong>Torre:</strong> ${avance.torreNombre}
+                </div>
+                <div>
+                    <strong>Piso:</strong> ${avance.pisoNombre}
+                </div>
+                <div>
+                    <strong>Unidad:</strong> ${avance.tipoAvance === 'comun' ? `Espacio común: ${avance.espacioComunNombre}` : avance.departamentoNombre}
+                </div>
+                <div>
+                    <strong>Fecha:</strong> ${new Date(avance.fecha).toLocaleString()}
+                </div>
+                <div>
+                    <strong>Registrado por:</strong> ${avance.usuarioNombre}
+                </div>
+                <div class="mt-20">
+                    <strong>Avances realizados:</strong>
+                    ${avancesHtml}
+                </div>
+                <div>
+                    <strong>Observaciones:</strong>
+                    <p>${avance.observaciones || 'Sin observaciones'}</p>
+                </div>
+                ${fotosHtml}
+            `;
+            
+            // Mostrar modal
+            document.getElementById('modal-detalle-avance').classList.remove('hidden');
+        } catch (error) {
+            mostrarNotificacion("Error al cargar el detalle del avance", "error");
+        }
+    }
+// ============================================
+    // PARTE 8: GESTIÓN DE INVENTARIO Y MATERIALES
+    // ============================================
+
+    // Función para cargar movimientos de inventario
+    async function cargarMovimientosInventario(filtros = {}) {
+        try {
+            const response = await callAPI('obtenerMovimientosInventario', { filtros });
+            if (response.error) {
+                mostrarNotificacion("Error al cargar los movimientos.", "error");
+                return;
+            }
+            
+            const movimientos = response.datos;
+            
+            // Actualizar tabla de movimientos
+            const tbody = document.getElementById('movimientos-tbody');
+            tbody.innerHTML = '';
+            
+            movimientos.forEach(movimiento => {
+                const tr = document.createElement('tr');
+                
+                // Aplicar clase según el tipo de movimiento
+                if (movimiento.tipoMovimiento === 'entrada') {
+                    tr.classList.add('bg-success');
+                } else if (movimiento.tipoMovimiento === 'salida') {
+                    tr.classList.add('bg-warning');
+                } else if (movimiento.tipoMovimiento === 'transferencia') {
+                    tr.classList.add('bg-info');
+                } else {
+                    tr.classList.add('bg-secondary');
+                }
+                
+                tr.innerHTML = `
+                    <td>${new Date(movimiento.fecha).toLocaleString()}</td>
+                    <td>
+                        <span class="badge badge-${
+                            movimiento.tipoMovimiento === 'entrada' ? 'success' : 
+                            movimiento.tipoMovimiento === 'salida' ? 'warning' : 
+                            movimiento.tipoMovimiento === 'transferencia' ? 'info' : 'secondary'
+                        }">
+                            ${movimiento.tipoMovimiento.toUpperCase()}
+                        </span>
+                    </td>
+                    <td>${movimiento.materialNombre}</td>
+                    <td>${movimiento.cantidad} ${movimiento.unidad}</td>
+                    <td>${movimiento.origenDestino || '-'}</td>
+                    <td>${movimiento.usuarioNombre}</td>
+                    <td>${movimiento.comentario || '-'}</td>
+                `;
+                
+                tbody.appendChild(tr);
+            });
+        } catch (error) {
+            mostrarNotificacion("Error al cargar los movimientos.", "error");
+        }
+    }
+
+    // Función para registrar entrada de material
+    async function registrarEntrada() {
+        const materialId = document.getElementById('material-entrada').value;
+        const cantidad = parseFloat(document.getElementById('cantidad-entrada').value);
+        const origen = document.getElementById('origen-entrada').value;
+        const costo = parseFloat(document.getElementById('costo-entrada').value);
+        const comentario = document.getElementById('comentario-entrada').value;
+        
+        // Validar campos requeridos
+        if (!materialId || isNaN(cantidad) || cantidad <= 0) {
+            mostrarNotificacion("Por favor complete todos los campos requeridos con valores válidos.", "error");
+            return;
+        }
+        
+        // Crear objeto de entrada
+        const entrada = {
+            materialId,
+            cantidad,
+            origen,
+            costo: isNaN(costo) ? 0 : costo,
+            comentario
+        };
+        
+        try {
+            // Mostrar loader
+            document.getElementById('entrada-loader').classList.remove('hidden');
+            
+            const response = await callAPI('registrarEntradaMaterial', entrada);
+            
+            // Ocultar loader
+            document.getElementById('entrada-loader').classList.add('hidden');
+            
+            if (response.success) {
+                mostrarNotificacion("Entrada registrada correctamente.", "success");
+                
+                // Limpiar formulario
+                document.getElementById('material-entrada').value = '';
+                document.getElementById('cantidad-entrada').value = '';
+                document.getElementById('origen-entrada').value = '';
+                document.getElementById('costo-entrada').value = '';
+                document.getElementById('comentario-entrada').value = '';
+                document.getElementById('detalles-material').style.display = 'none';
+                
+                // Recargar materiales
+                await cargarMateriales();
+            } else {
+                mostrarNotificacion(response.message || "Error al registrar la entrada.", "error");
+            }
+        } catch (error) {
+            document.getElementById('entrada-loader').classList.add('hidden');
+            mostrarNotificacion("Error al registrar la entrada.", "error");
+        }
+    }
+
+    // Función para registrar salida de material
+    async function registrarSalida() {
+        const materialId = document.getElementById('material-salida').value;
+        const cantidad = parseFloat(document.getElementById('cantidad-salida').value);
+        const destino = document.getElementById('destino-salida').value;
+        const comentario = document.getElementById('comentario-salida').value;
+        const prioridad = document.getElementById('prioridad-salida').value;
+        
+        // Validar campos requeridos
+        if (!materialId || isNaN(cantidad) || cantidad <= 0 || !destino) {
+            mostrarNotificacion("Por favor complete todos los campos requeridos con valores válidos.", "error");
+            return;
+        }
+        
+        // Validar stock disponible
+        const material = materialesData.find(m => m.id === materialId);
+        if (material && cantidad > material.stock) {
+            mostrarNotificacion(`No hay suficiente stock disponible. Stock actual: ${material.stock} ${material.unidad}`, "error");
+            return;
+        }
+        
+        // Crear objeto de salida
+        const salida = {
+            materialId,
+            cantidad,
+            destino,
+            comentario,
+            prioridad
+        };
+        
+        try {
+            // Mostrar loader
+            document.getElementById('salida-loader').classList.remove('hidden');
+            
+            const response = await callAPI('registrarSalidaMaterial', salida);
+            
+            // Ocultar loader
+            document.getElementById('salida-loader').classList.add('hidden');
+            
+            if (response.success) {
+                mostrarNotificacion("Salida registrada correctamente.", "success");
+                
+                // Limpiar formulario
+                document.getElementById('material-salida').value = '';
+                document.getElementById('cantidad-salida').value = '';
+                document.getElementById('destino-salida').value = '';
+                document.getElementById('comentario-salida').value = '';
+                document.getElementById('prioridad-salida').value = 'Normal';
+                document.getElementById('stock-disponible-valor').textContent = '0';
+                
+                // Recargar materiales
+                await cargarMateriales();
+            } else {
+                mostrarNotificacion(response.message || "Error al registrar la salida.", "error");
+            }
+        } catch (error) {
+            document.getElementById('salida-loader').classList.add('hidden');
+            mostrarNotificacion("Error al registrar la salida.", "error");
+        }
+    }
+
+    // Función para actualizar detalles del material
+    function actualizarDetallesMaterial() {
+        const materialId = document.getElementById('material-entrada').value;
+        const detallesDiv = document.getElementById('detalles-material');
+        
+        if (!materialId) {
+            detallesDiv.style.display = 'none';
+            return;
+        }
+        
+        const material = materialesData.find(m => m.id === materialId);
+        if (material) {
+            document.getElementById('stock-actual').textContent = material.stock;
+            document.getElementById('unidad-actual').textContent = material.unidad;
+            document.getElementById('minimo-actual').textContent = material.stockMinimo;
+            document.getElementById('ubicacion-actual').textContent = material.ubicacion || 'No especificada';
+            detallesDiv.style.display = 'block';
+        } else {
+            detallesDiv.style.display = 'none';
+        }
+    }
+
+    // Función para actualizar stock disponible
+    function actualizarStockDisponible() {
+        const materialId = document.getElementById('material-salida').value;
+        const spanStock = document.getElementById('stock-disponible-valor');
+        
+        if (!materialId) {
+            spanStock.textContent = '0';
+            return;
+        }
+        
+        const material = materialesData.find(m => m.id === materialId);
+        if (material) {
+            spanStock.textContent = `${material.stock} ${material.unidad}`;
+        } else {
+            spanStock.textContent = '0';
+        }
+    }
+
+    // Función para filtrar inventario
+    function filtrarInventario() {
+        const categoriaId = document.getElementById('filtro-categoria').value;
+        const soloStockBajo = document.getElementById('filtro-stock').checked;
+        const busqueda = document.getElementById('buscar-material').value.toLowerCase();
+        
+        const filtros = {};
+        if (categoriaId) filtros.categoriaId = categoriaId;
+        if (soloStockBajo) filtros.stockBajo = true;
+        if (busqueda) filtros.busqueda = busqueda;
+        
+        cargarMateriales(filtros);
+    }
+
+    // Función para filtrar movimientos
+    function filtrarMovimientos() {
+        const tipoMovimiento = document.getElementById('filtro-tipo-movimiento').value;
+        const materialId = document.getElementById('filtro-material-movimiento').value;
+        const fechaDesde = document.getElementById('filtro-fecha-desde').value;
+        const fechaHasta = document.getElementById('filtro-fecha-hasta').value;
+        
+        const filtros = {};
+        if (tipoMovimiento) filtros.tipoMovimiento = tipoMovimiento;
+        if (materialId) filtros.materialId = materialId;
+        if (fechaDesde) filtros.fechaDesde = fechaDesde;
+        if (fechaHasta) filtros.fechaHasta = fechaHasta;
+        
+        cargarMovimientosInventario(filtros);
+    }
+
+    // Funciones para mostrar formularios de materiales
+    function mostrarFormularioMaterial(materialId = null) {
+        const formulario = document.getElementById('formulario-material');
+        
+        // Limpiar formulario
+        document.getElementById('material-id').value = '';
+        document.getElementById('codigo-material').value = '';
+        document.getElementById('nombre-material').value = '';
+        document.getElementById('descripcion-material').value = '';
+        document.getElementById('categoria-material').value = '';
+        document.getElementById('stock-material').value = '0';
+        document.getElementById('stock-minimo-material').value = '5';
+        document.getElementById('unidad-material').value = 'unidad';
+        document.getElementById('ubicacion-material').value = '';
+        
+        // Si es edición, cargar los datos del material
+        if (materialId) {
+            const material = materialesData.find(m => m.id === materialId);
+            if (material) {
+                document.getElementById('material-id').value = material.id;
+                document.getElementById('codigo-material').value = material.codigo;
+                document.getElementById('nombre-material').value = material.nombre;
+                document.getElementById('descripcion-material').value = material.descripcion || '';
+                document.getElementById('categoria-material').value = material.categoriaId || '';
+                document.getElementById('stock-material').value = material.stock;
+                document.getElementById('stock-minimo-material').value = material.stockMinimo;
+                document.getElementById('unidad-material').value = material.unidad;
+                document.getElementById('ubicacion-material').value = material.ubicacion || '';
+            }
+        }
+        
+        // Mostrar formulario
+        formulario.classList.remove('hidden');
+    }
+
+    function cancelarEdicionMaterial() {
+        document.getElementById('formulario-material').classList.add('hidden');
+    }
+
+    // Funciones para editar y eliminar material
+    function editarMaterial(materialId) {
+        mostrarFormularioMaterial(materialId);
+    }
+
+    async function eliminarMaterial(materialId) {
+        if (!confirm('¿Está seguro de eliminar este material? Esta acción no se puede deshacer.')) {
+            return;
+        }
+        
+        try {
+            const response = await callAPI('eliminarMaterial', { materialId });
+            
+            if (response.success) {
+                mostrarNotificacion("Material eliminado correctamente.", "success");
+                await cargarMateriales();
+            } else {
+                mostrarNotificacion(response.message || "Error al eliminar el material.", "error");
+            }
+        } catch (error) {
+            mostrarNotificacion("Error al eliminar el material.", "error");
+        }
+    }
+
+    // Función para guardar material
+    async function guardarMaterial() {
+        const materialId = document.getElementById('material-id').value;
+        const codigo = document.getElementById('codigo-material').value;
+        const nombre = document.getElementById('nombre-material').value;
+        const descripcion = document.getElementById('descripcion-material').value;
+        const categoriaId = document.getElementById('categoria-material').value;
+        const stock = parseFloat(document.getElementById('stock-material').value);
+        const stockMinimo = parseFloat(document.getElementById('stock-minimo-material').value);
+        const unidad = document.getElementById('unidad-material').value;
+        const ubicacion = document.getElementById('ubicacion-material').value;
+        
+        // Validar campos requeridos
+        if (!codigo || !nombre || !unidad) {
+            mostrarNotificacion("Por favor complete todos los campos requeridos.", "error");
+            return;
+        }
+        
+        // Crear objeto de material
+        const material = {
+            id: materialId,
+            codigo,
+            nombre,
+            descripcion,
+            categoriaId,
+            stock: isNaN(stock) ? 0 : stock,
+            stockMinimo: isNaN(stockMinimo) ? 5 : stockMinimo,
+            unidad,
+            ubicacion
+        };
+        
+        try {
+            const response = await callAPI('guardarMaterial', material);
+            
+            if (response.success) {
+                mostrarNotificacion("Material guardado correctamente.", "success");
+                cancelarEdicionMaterial();
+                await cargarMateriales();
+            } else {
+                mostrarNotificacion(response.message || "Error al guardar el material.", "error");
+            }
+        } catch (error) {
+            mostrarNotificacion("Error al guardar el material.", "error");
+        }
+    }
+
+    // Funciones para entrada y salida rápida
+    function mostrarEntradaRapida(materialId) {
+        const material = materialesData.find(m => m.id === materialId);
+        if (!material) return;
+        
+        const cantidad = prompt(`Ingrese la cantidad a agregar al stock de ${material.nombre}:`);
+        if (cantidad && !isNaN(cantidad) && parseFloat(cantidad) > 0) {
+            registrarEntradaRapida(materialId, parseFloat(cantidad));
+        }
+    }
+
+    function mostrarSalidaRapida(materialId) {
+        const material = materialesData.find(m => m.id === materialId);
+        if (!material) return;
+        
+        const cantidad = prompt(`Ingrese la cantidad a sacar del stock de ${material.nombre} (Disponible: ${material.stock} ${material.unidad}):`);
+        if (cantidad && !isNaN(cantidad) && parseFloat(cantidad) > 0) {
+            if (parseFloat(cantidad) <= material.stock) {
+                registrarSalidaRapida(materialId, parseFloat(cantidad));
+            } else {
+                mostrarNotificacion("La cantidad excede el stock disponible.", "error");
+            }
+        }
+    }
+
+    async function registrarEntradaRapida(materialId, cantidad) {
+        try {
+            const response = await callAPI('registrarEntradaMaterial', {
+                materialId,
+                cantidad,
+                origen: 'Entrada rápida',
+                comentario: 'Ajuste de stock rápido'
+            });
+            
+            if (response.success) {
+                mostrarNotificacion("Entrada registrada correctamente.", "success");
+                await cargarMateriales();
+            } else {
+                mostrarNotificacion("Error al registrar la entrada.", "error");
+            }
+        } catch (error) {
+            mostrarNotificacion("Error al registrar la entrada.", "error");
+        }
+    }
+
+    async function registrarSalidaRapida(materialId, cantidad) {
+        try {
+            const response = await callAPI('registrarSalidaMaterial', {
+                materialId,
+                cantidad,
+                destino: 'Salida rápida',
+                comentario: 'Ajuste de stock rápido'
+            });
+            
+            if (response.success) {
+                mostrarNotificacion("Salida registrada correctamente.", "success");
+                await cargarMateriales();
+            } else {
+                mostrarNotificacion("Error al registrar la salida.", "error");
+            }
+        } catch (error) {
+            mostrarNotificacion("Error al registrar la salida.", "error");
+        }
+    }
+// ============================================
+    // PARTE 9: FUNCIONES DE MAQUETACIÓN (MODAL)
+    // ============================================
+
+    // Función de navegación entre pestañas del modal de maquetación
+    function mostrarTabMaquetacion(tabId) {
+        // Ocultar todas las pestañas
+        document.querySelectorAll('#modal-maquetacion .tab-content').forEach(tab => {
+            tab.style.display = 'none';
+        });
+        // Desactivar todas las pestañas
+        document.querySelectorAll('#modal-maquetacion .nav-link').forEach(link => {
+            link.classList.remove('active');
+        });
+        // Mostrar la pestaña seleccionada
+        document.getElementById('tab-' + tabId).style.display = 'block';
+        // Marcar la pestaña activa
+        document.querySelector('#modal-maquetacion .nav-link[onclick="mostrarTabMaquetacion(\'' + tabId + '\')"]').classList.add('active');
+    }
+
+    // Función para mostrar/ocultar el cuerpo de un componente configurable
+    function toggleComponente(componenteId, mostrar) {
+        const componente = document.getElementById(componenteId);
+        if (componente) {
+            componente.style.display = mostrar ? 'block' : 'none';
+        }
+    }
+
+    // Toggle configuración global o por torre para pisos
+    function toggleConfiguracionPisos(value) {
+        const pisosGlobal = document.getElementById('pisos-global');
+        const pisosPorTorre = document.getElementById('pisos-por-torre');
+        
+        if (value === 'global') {
+            pisosGlobal.style.display = 'block';
+            pisosPorTorre.style.display = 'none';
+        } else {
+            pisosGlobal.style.display = 'none';
+            pisosPorTorre.style.display = 'block';
+            actualizarFormularioPisosPorTorre();
+        }
+    }
+
+    // Toggle configuración global o específica para shaft
+    function toggleConfiguracionShaft(value) {
+        const shaftGlobal = document.getElementById('shaft-global');
+        const shaftEspecifico = document.getElementById('shaft-especifico');
+        
+        if (value === 'global') {
+            shaftGlobal.style.display = 'block';
+            shaftEspecifico.style.display = 'none';
+        } else {
+            shaftGlobal.style.display = 'none';
+            shaftEspecifico.style.display = 'block';
+            actualizarSelectorTorreShaft();
+        }
+    }
+
+    // Actualizar opciones de dispositivo en shaft según el tipo seleccionado
+    function actualizarOpcionesDispositivo() {
+        const tipoDispositivo = document.getElementById('tipo-dispositivo-shaft').value;
+        
+        // Ocultar todas las opciones primero
+        document.getElementById('derivador-alam-opciones').style.display = 'none';
+        document.getElementById('derivador-inal-opciones').style.display = 'none';
+        document.getElementById('odf-opciones').style.display = 'none';
+        document.getElementById('otro-dispositivo').style.display = 'none';
+        
+        // Mostrar las opciones según el tipo seleccionado
+        if (tipoDispositivo === 'derivador_alam') {
+            document.getElementById('derivador-alam-opciones').style.display = 'block';
+        } else if (tipoDispositivo === 'derivador_inal') {
+            document.getElementById('derivador-inal-opciones').style.display = 'block';
+        } else if (tipoDispositivo === 'odf') {
+            document.getElementById('odf-opciones').style.display = 'block';
+        } else if (tipoDispositivo === 'otro') {
+            document.getElementById('otro-dispositivo').style.display = 'block';
+        }
+    }
+
+    // Actualizar configuración de pisos y torres
+    function actualizarConfiguracionPisosTorres() {
+        if (document.getElementById('incluir-torres').checked) {
+            actualizarFormularioPisosPorTorre();
+            actualizarSelectorTorreShaft();
+            actualizarSelectorTorreDispositivosShaft();
+        }
+    }
+
+    // Generar formulario de pisos por torre basado en la cantidad de torres
+    function actualizarFormularioPisosPorTorre() {
+        if (!document.getElementById('incluir-torres').checked) return;
+        
+        const cantidadTorres = parseInt(document.getElementById('cantidad-torres').value) || 1;
+        const contenedor = document.getElementById('pisos-por-torre');
+        const nomenclaturaTorres = document.getElementById('nomenclatura-torres').value;
+        
+        // Limpiar contenido actual
+        contenedor.innerHTML = '';
+        
+        for (let i = 0; i < cantidadTorres; i++) {
+            const torreId = (nomenclaturaTorres === 'letras') ? String.fromCharCode(65 + i) : (i + 1).toString();
+            
+            const seccionTorre = document.createElement('div');
+            seccionTorre.classList.add('maquetacion-section', 'mb-20');
+            seccionTorre.innerHTML = `
+                <div class="maquetacion-section-header">
+                    <h5 class="maquetacion-section-title">Torre ${torreId}</h5>
+                </div>
+                <div class="maquetacion-grid">
+                    <div class="form-group">
+                        <label for="piso-inicio-torre-${i}">Piso de inicio:</label>
+                        <input type="number" id="piso-inicio-torre-${i}" min="-10" value="1" />
+                    </div>
+                    <div class="form-group">
+                        <label for="piso-fin-torre-${i}">Piso final:</label>
+                        <input type="number" id="piso-fin-torre-${i}" min="-9" value="10" />
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="nomenclatura-pisos-torre-${i}">Nomenclatura:</label>
+                    <select id="nomenclatura-pisos-torre-${i}">
+                        <option value="numerico">Numérica (1, 2, 3...)</option>
+                        <option value="alfanumerico">Alfanumérica (P1, P2, P3...)</option>
+                        <option value="personalizado">Personalizada</option>
+                    </select>
+                </div>
+            `;
+            
+            contenedor.appendChild(seccionTorre);
+        }
+    }
+
+    // Actualizar selector de torres para shafts
+    function actualizarSelectorTorreShaft() {
+        if (!document.getElementById('incluir-torres').checked) return;
+        
+        const cantidadTorres = parseInt(document.getElementById('cantidad-torres').value) || 1;
+        const selectorTorre = document.getElementById('torre-shaft');
+        const nomenclaturaTorres = document.getElementById('nomenclatura-torres').value;
+        
+        // Limpiar opciones actuales
+        selectorTorre.innerHTML = '';
+        
+        for (let i = 0; i < cantidadTorres; i++) {
+            const torreId = (nomenclaturaTorres === 'letras') ? String.fromCharCode(65 + i) : (i + 1).toString();
+            const option = document.createElement('option');
+            option.value = i;
+            option.textContent = `Torre ${torreId}`;
+            selectorTorre.appendChild(option);
+        }
+        
+        // Actualizar pisos para la torre seleccionada
+        cargarPisosPorTorre();
+    }
+
+    // Cargar pisos disponibles en función de la torre seleccionada para shaft
+    function cargarPisosPorTorre() {
+        const torreIndex = document.getElementById('torre-shaft').value;
+        const selectorPiso = document.getElementById('piso-shaft');
+        
+        // Limpiar opciones actuales
+        selectorPiso.innerHTML = '';
+        
+        if (document.getElementById('configuracion-pisos-global').value === 'global') {
+            const pisoInicio = parseInt(document.getElementById('piso-inicio-global').value) || 1;
+            const pisoFin = parseInt(document.getElementById('piso-fin-global').value) || 10;
+            
+            for (let i = pisoInicio; i <= pisoFin; i++) {
+                const option = document.createElement('option');
+                option.value = i;
+                option.textContent = `Piso ${i}`;
+                selectorPiso.appendChild(option);
+            }
+        } else {
+            const pisoInicio = parseInt(document.getElementById(`piso-inicio-torre-${torreIndex}`).value) || 1;
+            const pisoFin = parseInt(document.getElementById(`piso-fin-torre-${torreIndex}`).value) || 10;
+            
+            for (let i = pisoInicio; i <= pisoFin; i++) {
+                const option = document.createElement('option');
+                option.value = i;
+                option.textContent = `Piso ${i}`;
+                selectorPiso.appendChild(option);
+            }
+        }
+    }
+
+    // Agregar configuración de shaft por torre y piso
+    function agregarShaftEspecifico() {
+        const torreSelector = document.getElementById('torre-shaft');
+        const pisoSelector = document.getElementById('piso-shaft');
+        const cantidadShaft = document.getElementById('cantidad-shaft-especifico').value;
+        
+        if (!torreSelector || !pisoSelector) return;
+        
+        const torreIndex = torreSelector.value;
+        const torreText = torreSelector.options[torreSelector.selectedIndex].text;
+        const pisoValue = pisoSelector.value;
+        const pisoText = pisoSelector.options[pisoSelector.selectedIndex].text;
+        
+        // Verificar si ya existe una configuración para esta torre y piso
+        const existeConfig = shaftsPorTorrePiso.some(
+            config => config.torre === torreIndex && config.piso === pisoValue
+        );
+        
+        if (existeConfig) {
+            alert('Ya existe una configuración para esta torre y piso. Edite o elimine la existente.');
+            return;
+        }
+        
+        // Agregar configuración a la lista
+        shaftsPorTorrePiso.push({
+            torre: torreIndex,
+            torreText: torreText,
+            piso: pisoValue,
+            pisoText: pisoText,
+            cantidad: cantidadShaft
+        });
+        
+        // Actualizar la tabla
+        actualizarTablaShaftEspecifico();
+    }
+
+    // Actualizar la tabla de shafts específicos
+    function actualizarTablaShaftEspecifico() {
+        const tbody = document.querySelector('#lista-shaft-especifico tbody');
+        if (!tbody) return;
+        
+        // Limpiar contenido actual
+        tbody.innerHTML = '';
+        
+        // Agregar cada configuración
+        shaftsPorTorrePiso.forEach((config, index) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${config.torreText}</td>
+                <td>${config.pisoText}</td>
+                <td>${config.cantidad}</td>
+                <td>
+                    <button class="btn btn-sm btn-danger" onclick="eliminarShaftEspecifico(${index})">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    // Eliminar configuración de shaft específico
+    function eliminarShaftEspecifico(index) {
+        shaftsPorTorrePiso.splice(index, 1);
+        actualizarTablaShaftEspecifico();
+    }
+
+    // Actualizar selector de torres para dispositivos en shaft
+    function actualizarSelectorTorreDispositivosShaft() {
+        if (!document.getElementById('incluir-torres').checked) return;
+        
+        const cantidadTorres = parseInt(document.getElementById('cantidad-torres').value) || 1;
+        const selectorTorre = document.getElementById('torre-shaft-dispositivos');
+        const nomenclaturaTorres = document.getElementById('nomenclatura-torres').value;
+        
+        // Limpiar opciones actuales
+        selectorTorre.innerHTML = '';
+        
+        for (let i = 0; i < cantidadTorres; i++) {
+            const torreId = (nomenclaturaTorres === 'letras') ? String.fromCharCode(65 + i) : (i + 1).toString();
+            const option = document.createElement('option');
+            option.value = i;
+            option.textContent = `Torre ${torreId}`;
+            selectorTorre.appendChild(option);
+        }
+        
+        // Actualizar shafts para la torre seleccionada
+        cargarShaftsPorTorre();
+    }
+
+    // Cargar shafts disponibles en función de la torre seleccionada
+    function cargarShaftsPorTorre() {
+        const torreIndex = document.getElementById('torre-shaft-dispositivos').value;
+        const selectorShaft = document.getElementById('shaft-dispositivos');
+        
+        // Limpiar opciones actuales
+        selectorShaft.innerHTML = '';
+        
+        // Si se usa configuración global de shafts
+        if (document.getElementById('configuracion-shaft').value === 'global') {
+            const cantidadShafts = parseInt(document.getElementById('cantidad-shaft-por-torre').value) || 1;
+            
+            for (let i = 1; i <= cantidadShafts; i++) {
+                const option = document.createElement('option');
+                option.value = i;
+                option.textContent = `Shaft ${i}`;
+                selectorShaft.appendChild(option);
+            }
+        } else {
+            // Si se usa configuración específica, buscar configuraciones para esta torre
+            const shaftsDeTorre = shaftsPorTorrePiso.filter(config => config.torre === torreIndex);
+            
+            if (shaftsDeTorre.length === 0) {
+                const option = document.createElement('option');
+                option.value = '';
+                option.textContent = 'No hay shafts configurados para esta torre';
+                selectorShaft.appendChild(option);
+            } else {
+                shaftsDeTorre.forEach(config => {
+                    for (let i = 1; i <= config.cantidad; i++) {
+                        const option = document.createElement('option');
+                        option.value = `${config.piso}-${i}`;
+                        option.textContent = `Shaft ${i} (Piso ${config.piso})`;
+                        selectorShaft.appendChild(option);
+                    }
+                });
+            }
+        }
+    }
+
+    // Agregar dispositivo a un shaft específico
+    function agregarDispositivoShaft() {
+        const torreSelector = document.getElementById('torre-shaft-dispositivos');
+        const shaftSelector = document.getElementById('shaft-dispositivos');
+        const tipoDispositivoSelector = document.getElementById('tipo-dispositivo-shaft');
+        
+        if (!torreSelector || !shaftSelector || shaftSelector.value === '' || tipoDispositivoSelector.value === '') {
+            alert('Por favor, seleccione una torre, un shaft y un tipo de dispositivo.');
+            return;
+        }
+        
+        const torreIndex = torreSelector.value;
+        const torreText = torreSelector.options[torreSelector.selectedIndex].text;
+        const shaftValue = shaftSelector.value;
+        const shaftText = shaftSelector.options[shaftSelector.selectedIndex].text;
+        
+        let tipoDispositivo = '';
+        let especificaciones = '';
+        
+        // Determinar qué tipo de dispositivo está seleccionado
+        const tipoDispositivoValue = tipoDispositivoSelector.value;
+        
+        if (tipoDispositivoValue === 'derivador_alam') {
+            const modeloSelector = document.getElementById('modelo-derivador-alam');
+            tipoDispositivo = 'Derivador Alámbrico';
+            especificaciones = modeloSelector.options[modeloSelector.selectedIndex].text;
+        } 
+        else if (tipoDispositivoValue === 'derivador_inal') {
+            const modeloSelector = document.getElementById('modelo-derivador-inal');
+            tipoDispositivo = 'Derivador Inalámbrico';
+            especificaciones = modeloSelector.options[modeloSelector.selectedIndex].text;
+        } 
+        else if (tipoDispositivoValue === 'odf') {
+            tipoDispositivo = 'ODF';
+            especificaciones = `${document.getElementById('puertos-odf').value} puertos`;
+        } 
+        else if (tipoDispositivoValue === 'otro') {
+            tipoDispositivo = document.getElementById('nombre-otro-dispositivo').value;
+            especificaciones = document.getElementById('descripcion-otro-dispositivo').value;
+        }
+        
+        if (!tipoDispositivo) {
+            alert('Por favor, configure correctamente el dispositivo.');
+            return;
+        }
+        
+        // Agregar dispositivo a la lista
+        dispositivosPorShaft.push({
+            torre: torreIndex,
+            torreText: torreText,
+            shaft: shaftValue,
+            shaftText: shaftText,
+            dispositivo: tipoDispositivo,
+            especificaciones: especificaciones
+        });
+        
+        // Actualizar la tabla
+        actualizarTablaDispositivosShaft();
+        
+        // Limpiar la selección
+        tipoDispositivoSelector.value = '';
+        actualizarOpcionesDispositivo();
+    }
+
+    // Actualizar la tabla de dispositivos por shaft
+    function actualizarTablaDispositivosShaft() {
+        const tbody = document.querySelector('#lista-dispositivos-shaft tbody');
+        if (!tbody) return;
+        
+        // Limpiar contenido actual
+        tbody.innerHTML = '';
+        
+        // Agregar cada dispositivo
+        dispositivosPorShaft.forEach((config, index) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${config.torreText}</td>
+                <td>${config.shaftText}</td>
+                <td>${config.dispositivo}</td>
+                <td>${config.especificaciones}</td>
+                <td>
+                    <button class="btn btn-sm btn-danger" onclick="eliminarDispositivoShaft(${index})">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    // Eliminar dispositivo de shaft
+    function eliminarDispositivoShaft(index) {
+        dispositivosPorShaft.splice(index, 1);
+        actualizarTablaDispositivosShaft();
+    }
+
+    // Función para actualizar la descripción de la topología de red según selección
+    function actualizarConfiguracionRed() {
+        const tipoRed = document.getElementById('tipo-red').value;
+        let descripcion = '';
+        switch (tipoRed) {
+            case 'arbol':
+                descripcion = 'La topología en árbol distribuye la señal desde un punto central (raíz) a través de múltiples niveles de distribución.';
+                break;
+            case 'estrella':
+                descripcion = 'La topología en estrella conecta todos los dispositivos directamente a un punto central, facilitando la administración pero creando un único punto de fallo.';
+                break;
+            case 'rama':
+                descripcion = 'La topología en rama extiende la conexión a través de rutas lineales con derivaciones para cada punto de servicio.';
+                break;
+            case 'hibrida':
+                descripcion = 'La topología híbrida combina características de múltiples tipos de redes para maximizar beneficios y minimizar inconvenientes.';
+                break;
+        }
+        document.getElementById('descripcion-red').value = descripcion;
+    }
+// ============================================
+    // PARTE 10: TRANSFERENCIAS DE MATERIALES
+    // ============================================
+
+    // Variables para la gestión de transferencias (ya declaradas arriba)
+    // let transferenciasItems = [];
+
+    // Función para cargar materiales disponibles en la obra origen
+    async function cargarMaterialesDisponiblesObra() {
+        const obraId = document.getElementById('obra-origen').value;
+        
+        if (!obraId) {
+            document.getElementById('seleccion-materiales').classList.add('hidden');
+            document.getElementById('lista-materiales-transferencia').classList.add('hidden');
+            transferenciasItems = [];
+            return;
+        }
+        
+        try {
+            const response = await callAPI('obtenerMaterialesDisponiblesObra', { obraId });
+            
+            if (response.error) {
+                mostrarNotificacion("Error al cargar los materiales disponibles.", "error");
+                return;
+            }
+            
+            const materialesDisponibles = response.datos;
+            
+            // Cargar selector de materiales
+            const materialSelector = document.getElementById('material-transferencia');
+            // Mantener primera opción
+            const primeraOpcion = materialSelector.options[0];
+            materialSelector.innerHTML = '';
+            materialSelector.appendChild(primeraOpcion);
+            
+            // Agregar materiales disponibles
+            materialesDisponibles.forEach(material => {
+                const option = document.createElement('option');
+                option.value = material.id;
+                option.textContent = `${material.codigo} - ${material.nombre} (${material.stockDisponible} ${material.unidad})`;
+                // Guardar el stock disponible como atributo personalizado
+                option.dataset.stockDisponible = material.stockDisponible;
+                option.dataset.unidad = material.unidad;
+                materialSelector.appendChild(option);
+            });
+            
+            // Mostrar sección de selección de materiales
+            document.getElementById('seleccion-materiales').classList.remove('hidden');
+            
+            // Mostrar lista de materiales si hay items
+            if (transferenciasItems.length > 0) {
+                document.getElementById('lista-materiales-transferencia').classList.remove('hidden');
+                actualizarTablaMaterialesTransferencia();
+            } else {
+                document.getElementById('lista-materiales-transferencia').classList.add('hidden');
+            }
+        } catch (error) {
+            mostrarNotificacion("Error al cargar los materiales disponibles.", "error");
+        }
+    }
+
+    // Función para actualizar la disponibilidad del material seleccionado
+    function actualizarDisponibilidadMaterial() {
+        const materialSelector = document.getElementById('material-transferencia');
+        const materialId = materialSelector.value;
+        const spanDisponible = document.getElementById('disponible-obra');
+        
+        if (!materialId) {
+            spanDisponible.textContent = '0';
+            return;
+        }
+        
+        const selectedOption = materialSelector.options[materialSelector.selectedIndex];
+        const stockDisponible = selectedOption.dataset.stockDisponible;
+        const unidad = selectedOption.dataset.unidad;
+        
+        spanDisponible.textContent = `${stockDisponible} ${unidad}`;
+    }
+
+    // Función para agregar material a la lista de transferencia
+    function agregarMaterialTransferencia() {
+        const materialSelector = document.getElementById('material-transferencia');
+        const materialId = materialSelector.value;
+        const cantidadInput = document.getElementById('cantidad-transferencia');
+        const cantidad = parseFloat(cantidadInput.value);
+        
+        // Validar campos
+        if (!materialId || isNaN(cantidad) || cantidad <= 0) {
+            mostrarNotificacion("Por favor seleccione un material e ingrese una cantidad válida.", "error");
+            return;
+        }
+        
+        // Validar stock disponible
+        const selectedOption = materialSelector.options[materialSelector.selectedIndex];
+        const stockDisponible = parseFloat(selectedOption.dataset.stockDisponible);
+        const unidad = selectedOption.dataset.unidad;
+        
+        if (cantidad > stockDisponible) {
+            mostrarNotificacion(`No hay suficiente stock disponible. Máximo: ${stockDisponible}`, "error");
+            return;
+        }
+        
+        // Verificar si el material ya está en la lista
+        const itemExistente = transferenciasItems.find(item => item.materialId === materialId);
+        if (itemExistente) {
+            mostrarNotificacion("Este material ya está en la lista de transferencia.", "error");
+            return;
+        }
+        
+        // Obtener información del material
+        const materialNombre = selectedOption.textContent.split(' (')[0];
+        const materialCodigo = materialNombre.split(' - ')[0];
+        
+        // Agregar a la lista de transferencias
+        transferenciasItems.push({
+            materialId,
+            materialNombre: materialNombre.split(' - ')[1],
+            materialCodigo,
+            cantidad,
+            unidad
+        });
+        
+        // Actualizar tabla de materiales
+        actualizarTablaMaterialesTransferencia();
+        
+        // Mostrar la lista
+        document.getElementById('lista-materiales-transferencia').classList.remove('hidden');
+        
+        // Limpiar campos
+        materialSelector.value = '';
+        cantidadInput.value = '';
+        document.getElementById('disponible-obra').textContent = '0';
+    }
+
+    // Función para actualizar la tabla de materiales en transferencia
+    function actualizarTablaMaterialesTransferencia() {
+        const tbody = document.getElementById('transferencia-items-tbody');
+        tbody.innerHTML = '';
+        
+        transferenciasItems.forEach((item, index) => {
+            const tr = document.createElement('tr');
+            
+            tr.innerHTML = `
+                <td>${item.materialCodigo}</td>
+                <td>${item.materialNombre}</td>
+                <td>${item.cantidad}</td>
+                <td>${item.unidad}</td>
+                <td>
+                    <button class="btn btn-sm btn-danger" onclick="quitarMaterialTransferencia(${index})">
+                        <i class="fas fa-trash"></i> Quitar
+                    </button>
+                </td>
+            `;
+            
+            tbody.appendChild(tr);
+        });
+    }
+
+    // Función para quitar un material de la lista de transferencia
+    function quitarMaterialTransferencia(index) {
+        transferenciasItems.splice(index, 1);
+        
+        // Actualizar tabla
+        actualizarTablaMaterialesTransferencia();
+        
+        // Ocultar lista si está vacía
+        if (transferenciasItems.length === 0) {
+            document.getElementById('lista-materiales-transferencia').classList.add('hidden');
+        }
+    }
+
+    // Función para registrar la transferencia
+    async function registrarTransferencia() {
+        const obraOrigenId = document.getElementById('obra-origen').value;
+        const obraDestinoId = document.getElementById('obra-destino').value;
+        const motivo = document.getElementById('motivo-transferencia').value;
+        
+        // Validar campos
+        if (!obraOrigenId || !obraDestinoId) {
+            mostrarNotificacion("Por favor seleccione las obras de origen y destino.", "error");
+            return;
+        }
+        
+        if (obraOrigenId === obraDestinoId) {
+            mostrarNotificacion("Las obras de origen y destino no pueden ser iguales.", "error");
+            return;
+        }
+        
+        if (transferenciasItems.length === 0) {
+            mostrarNotificacion("No hay materiales en la lista de transferencia.", "error");
+            return;
+        }
+        
+        // Crear objeto de transferencia
+        const transferencia = {
+            obraOrigenId,
+            obraDestinoId,
+            motivo,
+            items: transferenciasItems
+        };
+        
+        try {
+            // Mostrar loader
+            document.getElementById('transferencias-loader').classList.remove('hidden');
+            
+            const response = await callAPI('registrarTransferencia', transferencia);
+            
+            // Ocultar loader
+            document.getElementById('transferencias-loader').classList.add('hidden');
+            
+            if (response.success) {
+                mostrarNotificacion("Transferencia registrada correctamente.", "success");
+                cancelarTransferencia();
+                cargarObras();
+            } else {
+                mostrarNotificacion(response.message || "Error al registrar la transferencia.", "error");
+            }
+        } catch (error) {
+            document.getElementById('transferencias-loader').classList.add('hidden');
+            mostrarNotificacion("Error al registrar la transferencia.", "error");
+        }
+    }
+
+    // Función para cancelar la transferencia
+    function cancelarTransferencia() {
+        document.getElementById('obra-origen').value = '';
+        document.getElementById('obra-destino').value = '';
+        document.getElementById('motivo-transferencia').value = '';
+        document.getElementById('seleccion-materiales').classList.add('hidden');
+        document.getElementById('lista-materiales-transferencia').classList.add('hidden');
+        transferenciasItems = [];
+        document.getElementById('formulario-transferencia').classList.add('hidden');
+    }
+
+    // Función para mostrar el formulario de transferencia
+    function mostrarFormularioTransferencia() {
+        document.getElementById('formulario-transferencia').classList.remove('hidden');
+        transferenciasItems = [];
+    }
+
+    // ============================================
+    // PARTE 11: SISTEMA DE REPORTES
+    // ============================================
+
+    // Función para generar reporte de avances
+    async function generarReporteAvances() {
+        const obraId = document.getElementById('reporte-obra').value;
+        const categoria = document.getElementById('reporte-categoria').value;
+        const fechaDesde = document.getElementById('reporte-fecha-desde').value;
+        const fechaHasta = document.getElementById('reporte-fecha-hasta').value;
+        
+        const filtros = {};
+        if (obraId) filtros.obraId = obraId;
+        if (categoria) filtros.categoria = categoria;
+        if (fechaDesde) filtros.fechaDesde = fechaDesde;
+        if (fechaHasta) filtros.fechaHasta = fechaHasta;
+        
+        try {
+            // Mostrar loader
+            document.getElementById('reporte-avances-result').innerHTML = '<div class="loader"></div>';
+            
+            const response = await callAPI('generarReporteAvances', { filtros });
+            
+            if (response.error) {
+                mostrarNotificacion("Error al generar el reporte de avances", "error");
+                document.getElementById('reporte-avances-result').innerHTML = '<p class="text-danger">Error al generar el reporte.</p>';
+                return;
+            }
+            
+            const reporte = response.datos;
+            
+            // Construir visualización del reporte
+            let html = '';
+            
+            // Título
+            html += `<h3>Reporte de Avances ${obraId ? `- ${obrasData.find(o => o.id === obraId).nombre}` : ''}</h3>`;
+            html += `<p>Período: ${fechaDesde ? new Date(fechaDesde).toLocaleDateString() : 'Desde el inicio'} - ${fechaHasta ? new Date(fechaHasta).toLocaleDateString() : 'Hasta hoy'}</p>`;
+            
+            // Resumen
+            html += `
+                <div class="mt-20">
+                    <h4>Resumen</h4>
+                    <div style="display: flex; flex-wrap: wrap; gap: 20px;">
+                        <div style="min-width: 200px; padding: 15px; background-color: #f8f9fa; border-radius: 8px;">
+                            <h5>Total de avances</h5>
+                            <p style="font-size: 24px; font-weight: bold;">${reporte.totalAvances}</p>
+                        </div>
+                        <div style="min-width: 200px; padding: 15px; background-color: #f8f9fa; border-radius: 8px;">
+                            <h5>Avance promedio</h5>
+                            <p style="font-size: 24px; font-weight: bold;">${reporte.avancePromedio}%</p>
+                        </div>
+                        <div style="min-width: 200px; padding: 15px; background-color: #f8f9fa; border-radius: 8px;">
+                            <h5>Tiempo estimado</h5>
+                            <p style="font-size: 24px; font-weight: bold;">${reporte.tiempoEstimado} días</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Gráfico de avance por categoría
+            html += `
+                <div class="mt-20">
+                    <h4>Avance por Categoría</h4>
+                    <div style="display: flex; flex-wrap: wrap; gap: 20px;">
+            `;
+            
+            for (const categoria in reporte.avancePorCategoria) {
+                const avance = reporte.avancePorCategoria[categoria];
+                const color = avance >= 75 ? 'var(--secondary-color)' : 
+                              avance >= 50 ? 'var(--primary-color)' : 
+                              avance >= 25 ? 'var(--warning-color)' : 'var(--danger-color)';
+                
+                html += `
+                    <div style="min-width: 150px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; text-align: center;">
+                        <h5>${categoria}</h5>
+                        <div style="position: relative; width: 100px; height: 100px; margin: 0 auto; border-radius: 50%; background: #eee; overflow: hidden;">
+                            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 20px; font-weight: bold;">${avance}%</div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            html += `
+                    </div>
+                </div>
+            `;
+            
+            // Tabla de avances recientes
+            html += `
+                <div class="mt-20">
+                    <h4>Avances Recientes</h4>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Fecha</th>
+                                    <th>Obra</th>
+                                    <th>Ubicación</th>
+                                    <th>Avances</th>
+                                    <th>Registrado por</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+            `;
+            
+            if (reporte.avancesRecientes && reporte.avancesRecientes.length > 0) {
+                reporte.avancesRecientes.forEach(avance => {
+                    html += `
+                        <tr>
+                            <td>${new Date(avance.fecha).toLocaleString()}</td>
+                            <td>${avance.obraNombre}</td>
+                            <td>${avance.ubicacion}</td>
+                            <td>${avance.avances}</td>
+                            <td>${avance.usuario}</td>
+                        </tr>
+                    `;
+                });
+            } else {
+                html += '<tr><td colspan="5" class="text-center">No hay avances recientes para mostrar</td></tr>';
+            }
+            
+            html += `
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+            
+            // Actualizar contenedor del reporte
+            document.getElementById('reporte-avances-result').innerHTML = html;
+        } catch (error) {
+            document.getElementById('reporte-avances-result').innerHTML = '<p class="text-danger">Error al generar el reporte.</p>';
+            mostrarNotificacion("Error al generar el reporte de avances", "error");
+        }
+    }
+
+    // Función para exportar reporte de avances
+    async function exportarReporteAvances() {
+        const obraId = document.getElementById('reporte-obra').value;
+        const categoria = document.getElementById('reporte-categoria').value;
+        const fechaDesde = document.getElementById('reporte-fecha-desde').value;
+        const fechaHasta = document.getElementById('reporte-fecha-hasta').value;
+        
+        const filtros = {};
+        if (obraId) filtros.obraId = obraId;
+        if (categoria) filtros.categoria = categoria;
+        if (fechaDesde) filtros.fechaDesde = fechaDesde;
+        if (fechaHasta) filtros.fechaHasta = fechaHasta;
+        
+        try {
+            // Mostrar notificación
+            mostrarNotificacion("Preparando exportación del reporte...", "info");
+            
+            const response = await callAPI('exportarReporteAvances', { filtros });
+            
+            if (response.error) {
+                mostrarNotificacion("Error al exportar el reporte", "error");
+                return;
+            }
+            
+            // Iniciar descarga
+            if (response.urlArchivo) {
+                // Crear elemento de enlace para descarga
+                const link = document.createElement('a');
+                link.href = response.urlArchivo;
+                link.download = `reporte_avances_${new Date().toISOString().split('T')[0]}.xlsx`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                mostrarNotificacion("Reporte exportado correctamente", "success");
+            } else {
+                mostrarNotificacion("No se pudo generar el archivo de exportación", "error");
+            }
+        } catch (error) {
+            mostrarNotificacion("Error al exportar el reporte", "error");
+        }
+    }
+
+    // Función para enviar reporte de avances por correo
+    async function enviarReporteAvancesPorCorreo() {
+        const obraId = document.getElementById('reporte-obra').value;
+        const categoria = document.getElementById('reporte-categoria').value;
+        const fechaDesde = document.getElementById('reporte-fecha-desde').value;
+        const fechaHasta = document.getElementById('reporte-fecha-hasta').value;
+        
+        // Solicitar dirección de correo para envío
+        const email = prompt("Ingrese la dirección de correo electrónico para enviar el reporte:");
+        
+        if (!email) return;
+        
+        // Validar formato de correo básico
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            mostrarNotificacion("Por favor ingrese una dirección de correo válida", "error");
+            return;
+        }
+        
+        const filtros = {};
+        if (obraId) filtros.obraId = obraId;
+        if (categoria) filtros.categoria = categoria;
+        if (fechaDesde) filtros.fechaDesde = fechaDesde;
+        if (fechaHasta) filtros.fechaHasta = fechaHasta;
+        
+        try {
+            // Mostrar notificación
+            mostrarNotificacion("Enviando reporte por correo...", "info");
+            
+            const response = await callAPI('enviarReporteAvancesPorCorreo', {
+                filtros,
+                email
+            });
+            
+            if (response.error) {
+                mostrarNotificacion(response.message || "Error al enviar el reporte por correo", "error");
+                return;
+            }
+            
+            mostrarNotificacion("Reporte enviado correctamente a " + email, "success");
+        } catch (error) {
+            mostrarNotificacion("Error al enviar el reporte por correo", "error");
+        }
+    }
+// ============================================
+// PARTE 12A: SISTEMA DE COBRANZAS - CARGA DE DATOS
+// ============================================
+
+// Función para cargar resumen de cobranza
+async function cargarResumenCobranza() {
+    const obraId = document.getElementById('cobranza-obra').value;
+    
+    if (!obraId) {
+        document.getElementById('cobranza-container').classList.add('hidden');
+        return;
+    }
+    
+    try {
+        // Mostrar loader
+        document.getElementById('cobranzas-loader').classList.remove('hidden');
+        
+        const response = await callAPI('obtenerResumenCobranza', { obraId });
+        
+        // Ocultar loader
+        document.getElementById('cobranzas-loader').classList.add('hidden');
+        
+        if (response.error) {
+            mostrarNotificacion("Error al cargar el resumen de cobranza", "error");
+            return;
+        }
+        
+        const resumen = response.datos;
+        
+        // Actualizar nombre de la obra
+        const obra = obrasData.find(o => o.id === obraId);
+        document.getElementById('cobranza-obra-nombre').textContent = obra ? obra.nombre : obraId;
+        
+        // Actualizar tabla de resumen
+        actualizarTablaResumenCobranza(resumen);
+        
+        // Cargar historial de cobranzas
+        await cargarHistorialCobranzas(obraId);
+        
+        // Mostrar contenedor
+        document.getElementById('cobranza-container').classList.remove('hidden');
+    } catch (error) {
+        document.getElementById('cobranzas-loader').classList.add('hidden');
+        mostrarNotificacion("Error al cargar el resumen de cobranza", "error");
+    }
+}
+
+// Función para actualizar tabla de resumen de cobranza
+function actualizarTablaResumenCobranza(resumen) {
+    // Actualizar valores de avance por tipo
+    document.getElementById('alam-actual').textContent = `${resumen.alamActual}%`;
+    document.getElementById('alam-cobrado').textContent = `${resumen.alamCobrado}%`;
+    document.getElementById('alam-pendiente').textContent = `${resumen.alamPendiente}%`;
+    document.getElementById('alam-fecha').textContent = resumen.alamFecha ? new Date(resumen.alamFecha).toLocaleDateString() : '-';
+    
+    document.getElementById('inal-actual').textContent = `${resumen.inalActual}%`;
+    document.getElementById('inal-cobrado').textContent = `${resumen.inalCobrado}%`;
+    document.getElementById('inal-pendiente').textContent = `${resumen.inalPendiente}%`;
+    document.getElementById('inal-fecha').textContent = resumen.inalFecha ? new Date(resumen.inalFecha).toLocaleDateString() : '-';
+    
+    document.getElementById('fo-actual').textContent = `${resumen.foActual}%`;
+    document.getElementById('fo-cobrado').textContent = `${resumen.foCobrado}%`;
+    document.getElementById('fo-pendiente').textContent = `${resumen.foPendiente}%`;
+    document.getElementById('fo-fecha').textContent = resumen.foFecha ? new Date(resumen.foFecha).toLocaleDateString() : '-';
+    
+    document.getElementById('senales-actual').textContent = `${resumen.senalesActual}%`;
+    document.getElementById('senales-cobrado').textContent = `${resumen.senalesCobrado}%`;
+    document.getElementById('senales-pendiente').textContent = `${resumen.senalesPendiente}%`;
+    document.getElementById('senales-fecha').textContent = resumen.senalesFecha ? new Date(resumen.senalesFecha).toLocaleDateString() : '-';
+    
+    document.getElementById('mediciones-actual').textContent = `${resumen.medicionesActual}%`;
+    document.getElementById('mediciones-cobrado').textContent = `${resumen.medicionesCobrado}%`;
+    document.getElementById('mediciones-pendiente').textContent = `${resumen.medicionesPendiente}%`;
+    document.getElementById('mediciones-fecha').textContent = resumen.medicionesFecha ? new Date(resumen.medicionesFecha).toLocaleDateString() : '-';
+    
+    document.getElementById('total-actual').textContent = `${resumen.totalActual}%`;
+    document.getElementById('total-cobrado').textContent = `${resumen.totalCobrado}%`;
+    document.getElementById('total-pendiente').textContent = `${resumen.totalPendiente}%`;
+    document.getElementById('total-fecha').textContent = resumen.totalFecha ? new Date(resumen.totalFecha).toLocaleDateString() : '-';
+    
+    // Guardar valores máximos para uso posterior
+    document.getElementById('max-alam').textContent = resumen.alamPendiente;
+    document.getElementById('max-inal').textContent = resumen.inalPendiente;
+    document.getElementById('max-fo').textContent = resumen.foPendiente;
+    document.getElementById('max-senales').textContent = resumen.senalesPendiente;
+    document.getElementById('max-mediciones').textContent = resumen.medicionesPendiente;
+}
+
+// Función para cargar historial de cobranzas
+async function cargarHistorialCobranzas(obraId) {
+    try {
+        const response = await callAPI('obtenerHistorialCobranzas', { obraId });
+        
+        if (response.error) {
+            mostrarNotificacion("Error al cargar el historial de cobranzas", "error");
+            return;
+        }
+        
+        const cobranzas = response.datos;
+        
+        // Actualizar tabla de historial
+        const tbody = document.getElementById('cobranzas-tbody');
+        tbody.innerHTML = '';
+        
+        if (cobranzas.length === 0) {
+            const tr = document.createElement('tr');
+            tr.innerHTML = '<td colspan="9" class="text-center">No hay registros de cobranzas.</td>';
+            tbody.appendChild(tr);
+            return;
+        }
+        
+        cobranzas.forEach(cobranza => {
+            const tr = document.createElement('tr');
+            
+            tr.innerHTML = `
+                <td>${new Date(cobranza.fecha).toLocaleDateString()}</td>
+                <td>${cobranza.numeroFactura || '-'}</td>
+                <td>${cobranza.porcentajeAlam ? `${cobranza.porcentajeAlam}%` : '-'}</td>
+                <td>${cobranza.porcentajeInal ? `${cobranza.porcentajeInal}%` : '-'}</td>
+                <td>${cobranza.porcentajeFo ? `${cobranza.porcentajeFo}%` : '-'}</td>
+                <td>${cobranza.porcentajeSeñales ? `${cobranza.porcentajeSeñales}%` : '-'}</td>
+                <td>${cobranza.porcentajeMediciones ? `${cobranza.porcentajeMediciones}%` : '-'}</td>
+                <td>${cobranza.usuarioNombre}</td>
+                <td>
+                    <button class="btn btn-sm btn-info" onclick="verDetalleCobranza('${cobranza.id}')">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    <button class="btn btn-sm btn-danger" onclick="eliminarCobranza('${cobranza.id}')">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            `;
+            
+            tbody.appendChild(tr);
+        });
+    } catch (error) {
+        mostrarNotificacion("Error al cargar el historial de cobranzas", "error");
+    }
+}
+// ============================================
+// PARTE 12B: SISTEMA DE COBRANZAS - GESTIÓN
+// ============================================
+
+// Función para mostrar formulario de cobranza
+function mostrarFormularioCobranza() {
+    // Establecer fecha actual
+    const hoy = new Date().toISOString().split('T')[0];
+    document.getElementById('fecha-cobranza').value = hoy;
+    
+    // Limpiar otros campos
+    document.getElementById('numero-factura').value = '';
+    document.getElementById('observaciones-cobranza').value = '';
+    
+    // Desmarcar todos los checkbox
+    document.getElementById('cobrar-alam').checked = false;
+    document.getElementById('cobrar-inal').checked = false;
+    document.getElementById('cobrar-fo').checked = false;
+    document.getElementById('cobrar-senales').checked = false;
+    document.getElementById('cobrar-mediciones').checked = false;
+    
+    // Ocultar porcentajes
+    document.getElementById('porcentajes-cobranza').classList.add('hidden');
+    document.querySelectorAll('#porcentajes-cobranza .form-group').forEach(group => {
+        group.classList.add('hidden');
+    });
+    
+    // Mostrar formulario
+    document.getElementById('formulario-cobranza').classList.remove('hidden');
+}
+
+// Función para alternar campos de cobranza
+function toggleCampoCobranza(tipo) {
+    const checked = document.getElementById(`cobrar-${tipo}`).checked;
+    const group = document.getElementById(`porcentaje-${tipo}-group`);
+    
+    if (checked) {
+        document.getElementById('porcentajes-cobranza').classList.remove('hidden');
+        group.classList.remove('hidden');
+        
+        // Establecer máximo disponible como valor por defecto
+        const max = parseFloat(document.getElementById(`max-${tipo}`).textContent);
+        document.getElementById(`porcentaje-${tipo}`).value = max;
+    } else {
+        group.classList.add('hidden');
+        
+        // Verificar si hay algún otro tipo seleccionado
+        const hayCamposVisibles = Array.from(document.querySelectorAll('#porcentajes-cobranza .form-group')).some(el => !el.classList.contains('hidden'));
+        
+        if (!hayCamposVisibles) {
+            document.getElementById('porcentajes-cobranza').classList.add('hidden');
+        }
+    }
+}
+
+// Función para registrar cobranza
+async function registrarCobranza() {
+    const obraId = document.getElementById('cobranza-obra').value;
+    const fecha = document.getElementById('fecha-cobranza').value;
+    const numeroFactura = document.getElementById('numero-factura').value;
+    const observaciones = document.getElementById('observaciones-cobranza').value;
+    
+    // Verificar tipos seleccionados
+    const tipos = ['alam', 'inal', 'fo', 'senales', 'mediciones'];
+    const porcentajes = {};
+    let haySeleccionados = false;
+    
+    for (const tipo of tipos) {
+        if (document.getElementById(`cobrar-${tipo}`).checked) {
+            const porcentaje = parseFloat(document.getElementById(`porcentaje-${tipo}`).value);
+            
+            if (isNaN(porcentaje) || porcentaje <= 0) {
+                mostrarNotificacion(`Ingrese un porcentaje válido para ${tipo}`, "error");
+                return;
+            }
+            
+            // Validar que no exceda el máximo disponible
+            const max = parseFloat(document.getElementById(`max-${tipo}`).textContent);
+            if (porcentaje > max) {
+                mostrarNotificacion(`El porcentaje para ${tipo} no puede exceder ${max}%`, "error");
+                return;
+            }
+            
+            porcentajes[tipo] = porcentaje;
+            haySeleccionados = true;
+        }
+    }
+    
+    if (!haySeleccionados) {
+        mostrarNotificacion("Debe seleccionar al menos un tipo para cobrar", "error");
+        return;
+    }
+    
+    // Crear objeto de cobranza
+    const cobranza = {
+        obraId,
+        fecha,
+        numeroFactura,
+        observaciones,
+        porcentajes
+    };
+    
+    try {
+        // Mostrar loader
+        document.getElementById('cobranzas-loader').classList.remove('hidden');
+        
+        const response = await callAPI('registrarCobranza', cobranza);
+        
+        // Ocultar loader
+        document.getElementById('cobranzas-loader').classList.add('hidden');
+        
+        if (response.success) {
+            mostrarNotificacion("Cobranza registrada correctamente", "success");
+            cancelarCobranza();
+            await cargarResumenCobranza();
+        } else {
+            mostrarNotificacion(response.message || "Error al registrar la cobranza", "error");
+        }
+    } catch (error) {
+        document.getElementById('cobranzas-loader').classList.add('hidden');
+        mostrarNotificacion("Error al registrar la cobranza", "error");
+    }
+}
+
+// Función para cancelar cobranza
+function cancelarCobranza() {
+    document.getElementById('formulario-cobranza').classList.add('hidden');
+}
+
+// Función para ver detalle de cobranza
+async function verDetalleCobranza(id) {
+    try {
+        const response = await callAPI('obtenerDetalleCobranza', { id });
+        
+        if (response.error) {
+            mostrarNotificacion("Error al obtener el detalle de la cobranza", "error");
+            return;
+        }
+        
+        const cobranza = response.datos;
+        
+        // Implementación básica de un alert con la información
+        let detalle = `Cobranza del ${new Date(cobranza.fecha).toLocaleDateString()}\n`;
+        detalle += `Factura: ${cobranza.numeroFactura || 'No especificada'}\n\n`;
+        
+        if (cobranza.porcentajeAlam) detalle += `Alámbrico: ${cobranza.porcentajeAlam}%\n`;
+        if (cobranza.porcentajeInal) detalle += `Inalámbrico: ${cobranza.porcentajeInal}%\n`;
+        if (cobranza.porcentajeFo) detalle += `Fibra Óptica: ${cobranza.porcentajeFo}%\n`;
+        if (cobranza.porcentajeSeñales) detalle += `Señales: ${cobranza.porcentajeSeñales}%\n`;
+        if (cobranza.porcentajeMediciones) detalle += `Mediciones: ${cobranza.porcentajeMediciones}%\n`;
+        
+        detalle += `\nObservaciones: ${cobranza.observaciones || 'Sin observaciones'}\n`;
+        detalle += `Registrado por: ${cobranza.usuarioNombre}`;
+        
+        alert(detalle);
+    } catch (error) {
+        mostrarNotificacion("Error al obtener el detalle de la cobranza", "error");
+    }
+}
+
+// Función para eliminar cobranza
+async function eliminarCobranza(id) {
+    if (!confirm('¿Está seguro de eliminar este registro de cobranza? Esta acción no se puede deshacer.')) {
+        return;
+    }
+    
+    try {
+        // Mostrar loader
+        document.getElementById('cobranzas-loader').classList.remove('hidden');
+        
+        const response = await callAPI('eliminarCobranza', { id });
+        
+        // Ocultar loader
+        document.getElementById('cobranzas-loader').classList.add('hidden');
+        
+        if (response.success) {
+            mostrarNotificacion("Cobranza eliminada correctamente", "success");
+            await cargarResumenCobranza();
+        } else {
+            mostrarNotificacion(response.message || "Error al eliminar la cobranza", "error");
+        }
+    } catch (error) {
+        document.getElementById('cobranzas-loader').classList.add('hidden');
+        mostrarNotificacion("Error al eliminar la cobranza", "error");
+    }
+}
+
+// Función para exportar resumen de cobranza
+async function exportarResumenCobranza() {
+    const obraId = document.getElementById('cobranza-obra').value;
+    
+    if (!obraId) {
+        mostrarNotificacion("Seleccione una obra para exportar su resumen", "error");
+        return;
+    }
+    
+    try {
+        // Mostrar notificación
+        mostrarNotificacion("Preparando exportación del resumen...", "info");
+        
+        const response = await callAPI('exportarResumenCobranza', { obraId });
+        
+        if (response.error) {
+            mostrarNotificacion("Error al exportar el resumen", "error");
+            return;
+        }
+        
+        // Iniciar descarga
+        if (response.urlArchivo) {
+            const link = document.createElement('a');
+            link.href = response.urlArchivo;
+            link.download = `resumen_cobranza_${new Date().toISOString().split('T')[0]}.xlsx`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            mostrarNotificacion("Resumen exportado correctamente", "success");
+        } else {
+            mostrarNotificacion("No se pudo generar el archivo de exportación", "error");
+        }
+    } catch (error) {
+        mostrarNotificacion("Error al exportar el resumen", "error");
+    }
+}
+// ============================================
+// PARTE 12C: FUNCIONES DE INICIALIZACIÓN Y EVENT LISTENERS
+// ============================================
+
+// Función para inicializar la aplicación
+document.addEventListener('DOMContentLoaded', function() {
+    // Inicializar variables globales para maquetación
+    window.shaftsPorTorrePiso = [];
+    window.dispositivosPorShaft = [];
+    window.maquetacionModificada = false;
+    
+    // Escuchadores para los formularios principales
+    setupFormEventListeners();
+    
+    // Escuchadores para maquetación
+    setupMaquetacionEventListeners();
+    
+    // Inicializar fechas en formularios con la fecha actual
+    initializeDateInputs();
+    
+    // Configurar eventos específicos de la aplicación
+    setupApplicationEvents();
+});
+
+// Función para configurar event listeners de formularios
+function setupFormEventListeners() {
+    // Eventos para registro de avances
+    const obraAvanceSelect = document.getElementById('obra-avance');
+    if (obraAvanceSelect) {
+        obraAvanceSelect.addEventListener('change', cargarAvancesObra);
+    }
+    
+    const torreAvanceSelect = document.getElementById('torre-avance');
+    if (torreAvanceSelect) {
+        torreAvanceSelect.addEventListener('change', cargarPisosPorTorre);
+    }
+    
+    const pisoAvanceSelect = document.getElementById('piso-avance');
+    if (pisoAvanceSelect) {
+        pisoAvanceSelect.addEventListener('change', cargarDepartamentosPorPiso);
+    }
+    
+    const departamentoAvanceSelect = document.getElementById('departamento-avance');
+    if (departamentoAvanceSelect) {
+        departamentoAvanceSelect.addEventListener('change', cargarTiposAvance);
+    }
+    
+    // Eventos para inventario
+    const materialEntradaSelect = document.getElementById('material-entrada');
+    if (materialEntradaSelect) {
+        materialEntradaSelect.addEventListener('change', actualizarDetallesMaterial);
+    }
+    
+    const materialSalidaSelect = document.getElementById('material-salida');
+    if (materialSalidaSelect) {
+        materialSalidaSelect.addEventListener('change', actualizarStockDisponible);
+    }
+    
+    // Eventos para transferencias
+    const obraOrigenSelect = document.getElementById('obra-origen');
+    if (obraOrigenSelect) {
+        obraOrigenSelect.addEventListener('change', cargarMaterialesDisponiblesObra);
+    }
+    
+    const materialTransferenciaSelect = document.getElementById('material-transferencia');
+    if (materialTransferenciaSelect) {
+        materialTransferenciaSelect.addEventListener('change', actualizarDisponibilidadMaterial);
+    }
+    
+    // Eventos para cobranzas
+    const cobranzaObraSelect = document.getElementById('cobranza-obra');
+    if (cobranzaObraSelect) {
+        cobranzaObraSelect.addEventListener('change', cargarResumenCobranza);
+    }
+    
+    // Eventos para tipos de avance
+    const tipoAvanceRadios = document.querySelectorAll('input[name="tipo-avance"]');
+    tipoAvanceRadios.forEach(radio => {
+        radio.addEventListener('change', function() {
+            toggleTipoAvance(this.value);
+        });
+    });
+    
+    // Evento para cargar espacios comunes cuando se selecciona
+    const espacioComunSelect = document.getElementById('espacio-comun');
+    if (espacioComunSelect) {
+        espacioComunSelect.addEventListener('change', cargarTiposAvanceEspacioComun);
+    }
+}
+
+// Función para configurar event listeners de maquetación
+function setupMaquetacionEventListeners() {
+    // Agregar event listeners para detectar cambios en maquetación
+    const elementosMaquetacion = document.querySelectorAll('#modal-maquetacion input, #modal-maquetacion select, #modal-maquetacion textarea');
+    elementosMaquetacion.forEach(elem => {
+        elem.addEventListener('change', marcarMaquetacionComoModificada);
+        elem.addEventListener('input', marcarMaquetacionComoModificada);
+    });
+    
+    // Event listeners específicos de maquetación
+    const incluirTorresCheck = document.getElementById('incluir-torres');
+    if (incluirTorresCheck) {
+        incluirTorresCheck.addEventListener('change', function() {
+            toggleComponente('torres-config', this.checked);
+            actualizarConfiguracionPisosTorres();
+        });
+    }
+    
+    const incluirPisosCheck = document.getElementById('incluir-pisos');
+    if (incluirPisosCheck) {
+        incluirPisosCheck.addEventListener('change', function() {
+            toggleComponente('pisos-config', this.checked);
+            actualizarConfiguracionPisosTorres();
+        });
+    }
+    
+    const cantidadTorresInput = document.getElementById('cantidad-torres');
+    if (cantidadTorresInput) {
+        cantidadTorresInput.addEventListener('change', actualizarConfiguracionPisosTorres);
+    }
+    
+    const configuracionPisosSelect = document.getElementById('configuracion-pisos-global');
+    if (configuracionPisosSelect) {
+        configuracionPisosSelect.addEventListener('change', function() {
+            toggleConfiguracionPisos(this.value);
+        });
+    }
+    
+    const configuracionShaftSelect = document.getElementById('configuracion-shaft');
+    if (configuracionShaftSelect) {
+        configuracionShaftSelect.addEventListener('change', function() {
+            toggleConfiguracionShaft(this.value);
+        });
+    }
+    
+    const tipoDispositivoShaftSelect = document.getElementById('tipo-dispositivo-shaft');
+    if (tipoDispositivoShaftSelect) {
+        tipoDispositivoShaftSelect.addEventListener('change', actualizarOpcionesDispositivo);
+    }
+    
+    const tipoRedSelect = document.getElementById('tipo-red');
+    if (tipoRedSelect) {
+        tipoRedSelect.addEventListener('change', actualizarConfiguracionRed);
+    }
+}
+
+// Función para inicializar campos de fecha
+function initializeDateInputs() {
+    const inputsFecha = document.querySelectorAll('input[type="date"]');
+    const fechaHoy = new Date().toISOString().split('T')[0];
+    
+    inputsFecha.forEach(input => {
+        if (!input.value && !input.hasAttribute('data-no-auto-date')) {
+            input.value = fechaHoy;
+        }
+    });
+}
+
+// Función para configurar eventos específicos de la aplicación
+function setupApplicationEvents() {
+    // Evento para cerrar modales con ESC
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            // Cerrar modales abiertos
+            const modalesAbiertos = document.querySelectorAll('.modal-overlay:not(.hidden)');
+            modalesAbiertos.forEach(modal => {
+                modal.classList.add('hidden');
+            });
+        }
+    });
+    
+    // Evento para confirmar salida si hay cambios sin guardar
+    window.addEventListener('beforeunload', function(e) {
+        if (window.maquetacionModificada) {
+            e.preventDefault();
+            e.returnValue = '¿Está seguro de salir? Hay cambios sin guardar en la maquetación.';
+            return e.returnValue;
+        }
+    });
+    
+    // Configurar auto-guardado de sesión cada 30 minutos
+    setInterval(function() {
+        if (usuarioActual && tokenSesion) {
+            // Renovar token de sesión silenciosamente
+            callAPI('renovarSesion').catch(error => {
+                console.warn('Error al renovar sesión:', error);
+            });
+        }
+    }, 30 * 60 * 1000); // 30 minutos
+}
+
+// Función para cargar tipos de avance para espacios comunes
+async function cargarTiposAvanceEspacioComun() {
+    const espacioComunId = document.getElementById('espacio-comun').value;
+    
+    if (!espacioComunId) {
+        document.getElementById('avances-especificos').innerHTML = '';
+        return;
+    }
+    
+    try {
+        const response = await callAPI('obtenerTiposAvanceEspacioComun', { espacioComunId });
+        
+        if (response.error) {
+            mostrarNotificacion("Error al cargar los tipos de avance", "error");
+            return;
+        }
+        
+        const tiposAvance = response.datos;
+        
+        // Actualizar contenedor de avances específicos
+        const container = document.getElementById('avances-especificos');
+        container.innerHTML = '';
+        
+        tiposAvance.forEach(tipo => {
+            const div = document.createElement('div');
+            div.className = 'avance-item';
+            
+            div.innerHTML = `
+                <label>
+                    <input type="checkbox" name="avance-${tipo.id}" data-id="${tipo.id}">
+                    ${tipo.nombre}
+                </label>
+            `;
+            
+            container.appendChild(div);
+        });
+    } catch (error) {
+        mostrarNotificacion("Error al cargar los tipos de avance", "error");
+    }
+}
+
+// Función para cargar espacios comunes por torre
+async function cargarEspaciosComunesPorTorre() {
+    const torreId = document.getElementById('torre-avance').value;
+    
+    if (!torreId) {
+        document.getElementById('espacio-comun').innerHTML = '<option value="">Seleccione un espacio común</option>';
+        return;
+    }
+    
+    try {
+        const response = await callAPI('obtenerEspaciosComunesPorTorre', { torreId });
+        
+        if (response.error) {
+            mostrarNotificacion("Error al cargar los espacios comunes", "error");
+            return;
+        }
+        
+        const espaciosComunes = response.datos;
+        
+        // Actualizar selector
+        const select = document.getElementById('espacio-comun');
+        const primeraOpcion = select.options[0];
+        select.innerHTML = '';
+        select.appendChild(primeraOpcion);
+        
+        espaciosComunes.forEach(espacio => {
+            const option = document.createElement('option');
+            option.value = espacio.id;
+            option.textContent = espacio.nombre;
+            select.appendChild(option);
+        });
+    } catch (error) {
+        mostrarNotificacion("Error al cargar los espacios comunes", "error");
+    }
+}
+// ============================================
+// PARTE 12D: FUNCIONES AUXILIARES Y UTILIDADES FINALES
+// ============================================
+
+// Función auxiliar para cargar configuración completa de maquetación
+function cargarConfiguracionMaquetacion(maquetacion) {
+    // Reiniciar variables globales
+    window.shaftsPorTorrePiso = maquetacion.shaftsPorTorrePiso || [];
+    window.dispositivosPorShaft = maquetacion.dispositivosPorShaft || [];
+
+    // Cargar infraestructura
+    if (maquetacion.estructuraFisica) {
+        // Torres
+        if (maquetacion.estructuraFisica.torres) {
+            document.getElementById('incluir-torres').checked = true;
+            toggleComponente('torres-config', true);
+            document.getElementById('cantidad-torres').value = maquetacion.estructuraFisica.torres.cantidad || 1;
+            document.getElementById('nomenclatura-torres').value = maquetacion.estructuraFisica.torres.nomenclatura || 'letras';
+        }
+        
+        // Pisos
+        if (maquetacion.estructuraFisica.pisos) {
+            document.getElementById('incluir-pisos').checked = true;
+            toggleComponente('pisos-config', true);
+            
+            if (maquetacion.estructuraFisica.pisos.configuracionGlobal) {
+                document.getElementById('configuracion-pisos-global').value = 'global';
+                document.getElementById('piso-inicio-global').value = maquetacion.estructuraFisica.pisos.inicioGlobal || 1;
+                document.getElementById('piso-fin-global').value = maquetacion.estructuraFisica.pisos.finGlobal || 10;
+                document.getElementById('nomenclatura-pisos-global').value = maquetacion.estructuraFisica.pisos.nomenclatura || 'numerico';
+                
+                toggleConfiguracionPisos('global');
+            } else {
+                document.getElementById('configuracion-pisos-global').value = 'porTorre';
+                toggleConfiguracionPisos('porTorre');
+            }
+        }
+        
+        // Unidades
+        if (maquetacion.estructuraFisica.unidades) {
+            document.getElementById('incluir-unidades').checked = true;
+            toggleComponente('unidades-config', true);
+            document.getElementById('unidades-por-piso').value = maquetacion.estructuraFisica.unidades.cantidadPorPiso || 4;
+            document.getElementById('nomenclatura-unidades').value = maquetacion.estructuraFisica.unidades.nomenclatura || 'numerico';
+        }
+        
+        // CTR
+        if (maquetacion.estructuraFisica.ctr) {
+            document.getElementById('incluir-ctr').checked = true;
+            toggleComponente('ctr-config', true);
+            document.getElementById('tipo-ctr').value = maquetacion.estructuraFisica.ctr.tipo || 'principal';
+        }
+        
+        // Shaft
+        if (maquetacion.estructuraFisica.shaft) {
+            document.getElementById('incluir-shaft').checked = true;
+            toggleComponente('shaft-config', true);
+            
+            if (maquetacion.estructuraFisica.shaft.configuracionGlobal) {
+                document.getElementById('configuracion-shaft').value = 'global';
+                document.getElementById('cantidad-shaft-por-torre').value = maquetacion.estructuraFisica.shaft.cantidadPorTorre || 1;
+                toggleConfiguracionShaft('global');
+            } else {
+                document.getElementById('configuracion-shaft').value = 'especifico';
+                toggleConfiguracionShaft('especifico');
+                actualizarTablaShaftEspecifico();
+            }
+        }
+        
+        // SOT
+        if (maquetacion.estructuraFisica.sot) {
+            document.getElementById('incluir-sot').checked = true;
+            toggleComponente('sot-config', true);
+            document.getElementById('distribucion-sot').value = maquetacion.estructuraFisica.sot.distribucion || 'por_piso';
+        }
+        
+        // Cámaras
+        if (maquetacion.estructuraFisica.camaras) {
+            document.getElementById('incluir-camaras').checked = true;
+            toggleComponente('camaras-config', true);
+            document.getElementById('cantidad-camaras').value = maquetacion.estructuraFisica.camaras.cantidad || 2;
+        }
+    }
+    
+    // Cargar red de telecomunicaciones
+    if (maquetacion.redTelecomunicaciones) {
+        document.getElementById('tipo-red').value = maquetacion.redTelecomunicaciones.tipo || 'arbol';
+        actualizarConfiguracionRed();
+        
+        // Coaxial Alámbrico
+        if (maquetacion.redTelecomunicaciones.coaxAlambrico) {
+            document.getElementById('incluir-coax-ala').checked = true;
+            toggleComponente('coax-ala-config', true);
+            document.getElementById('marca-coax').value = maquetacion.redTelecomunicaciones.coaxAlambrico.marca || 'bdn';
+            document.getElementById('tipo-coax').value = maquetacion.redTelecomunicaciones.coaxAlambrico.tipo || 'rg6';
+            document.getElementById('incluir-t1-t2-alam').checked = maquetacion.redTelecomunicaciones.coaxAlambrico.incluyeT1T2 || false;
+            
+            if (maquetacion.redTelecomunicaciones.coaxAlambrico.troncales) {
+                document.getElementById('incluir-troncal-coax').checked = true;
+                toggleComponente('troncal-coax-config', true);
+                document.getElementById('cantidad-troncales-coax').value = maquetacion.redTelecomunicaciones.coaxAlambrico.troncales.cantidad || 1;
+            }
+        }
+        
+        // Coaxial Inalámbrico
+        if (maquetacion.redTelecomunicaciones.coaxInalambrico) {
+            document.getElementById('incluir-coax-ina').checked = true;
+            toggleComponente('coax-ina-config', true);
+            document.getElementById('incluir-t1-t2-inal').checked = maquetacion.redTelecomunicaciones.coaxInalambrico.incluyeT1T2 || false;
+            
+            if (maquetacion.redTelecomunicaciones.coaxInalambrico.troncales) {
+                document.getElementById('incluir-troncal-inal').checked = true;
+                toggleComponente('troncal-inal-config', true);
+                document.getElementById('cantidad-troncales-inal').value = maquetacion.redTelecomunicaciones.coaxInalambrico.troncales.cantidad || 1;
+            }
+        }
+        
+        // Fibra Óptica
+        if (maquetacion.redTelecomunicaciones.fibra) {
+            document.getElementById('incluir-fibra').checked = true;
+            toggleComponente('fibra-config', true);
+            document.getElementById('tipo-fibra').value = maquetacion.redTelecomunicaciones.fibra.tipo || 'monomodo';
+            document.getElementById('distribucion-fibra').value = maquetacion.redTelecomunicaciones.fibra.distribucion || 'gpon';
+            
+            if (maquetacion.redTelecomunicaciones.fibra.troncales) {
+                document.getElementById('incluir-troncal-fibra').checked = true;
+                toggleComponente('troncal-fibra-config', true);
+                document.getElementById('cantidad-troncales-fibra').value = maquetacion.redTelecomunicaciones.fibra.troncales.cantidad || 1;
+            }
+        }
+        
+        // PAU
+        if (maquetacion.redTelecomunicaciones.pau) {
+            document.getElementById('incluir-pau').checked = true;
+            toggleComponente('pau-config', true);
+            document.getElementById('puntos-por-unidad').value = maquetacion.redTelecomunicaciones.pau.puntosPorUnidad || 2;
+            
+            if (maquetacion.redTelecomunicaciones.pau.repartidorALAM) {
+                document.getElementById('incluir-repartidor-alam').checked = true;
+                toggleComponente('repartidor-alam-config', true);
+                document.getElementById('marca-repartidor-alam').value = maquetacion.redTelecomunicaciones.pau.repartidorALAM.marca || '';
+            }
+            
+            if (maquetacion.redTelecomunicaciones.pau.repartidorINAL) {
+                document.getElementById('incluir-repartidor-inal').checked = true;
+                toggleComponente('repartidor-inal-config', true);
+                document.getElementById('marca-repartidor-inal').value = maquetacion.redTelecomunicaciones.pau.repartidorINAL.marca || '';
+            }
+            
+            if (maquetacion.redTelecomunicaciones.pau.rosetaFO) {
+                document.getElementById('incluir-roseta-fo').checked = true;
+                toggleComponente('roseta-fo-config', true);
+                document.getElementById('marca-roseta-fo').value = maquetacion.redTelecomunicaciones.pau.rosetaFO.marca || '';
+            }
+        }
+        
+        // Antenas
+        if (maquetacion.redTelecomunicaciones.antenas) {
+            document.getElementById('incluir-antenas').checked = true;
+            toggleComponente('antenas-config', true);
+            document.getElementById('tipo-antenas').value = maquetacion.redTelecomunicaciones.antenas.tipo || 'uhf';
+            document.getElementById('cantidad-antenas').value = maquetacion.redTelecomunicaciones.antenas.cantidad || 1;
+            document.getElementById('ubicacion-antenas').value = maquetacion.redTelecomunicaciones.antenas.ubicacion || 'azotea';
+        }
+        
+        // Amplificadores
+        if (maquetacion.redTelecomunicaciones.amplificadores) {
+            document.getElementById('incluir-amplificadores').checked = true;
+            toggleComponente('amplificadores-config', true);
+            document.getElementById('tipo-amplificadores').value = maquetacion.redTelecomunicaciones.amplificadores.tipo || 'senal';
+            document.getElementById('cantidad-amplificadores').value = maquetacion.redTelecomunicaciones.amplificadores.cantidad || 2;
+        }
+    }
+    
+    // Cargar mediciones
+    if (maquetacion.mediciones && maquetacion.mediciones.certificacion) {
+        document.getElementById('incluir-certificacion').checked = true;
+        document.getElementById('equipo-certificacion').value = maquetacion.mediciones.certificacion.equipo || 'Certificadora Unificada FO/Coaxial';
+        document.getElementById('param-atenuacion').checked = maquetacion.mediciones.certificacion.parametros.atenuacion || false;
+        document.getElementById('param-continuidad').checked = maquetacion.mediciones.certificacion.parametros.continuidad || false;
+        document.getElementById('param-potencia').checked = maquetacion.mediciones.certificacion.parametros.potencia || false;
+    }
+    
+    // Cargar sistemas integrados
+    if (maquetacion.sistemasIntegrados) {
+        // Red de incendios
+        if (maquetacion.sistemasIntegrados.redIncendios) {
+            document.getElementById('incluir-red-incendios').checked = true;
+            toggleComponente('red-incendios-config', true);
+            document.getElementById('tipo-deteccion').value = maquetacion.sistemasIntegrados.redIncendios.tipoDeteccion || 'convencional';
+            document.getElementById('componente-detectores').checked = maquetacion.sistemasIntegrados.redIncendios.componentes.detectores || false;
+            document.getElementById('componente-pulsadores').checked = maquetacion.sistemasIntegrados.redIncendios.componentes.pulsadores || false;
+            document.getElementById('componente-sirenas').checked = maquetacion.sistemasIntegrados.redIncendios.componentes.sirenas || false;
+            document.getElementById('componente-central').checked = maquetacion.sistemasIntegrados.redIncendios.componentes.central || false;
+        }
+        
+        // Corrientes débiles
+        if (maquetacion.sistemasIntegrados.corrientesDebiles) {
+            document.getElementById('incluir-corrientes-debiles').checked = true;
+            toggleComponente('corrientes-debiles-config', true);
+            document.getElementById('sistema-cctv').checked = maquetacion.sistemasIntegrados.corrientesDebiles.sistemas.cctv || false;
+            document.getElementById('sistema-control-acceso').checked = maquetacion.sistemasIntegrados.corrientesDebiles.sistemas.controlAcceso || false;
+            document.getElementById('sistema-intrusion').checked = maquetacion.sistemasIntegrados.corrientesDebiles.sistemas.intrusion || false;
+            document.getElementById('sistema-audio').checked = maquetacion.sistemasIntegrados.corrientesDebiles.sistemas.audio || false;
+        }
+        
+        // Citofonía
+        if (maquetacion.sistemasIntegrados.citofonia) {
+            document.getElementById('incluir-citofonia').checked = true;
+            toggleComponente('citofonia-config', true);
+            document.getElementById('tipo-citofonia').value = maquetacion.sistemasIntegrados.citofonia.tipo || 'analogico';
+            document.getElementById('integracion-citofonia').value = maquetacion.sistemasIntegrados.citofonia.integracion || 'standalone';
+        }
+        
+        // Motores de acceso
+        if (maquetacion.sistemasIntegrados.motoresAcceso) {
+            document.getElementById('incluir-motores-acceso').checked = true;
+            toggleComponente('motores-acceso-config', true);
+            document.getElementById('tipo-motores').value = maquetacion.sistemasIntegrados.motoresAcceso.tipo || 'correderas';
+            document.getElementById('cantidad-motores').value = maquetacion.sistemasIntegrados.motoresAcceso.cantidad || 2;
+            document.getElementById('control-motores').value = maquetacion.sistemasIntegrados.motoresAcceso.control || 'local';
+        }
+    }
+    
+    // Actualizar vistas que dependen de estos valores
+    actualizarConfiguracionPisosTorres();
+}
+
+// Función para generar vista previa de maquetación
+function generarVistaPrevia() {
+    // Obtener toda la configuración actual del formulario
+    const configuracion = obtenerConfiguracionMaquetacion();
+    
+    // Generar HTML de tabla resumen
+    const contenedorResumen = document.getElementById('vista-previa-resumen');
+    
+    let htmlResumen = `
+        <table class="resumen-table">
+            <tr class="section-title">
+                <td colspan="2">Información Básica</td>
+            </tr>
+            <tr>
+                <td>Nombre de la obra:</td>
+                <td>${configuracion.infoBasica.nombre || '-'}</td>
+            </tr>
+            <tr>
+                <td>Dirección:</td>
+                <td>${configuracion.infoBasica.direccion || '-'}</td>
+            </tr>
+            <tr>
+                <td>Fecha de inicio:</td>
+                <td>${configuracion.infoBasica.fechaInicio || '-'}</td>
+            </tr>
+            <tr>
+                <td>Fecha estimada de término:</td>
+                <td>${configuracion.infoBasica.fechaTermino || '-'}</td>
+            </tr>
+            <tr>
+                <td>Tipo de obra:</td>
+                <td>${configuracion.infoBasica.tipo || '-'}</td>
+            </tr>
+            <tr>
+                <td>Estado:</td>
+                <td>${configuracion.infoBasica.estado || '-'}</td>
+            </tr>
+            <tr>
+                <td>Empresa cliente:</td>
+                <td>${configuracion.infoBasica.empresaCliente || '-'}</td>
+            </tr>
+            
+            <tr class="section-title">
+                <td colspan="2">Infraestructura</td>
+            </tr>
+    `;
+    
+    // Agregar torres
+    if (configuracion.estructuraFisica.torres) {
+        htmlResumen += `
+            <tr>
+                <td>Torres:</td>
+                <td>${configuracion.estructuraFisica.torres.cantidad} (${configuracion.estructuraFisica.torres.nomenclatura})</td>
+            </tr>
+        `;
+    } else {
+        htmlResumen += `
+            <tr>
+                <td>Torres:</td>
+                <td>No configurado</td>
+            </tr>
+        `;
+    }
+    
+    // Agregar pisos
+    if (configuracion.estructuraFisica.pisos) {
+        if (document.getElementById('configuracion-pisos-global').value === 'global') {
+            const pisoInicio = document.getElementById('piso-inicio-global').value;
+            const pisoFin = document.getElementById('piso-fin-global').value;
+            htmlResumen += `
+                <tr>
+                    <td>Pisos:</td>
+                    <td>Global - Del piso ${pisoInicio} al ${pisoFin} (${configuracion.estructuraFisica.pisos.nomenclatura})</td>
+                </tr>
+            `;
+        } else {
+            htmlResumen += `
+                <tr>
+                    <td>Pisos:</td>
+                    <td>Configuración específica por torre</td>
+                </tr>
+            `;
+        }
+    } else {
+        htmlResumen += `
+            <tr>
+                <td>Pisos:</td>
+                <td>No configurado</td>
+            </tr>
+        `;
+    }
+    
+    // Continuar con el resto de la configuración...
+    htmlResumen += `</table>`;
+    
+    // Mostrar el resumen en el div correspondiente
+    contenedorResumen.innerHTML = htmlResumen;
+    
+    // Notificación de éxito
+    mostrarNotificacion('Vista previa generada correctamente', 'success');
+}
+
+// Funciones de utilidad final
+function limpiarFormularios() {
+    // Limpiar formularios principales cuando sea necesario
+    const formularios = document.querySelectorAll('form');
+    formularios.forEach(form => {
+        if (form.hasAttribute('data-auto-clear')) {
+            form.reset();
+        }
+    });
+}
+
+// Función para validar conectividad
+async function verificarConectividad() {
+    try {
+        const response = await callAPI('ping');
+        return response.success;
+    } catch (error) {
+        return false;
+    }
+}
+
+// Función de limpieza al cerrar
+window.addEventListener('beforeunload', function() {
+    // Limpiar variables globales si es necesario
+    if (window.maquetacionModificada) {
+        // Intentar guardar cambios pendientes de manera síncrona
+        navigator.sendBeacon('/api/guardar-cambios-pendientes', JSON.stringify({
+            usuario: usuarioActual?.id,
+            cambios: 'maquetacion_pendiente'
+        }));
+    }
+});
+// Mensaje de consola para desarrolladores
+console.log('%c🏗️ BDPA v2.0 - Sistema de Gestión de Obras de Telecomunicaciones', 
+    'color: #3498db; font-size: 16px; font-weight: bold;');
+console.log('%cDesarrollado por Larnet Telecomunicaciones', 
+    'color: #2ecc71; font-size: 12px;');
+console.log('%c📋 Funcionalidades cargadas: Gestión de Obras, Avances, Inventario, Usuarios, Reportes, Cobranzas, Transferencias', 
+    'color: #95a5a6; font-size: 10px;');
+</script>

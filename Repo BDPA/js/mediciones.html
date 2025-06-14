@@ -1,0 +1,543 @@
+<script>
+// ============================================================================
+// BDPA - js/mediciones.html - Sistema de Mediciones
+// ============================================================================
+
+// Variables globales
+let medicionesData = [];
+let estructuraEdificio = {};
+let tipoMedicionActual = '';
+let medicionesPorDepto = {};
+
+// Configuración de valores de referencia
+const VALORES_REFERENCIA = {
+    COAXIAL: {
+        '53': { min: 45, max: 65, tolerance: 3 },
+        '400': { min: 45, max: 65, tolerance: 3 },
+        '800': { min: 45, max: 65, tolerance: 3 },
+        '1220': { min: 45, max: 65, tolerance: 3 }
+    },
+    FO: {
+        potenciaMin: -30,
+        potenciaMax: -8,
+        atenuacionMax: 0.5
+    }
+};
+
+// ============================================================================
+// FUNCIONES PRINCIPALES
+// ============================================================================
+
+// Mostrar modal de mediciones
+function mostrarModalMediciones() {
+    document.getElementById('modal-mediciones').classList.remove('hidden');
+    cargarObrasParaMedicion();
+    limpiarFormularioMediciones();
+}
+
+// Cerrar modal de mediciones
+function cerrarModalMediciones() {
+    if (confirm('¿Está seguro de cerrar? Se perderán los datos no guardados.')) {
+        document.getElementById('modal-mediciones').classList.add('hidden');
+        limpiarFormularioMediciones();
+    }
+}
+
+// Cargar obras disponibles
+async function cargarObrasParaMedicion() {
+    try {
+        const response = await callAPI('obtenerObras', { 
+            estado: 'En progreso',
+            conMaquetacion: true 
+        });
+        
+        if (response.success) {
+            const select = document.getElementById('medicion-obra');
+            select.innerHTML = '<option value="">Seleccionar obra...</option>';
+            
+            response.datos.forEach(obra => {
+                const option = document.createElement('option');
+                option.value = obra.id;
+                option.textContent = obra.nombre;
+                select.appendChild(option);
+            });
+        }
+    } catch (error) {
+        mostrarNotificacion('Error al cargar obras: ' + error.message, 'error');
+    }
+}
+
+// Cargar estructura del edificio
+async function cargarEstructuraMedicion() {
+    const obraId = document.getElementById('medicion-obra').value;
+    if (!obraId) return;
+    
+    try {
+        const response = await callAPI('obtenerEstructuraEdificio', { obraId });
+        
+        if (response.success) {
+            estructuraEdificio = response.datos;
+            
+            // Cargar torres
+            const selectTorre = document.getElementById('medicion-torre');
+            selectTorre.innerHTML = '<option value="">Seleccionar torre...</option>';
+            
+            estructuraEdificio.torres.forEach(torre => {
+                const option = document.createElement('option');
+                option.value = torre.id;
+                option.textContent = torre.nombre;
+                selectTorre.appendChild(option);
+            });
+        }
+    } catch (error) {
+        mostrarNotificacion('Error al cargar estructura: ' + error.message, 'error');
+    }
+}
+
+// Cambiar tipo de medición
+function cambiarTipoMedicion() {
+    const tipo = document.getElementById('medicion-tipo-senal').value;
+    const torre = document.getElementById('medicion-torre').value;
+    
+    if (!tipo || !torre) return;
+    
+    tipoMedicionActual = tipo;
+    
+    // Mostrar tabla correspondiente
+    document.getElementById('contenedor-tabla-mediciones').classList.remove('hidden');
+    document.getElementById('acciones-mediciones').classList.remove('hidden');
+    
+    // Ocultar todas las tablas
+    document.getElementById('tabla-coaxial').classList.add('hidden');
+    document.getElementById('tabla-fo').classList.add('hidden');
+    
+    // Mostrar la tabla correcta
+    if (tipo === 'FO') {
+        document.getElementById('tabla-fo').classList.remove('hidden');
+        cargarTablaFO();
+    } else {
+        document.getElementById('tabla-coaxial').classList.remove('hidden');
+        cargarTablaCoaxial();
+    }
+    
+    // Actualizar título
+    document.getElementById('tipo-senal-titulo').textContent = 
+        tipo === 'COAXIAL_INALAMBRICO' ? 'Coaxial Inalámbrico' :
+        tipo === 'COAXIAL_ALAMBRICO' ? 'Coaxial Alámbrico' : 'Fibra Óptica';
+}
+
+// Cargar tabla para mediciones coaxiales
+function cargarTablaCoaxial() {
+    const torreId = document.getElementById('medicion-torre').value;
+    const torre = estructuraEdificio.torres.find(t => t.id === torreId);
+    
+    if (!torre) return;
+    
+    const tbody = document.getElementById('tbody-mediciones-coaxial');
+    tbody.innerHTML = '';
+    
+    torre.pisos.forEach(piso => {
+        piso.departamentos.forEach(depto => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${piso.numero}</td>
+                <td>${depto.numero}</td>
+                <td><input type="number" step="0.1" class="medicion-input" 
+                    data-depto="${depto.id}" data-freq="53" data-tipo="pwr"
+                    onchange="validarValorCoaxial(this)"></td>
+                <td><input type="number" step="0.1" class="medicion-input" 
+                    data-depto="${depto.id}" data-freq="400" data-tipo="pwr"
+                    onchange="validarValorCoaxial(this)"></td>
+                <td><input type="number" step="0.1" class="medicion-input" 
+                    data-depto="${depto.id}" data-freq="800" data-tipo="pwr"
+                    onchange="validarValorCoaxial(this)"></td>
+                <td><input type="number" step="0.1" class="medicion-input" 
+                    data-depto="${depto.id}" data-freq="1220" data-tipo="pwr"
+                    onchange="validarValorCoaxial(this)"></td>
+                <td><input type="number" step="0.1" class="medicion-input" 
+                    data-depto="${depto.id}" data-freq="53" data-tipo="db"
+                    onchange="validarValorCoaxial(this)" readonly></td>
+                <td><input type="number" step="0.1" class="medicion-input" 
+                    data-depto="${depto.id}" data-freq="400" data-tipo="db"
+                    onchange="validarValorCoaxial(this)" readonly></td>
+                <td><input type="number" step="0.1" class="medicion-input" 
+                    data-depto="${depto.id}" data-freq="800" data-tipo="db"
+                    onchange="validarValorCoaxial(this)" readonly></td>
+                <td><input type="number" step="0.1" class="medicion-input" 
+                    data-depto="${depto.id}" data-freq="1220" data-tipo="db"
+                    onchange="validarValorCoaxial(this)" readonly></td>
+            `;
+            tbody.appendChild(tr);
+            
+            // Inicializar estructura de datos
+            if (!medicionesPorDepto[depto.id]) {
+                medicionesPorDepto[depto.id] = {
+                    piso: piso.numero,
+                    numeroDepto: depto.numero,
+                    mediciones: {}
+                };
+            }
+        });
+    });
+}
+
+// Cargar tabla para mediciones de fibra óptica
+function cargarTablaFO() {
+    const torreId = document.getElementById('medicion-torre').value;
+    const torre = estructuraEdificio.torres.find(t => t.id === torreId);
+    
+    if (!torre) return;
+    
+    const tbody = document.getElementById('tbody-mediciones-fo');
+    tbody.innerHTML = '';
+    
+    torre.pisos.forEach(piso => {
+        piso.departamentos.forEach(depto => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${piso.numero}</td>
+                <td>${depto.numero}</td>
+                <td><input type="number" step="0.01" class="medicion-input" 
+                    data-depto="${depto.id}" data-campo="potencia_tx"
+                    placeholder="-25.00"></td>
+                <td><input type="number" step="0.01" class="medicion-input" 
+                    data-depto="${depto.id}" data-campo="potencia_rx"
+                    placeholder="-25.50"></td>
+                <td><input type="number" step="0.01" class="medicion-input" 
+                    data-depto="${depto.id}" data-campo="atenuacion"
+                    readonly></td>
+                <td>
+                    <select class="medicion-select" data-depto="${depto.id}" data-campo="estado">
+                        <option value="OK">OK</option>
+                        <option value="FALLA">FALLA</option>
+                        <option value="PENDIENTE">PENDIENTE</option>
+                    </select>
+                </td>
+                <td><input type="text" class="medicion-input" 
+                    data-depto="${depto.id}" data-campo="observaciones"></td>
+            `;
+            tbody.appendChild(tr);
+            
+            // Inicializar estructura de datos
+            if (!medicionesPorDepto[depto.id]) {
+                medicionesPorDepto[depto.id] = {
+                    piso: piso.numero,
+                    numeroDepto: depto.numero,
+                    mediciones: {}
+                };
+            }
+        });
+    });
+}
+
+// Validar valor coaxial
+function validarValorCoaxial(input) {
+    const valor = parseFloat(input.value);
+    const freq = input.dataset.freq;
+    const tipo = input.dataset.tipo;
+    const deptoId = input.dataset.depto;
+    
+    if (tipo === 'pwr') {
+        // Validar contra valores de referencia
+        const ref = VALORES_REFERENCIA.COAXIAL[freq];
+        if (valor < ref.min || valor > ref.max) {
+            input.style.backgroundColor = '#ffcccc';
+            input.style.color = 'red';
+        } else {
+            input.style.backgroundColor = '';
+            input.style.color = '';
+        }
+        
+        // Calcular dB automáticamente (diferencia con base trazado)
+        calcularDB(deptoId, freq);
+    }
+    
+    // Guardar valor
+    if (!medicionesPorDepto[deptoId].mediciones[freq]) {
+        medicionesPorDepto[deptoId].mediciones[freq] = {};
+    }
+    medicionesPorDepto[deptoId].mediciones[freq][tipo] = valor;
+}
+
+// Calcular dB respecto a base trazado
+function calcularDB(deptoId, freq) {
+    const baseTrazado = 60.0; // Valor de referencia del depto 101
+    const valorActual = medicionesPorDepto[deptoId]?.mediciones[freq]?.pwr;
+    
+    if (valorActual) {
+        const db = baseTrazado - valorActual;
+        const inputDB = document.querySelector(
+            `input[data-depto="${deptoId}"][data-freq="${freq}"][data-tipo="db"]`
+        );
+        if (inputDB) {
+            inputDB.value = db.toFixed(1);
+            medicionesPorDepto[deptoId].mediciones[freq].db = db;
+            
+            // Colorear según tolerancia
+            if (Math.abs(db) > VALORES_REFERENCIA.COAXIAL[freq].tolerance) {
+                inputDB.style.backgroundColor = '#ffcccc';
+                inputDB.style.color = 'red';
+            } else {
+                inputDB.style.backgroundColor = '';
+                inputDB.style.color = '';
+            }
+        }
+    }
+}
+
+// Validar todas las mediciones
+function validarMediciones() {
+    let errores = [];
+    let advertencias = [];
+    
+    Object.keys(medicionesPorDepto).forEach(deptoId => {
+        const depto = medicionesPorDepto[deptoId];
+        
+        if (tipoMedicionActual === 'FO') {
+            // Validar FO
+            if (!depto.mediciones.potencia_tx || !depto.mediciones.potencia_rx) {
+                errores.push(`Depto ${depto.numeroDepto}: Faltan mediciones de potencia`);
+            }
+        } else {
+            // Validar Coaxial
+            ['53', '400', '800', '1220'].forEach(freq => {
+                if (!depto.mediciones[freq]?.pwr) {
+                    advertencias.push(`Depto ${depto.numeroDepto}: Falta medición en ${freq} MHz`);
+                }
+            });
+        }
+    });
+    
+    if (errores.length > 0) {
+        alert('Errores encontrados:\n' + errores.join('\n'));
+        return false;
+    }
+    
+    if (advertencias.length > 0) {
+        if (!confirm('Advertencias:\n' + advertencias.join('\n') + '\n\n¿Continuar de todos modos?')) {
+            return false;
+        }
+    }
+    
+    mostrarNotificacion('Mediciones válidas', 'success');
+    return true;
+}
+
+// Guardar mediciones
+async function guardarMediciones() {
+    if (!validarMediciones()) return;
+    
+    const datos = {
+        obraId: document.getElementById('medicion-obra').value,
+        torreId: document.getElementById('medicion-torre').value,
+        tipoSenal: tipoMedicionActual,
+        mediciones: medicionesPorDepto,
+        fecha: new Date().toISOString(),
+        usuario: usuarioActual.id
+    };
+    
+    try {
+        const response = await callAPI('guardarMediciones', datos);
+        
+        if (response.success) {
+            mostrarNotificacion('Mediciones guardadas correctamente', 'success');
+            cerrarModalMediciones();
+            
+            // Recargar tabla de mediciones si existe
+            if (typeof cargarMediciones === 'function') {
+                cargarMediciones();
+            }
+        } else {
+            mostrarNotificacion('Error al guardar: ' + response.message, 'error');
+        }
+    } catch (error) {
+        mostrarNotificacion('Error al guardar mediciones', 'error');
+    }
+}
+
+// Exportar hoja de mediciones
+async function exportarHojaMediciones() {
+    if (!validarMediciones()) return;
+    
+    try {
+        const datos = {
+            obra: document.getElementById('medicion-obra').options[
+                document.getElementById('medicion-obra').selectedIndex
+            ].text,
+            torre: document.getElementById('medicion-torre').options[
+                document.getElementById('medicion-torre').selectedIndex
+            ].text,
+            tipoSenal: tipoMedicionActual,
+            mediciones: medicionesPorDepto
+        };
+        
+        // Generar Excel
+        const response = await callAPI('generarExcelMediciones', datos);
+        
+        if (response.success && response.url) {
+            // Descargar archivo
+            const link = document.createElement('a');
+            link.href = response.url;
+            link.download = `Mediciones_${datos.obra}_${datos.torre}_${tipoMedicionActual}.xlsx`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            mostrarNotificacion('Excel generado correctamente', 'success');
+        }
+    } catch (error) {
+        mostrarNotificacion('Error al generar Excel: ' + error.message, 'error');
+    }
+}
+
+// Limpiar mediciones
+function limpiarMediciones() {
+    if (confirm('¿Está seguro de limpiar todas las mediciones?')) {
+        medicionesPorDepto = {};
+        
+        // Limpiar inputs
+        document.querySelectorAll('.medicion-input').forEach(input => {
+            input.value = '';
+            input.style.backgroundColor = '';
+            input.style.color = '';
+        });
+        
+        mostrarNotificacion('Mediciones limpiadas', 'info');
+    }
+}
+
+// Limpiar formulario
+function limpiarFormularioMediciones() {
+    document.getElementById('medicion-obra').value = '';
+    document.getElementById('medicion-tipo-senal').value = '';
+    document.getElementById('medicion-torre').value = '';
+    document.getElementById('contenedor-tabla-mediciones').classList.add('hidden');
+    document.getElementById('acciones-mediciones').classList.add('hidden');
+    medicionesPorDepto = {};
+}
+
+// Mostrar valores de referencia
+function mostrarValoresReferencia() {
+    document.getElementById('modal-valores-referencia').classList.remove('hidden');
+}
+
+// Cerrar modal valores de referencia
+function cerrarModalValoresReferencia() {
+    document.getElementById('modal-valores-referencia').classList.add('hidden');
+}
+
+// Previsualizar hoja
+function previsualizarHoja() {
+    // Implementar vista previa del formato Excel
+    mostrarNotificacion('Vista previa en desarrollo', 'info');
+}
+
+// ============================================================================
+// FUNCIONES DE TABLA PRINCIPAL DE MEDICIONES
+// ============================================================================
+
+// Cargar mediciones existentes
+async function cargarMediciones() {
+    const filtros = {
+        obra: document.getElementById('filtro-obra-medicion')?.value,
+        tipo: document.getElementById('filtro-tipo-medicion')?.value,
+        estado: document.getElementById('filtro-estado-medicion')?.value
+    };
+    
+    try {
+        const response = await callAPI('obtenerMediciones', filtros);
+        
+        if (response.success) {
+            medicionesData = response.datos;
+            mostrarTablaMediciones();
+        }
+    } catch (error) {
+        mostrarNotificacion('Error al cargar mediciones', 'error');
+    }
+}
+
+// Mostrar tabla de mediciones
+function mostrarTablaMediciones() {
+    const tbody = document.getElementById('mediciones-tbody');
+    if (!tbody) return;
+    
+    tbody.innerHTML = '';
+    
+    if (medicionesData.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="11" class="text-center">No hay mediciones registradas</td></tr>';
+        return;
+    }
+    
+    medicionesData.forEach(medicion => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${medicion.obra}</td>
+            <td>${medicion.torre}</td>
+            <td>${medicion.piso}</td>
+            <td>${medicion.unidad}</td>
+            <td>${medicion.tipoSenal}</td>
+            <td>${medicion.valor || '-'}</td>
+            <td>${medicion.unidad || '-'}</td>
+            <td><span class="badge badge-${medicion.estado}">${medicion.estado}</span></td>
+            <td>${formatearFecha(medicion.fecha)}</td>
+            <td>${medicion.tecnico}</td>
+            <td>
+                <button class="btn btn-sm btn-info" onclick="verDetalleMedicion('${medicion.id}')">
+                    <i class="fas fa-eye"></i>
+                </button>
+                <button class="btn btn-sm btn-warning" onclick="editarMedicion('${medicion.id}')">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn btn-sm btn-danger" onclick="eliminarMedicion('${medicion.id}')">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+// Filtrar mediciones
+function filtrarMediciones() {
+    cargarMediciones();
+}
+
+// Ver detalle de medición
+function verDetalleMedicion(id) {
+    // Implementar vista de detalle
+    mostrarNotificacion('Detalle de medición en desarrollo', 'info');
+}
+
+// Editar medición
+function editarMedicion(id) {
+    // Implementar edición
+    mostrarNotificacion('Edición en desarrollo', 'info');
+}
+
+// Eliminar medición
+async function eliminarMedicion(id) {
+    if (!confirm('¿Está seguro de eliminar esta medición?')) return;
+    
+    try {
+        const response = await callAPI('eliminarMedicion', { id });
+        
+        if (response.success) {
+            mostrarNotificacion('Medición eliminada correctamente', 'success');
+            cargarMediciones();
+        }
+    } catch (error) {
+        mostrarNotificacion('Error al eliminar medición', 'error');
+    }
+}
+
+// ============================================================================
+// INICIALIZACIÓN
+// ============================================================================
+
+// Inicializar cuando el DOM esté listo
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('[MEDICIONES] Módulo de mediciones cargado');
+});
+
+console.log('[MEDICIONES] Archivo js/mediciones.html cargado completamente');
+</script

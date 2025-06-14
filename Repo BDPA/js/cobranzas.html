@@ -1,0 +1,375 @@
+<script>
+// ============================================================================
+// BDPA - js/cobranzas.html - Sistema de Registro de Progreso para Cobranzas
+// ============================================================================
+
+// Variables globales
+let registrosProgreso = [];
+let progresoActual = {};
+let obraSeleccionada = null;
+
+// ============================================================================
+// FUNCIONES PRINCIPALES
+// ============================================================================
+
+/**
+ * Mostrar modal de registro de progreso
+ */
+function mostrarModalRegistroProgreso() {
+    document.getElementById('modal-registro-progreso').classList.remove('hidden');
+    cargarObrasParaProgreso();
+    limpiarFormularioProgreso();
+}
+
+/**
+ * Cerrar modal
+ */
+function cerrarModalRegistroProgreso() {
+    document.getElementById('modal-registro-progreso').classList.add('hidden');
+    limpiarFormularioProgreso();
+}
+
+/**
+ * Cargar obras disponibles
+ */
+async function cargarObrasParaProgreso() {
+    try {
+        const response = await callAPI('obtenerObras', { 
+            estado: 'En progreso',
+            conAvances: true 
+        });
+        
+        if (!response.success) return;
+        
+        const obras = response.datos || [];
+        const select = document.getElementById('progreso-obra');
+        select.innerHTML = '<option value="">Seleccione una obra...</option>';
+        
+        obras.forEach(obra => {
+            const option = document.createElement('option');
+            option.value = obra.id;
+            option.textContent = obra.nombre;
+            option.dataset.empresa = obra.empresaCliente || '';
+            option.dataset.fechaInicio = obra.fechaInicio || '';
+            option.dataset.tipo = obra.tipo || '';
+            select.appendChild(option);
+        });
+        
+    } catch (error) {
+        console.error('[PROGRESO] Error cargando obras:', error);
+        mostrarNotificacion('Error al cargar obras', 'error');
+    }
+}
+
+/**
+ * Cargar progreso de obra seleccionada
+ */
+async function cargarProgresoObra() {
+    const obraId = document.getElementById('progreso-obra').value;
+    if (!obraId) {
+        document.getElementById('info-obra-progreso').classList.add('hidden');
+        document.getElementById('progreso-detallado').classList.add('hidden');
+        return;
+    }
+    
+    try {
+        // Mostrar información de la obra
+        const select = document.getElementById('progreso-obra');
+        const option = select.options[select.selectedIndex];
+        
+        document.getElementById('progreso-empresa').textContent = option.dataset.empresa;
+        document.getElementById('progreso-fecha-inicio').textContent = formatearFecha(option.dataset.fechaInicio);
+        document.getElementById('progreso-tipo-obra').textContent = option.dataset.tipo;
+        document.getElementById('info-obra-progreso').classList.remove('hidden');
+        
+        // Cargar progreso real desde los avances
+        const response = await callAPI('obtenerProgresoDetalladoObra', { obraId });
+        
+        if (!response.success) {
+            throw new Error(response.message || 'Error al obtener progreso');
+        }
+        
+        progresoActual = response.datos;
+        actualizarVistaProgreso();
+        
+        document.getElementById('progreso-detallado').classList.remove('hidden');
+        
+    } catch (error) {
+        console.error('[PROGRESO] Error cargando progreso:', error);
+        mostrarNotificacion('Error al cargar progreso de la obra', 'error');
+    }
+}
+
+/**
+ * Actualizar vista de progreso
+ */
+function actualizarVistaProgreso() {
+    // Actualizar cada tipo de señal
+    ['alambrico', 'inalambrico', 'fo'].forEach(tipo => {
+        const datos = progresoActual[tipo] || {
+            porcentaje: 0,
+            completadas: 0,
+            total: 0,
+            ultimoAvance: null,
+            trabajosRealizados: []
+        };
+        
+        // Actualizar porcentaje y barra
+        document.getElementById(`porcentaje-${tipo}`).textContent = `${datos.porcentaje}%`;
+        const barra = document.getElementById(`bar-${tipo}`);
+        barra.style.width = `${datos.porcentaje}%`;
+        
+        // Aplicar color según progreso
+        barra.className = 'progreso-bar';
+        if (datos.porcentaje >= 80) {
+            barra.classList.add('progreso-alto');
+        } else if (datos.porcentaje >= 50) {
+            barra.classList.add('progreso-medio');
+        } else if (datos.porcentaje > 0) {
+            barra.classList.add('progreso-bajo');
+        }
+        
+        // Actualizar estadísticas
+        document.getElementById(`${tipo}-completadas`).textContent = datos.completadas;
+        document.getElementById(`${tipo}-total`).textContent = datos.total;
+        document.getElementById(`${tipo}-ultimo`).textContent = datos.ultimoAvance ? 
+            formatearFecha(datos.ultimoAvance) : 'Sin avances';
+        
+        // Actualizar lista de trabajos
+        const listaTrabajos = document.getElementById(`${tipo}-trabajos`);
+        listaTrabajos.innerHTML = '';
+        
+        if (datos.trabajosRealizados.length > 0) {
+            datos.trabajosRealizados.slice(0, 5).forEach(trabajo => {
+                const li = document.createElement('li');
+                li.innerHTML = `
+                    <strong>${trabajo.ubicacion}</strong> - ${trabajo.descripcion}
+                    <small class="text-muted">(${formatearFecha(trabajo.fecha)})</small>
+                `;
+                listaTrabajos.appendChild(li);
+            });
+            
+            if (datos.trabajosRealizados.length > 5) {
+                const li = document.createElement('li');
+                li.innerHTML = `<em>...y ${datos.trabajosRealizados.length - 5} trabajos más</em>`;
+                listaTrabajos.appendChild(li);
+            }
+        } else {
+            listaTrabajos.innerHTML = '<li class="text-muted">No hay trabajos registrados</li>';
+        }
+    });
+}
+
+/**
+ * Guardar registro de progreso
+ */
+async function guardarRegistroProgreso() {
+    if (!validarFormularioProgreso()) return;
+    
+    try {
+        const datosRegistro = {
+            obraId: document.getElementById('progreso-obra').value,
+            periodoDesde: document.getElementById('periodo-desde').value,
+            periodoHasta: document.getElementById('periodo-hasta').value,
+            descripcion: document.getElementById('descripcion-progreso').value,
+            observaciones: document.getElementById('observaciones-progreso').value,
+            incluirFotos: document.getElementById('incluir-fotos-progreso').checked,
+            progreso: progresoActual,
+            fecha: new Date().toISOString()
+        };
+        
+        const response = await callAPI('guardarRegistroProgreso', datosRegistro);
+        
+        if (!response.success) {
+            throw new Error(response.message || 'Error al guardar registro');
+        }
+        
+        mostrarNotificacion('Registro de progreso guardado correctamente', 'success');
+        
+        // Preguntar si desea generar reporte
+        if (confirm('¿Desea generar un reporte PDF para enviar al cliente?')) {
+            await generarReporteProgreso(response.registroId);
+        }
+        
+        cerrarModalRegistroProgreso();
+        cargarRegistrosProgreso();
+        
+    } catch (error) {
+        console.error('[PROGRESO] Error guardando registro:', error);
+        mostrarNotificacion('Error al guardar registro de progreso', 'error');
+    }
+}
+
+/**
+ * Cargar registros de progreso existentes
+ */
+async function cargarRegistrosProgreso() {
+    try {
+        mostrarLoader(true);
+        
+        const filtros = obtenerFiltrosProgreso();
+        const response = await callAPI('obtenerRegistrosProgreso', filtros);
+        
+        if (!response.success) {
+            throw new Error(response.message || 'Error al cargar registros');
+        }
+        
+        registrosProgreso = response.datos || [];
+        mostrarRegistrosProgreso();
+        
+    } catch (error) {
+        console.error('[PROGRESO] Error cargando registros:', error);
+        mostrarNotificacion('Error al cargar registros de progreso', 'error');
+    } finally {
+        mostrarLoader(false);
+    }
+}
+
+/**
+ * Mostrar registros como cards
+ */
+function mostrarRegistrosProgreso() {
+    const container = document.getElementById('registros-progreso-container');
+    container.innerHTML = '';
+    
+    if (registrosProgreso.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-clipboard-list"></i>
+                <h3>No hay registros de progreso</h3>
+                <p>Comienza registrando el progreso de tus obras</p>
+            </div>
+        `;
+        return;
+    }
+    
+    registrosProgreso.forEach(registro => {
+        const card = document.createElement('div');
+        card.className = 'progreso-card';
+        card.innerHTML = `
+            <div class="card-header">
+                <h4>${registro.obraNombre}</h4>
+                <span class="badge badge-${getEstadoBadgeClass(registro.estado)}">${registro.estado}</span>
+            </div>
+            <div class="card-body">
+                <div class="info-row">
+                    <strong>Empresa:</strong> ${registro.empresa}
+                </div>
+                <div class="info-row">
+                    <strong>Período:</strong> ${formatearFecha(registro.periodoDesde)} - ${formatearFecha(registro.periodoHasta)}
+                </div>
+                <div class="progreso-resumen">
+                    <div class="mini-progreso">
+                        <span>Alámbrico</span>
+                        <div class="mini-bar">
+                            <div class="mini-fill" style="width: ${registro.progreso.alambrico.porcentaje}%"></div>
+                        </div>
+                        <span>${registro.progreso.alambrico.porcentaje}%</span>
+                    </div>
+                    <div class="mini-progreso">
+                        <span>Inalámbrico</span>
+                        <div class="mini-bar">
+                            <div class="mini-fill" style="width: ${registro.progreso.inalambrico.porcentaje}%"></div>
+                        </div>
+                        <span>${registro.progreso.inalambrico.porcentaje}%</span>
+                    </div>
+                    <div class="mini-progreso">
+                        <span>F.O.</span>
+                        <div class="mini-bar">
+                            <div class="mini-fill" style="width: ${registro.progreso.fo.porcentaje}%"></div>
+                        </div>
+                        <span>${registro.progreso.fo.porcentaje}%</span>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer">
+                <button class="btn btn-sm btn-info" onclick="verDetalleRegistro('${registro.id}')">
+                    <i class="fas fa-eye"></i> Ver
+                </button>
+                <button class="btn btn-sm btn-success" onclick="descargarReporte('${registro.id}')">
+                    <i class="fas fa-download"></i> PDF
+                </button>
+                ${registro.estado === 'Borrador' ? `
+                    <button class="btn btn-sm btn-primary" onclick="enviarRegistro('${registro.id}')">
+                        <i class="fas fa-paper-plane"></i> Enviar
+                    </button>
+                ` : ''}
+            </div>
+        `;
+        container.appendChild(card);
+    });
+}
+
+// ============================================================================
+// FUNCIONES AUXILIARES
+// ============================================================================
+
+function validarFormularioProgreso() {
+    if (!document.getElementById('progreso-obra').value) {
+        mostrarNotificacion('Debe seleccionar una obra', 'error');
+        return false;
+    }
+    
+    if (!document.getElementById('periodo-desde').value || !document.getElementById('periodo-hasta').value) {
+        mostrarNotificacion('Debe especificar el período del reporte', 'error');
+        return false;
+    }
+    
+    if (!document.getElementById('descripcion-progreso').value.trim()) {
+        mostrarNotificacion('Debe incluir una descripción del progreso', 'error');
+        return false;
+    }
+    
+    return true;
+}
+
+function limpiarFormularioProgreso() {
+    document.getElementById('progreso-obra').value = '';
+    document.getElementById('periodo-desde').value = '';
+    document.getElementById('periodo-hasta').value = '';
+    document.getElementById('descripcion-progreso').value = '';
+    document.getElementById('observaciones-progreso').value = '';
+    document.getElementById('incluir-fotos-progreso').checked = false;
+    
+    document.getElementById('info-obra-progreso').classList.add('hidden');
+    document.getElementById('progreso-detallado').classList.add('hidden');
+}
+
+function getEstadoBadgeClass(estado) {
+    const clases = {
+        'Borrador': 'secondary',
+        'Enviado': 'info',
+        'Aprobado': 'success'
+    };
+    return clases[estado] || 'secondary';
+}
+
+function mostrarLoader(mostrar) {
+    const loader = document.getElementById('progreso-loader');
+    if (loader) {
+        loader.classList.toggle('hidden', !mostrar);
+    }
+}
+
+// ============================================================================
+// INICIALIZACIÓN
+// ============================================================================
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Establecer fechas por defecto
+    const hoy = new Date();
+    const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    
+    document.getElementById('periodo-hasta').value = hoy.toISOString().split('T')[0];
+    document.getElementById('periodo-desde').value = inicioMes.toISOString().split('T')[0];
+});
+
+// Exportar funciones globales
+window.mostrarModalRegistroProgreso = mostrarModalRegistroProgreso;
+window.cerrarModalRegistroProgreso = cerrarModalRegistroProgreso;
+window.cargarProgresoObra = cargarProgresoObra;
+window.guardarRegistroProgreso = guardarRegistroProgreso;
+window.cargarRegistrosProgreso = cargarRegistrosProgreso;
+
+console.log('[PROGRESO] Módulo de registro de progreso cargado');
+</script>
