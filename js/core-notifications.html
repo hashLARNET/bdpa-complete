@@ -1,0 +1,360 @@
+<script>
+// ============================================================================
+// BDPA - js/core-notifications.html - Sistema de Notificaciones Global
+// ============================================================================
+
+/**
+ * Sistema de notificaciones centralizado para BDPA
+ * Resuelve el problema de mostrarNotificacion() no implementada
+ */
+
+// Configuración del sistema de notificaciones
+const NOTIFICATION_CONFIG = {
+    duration: 5000, // 5 segundos por defecto
+    maxNotifications: 5,
+    position: 'top-right',
+    animations: true
+};
+
+// Cola de notificaciones activas
+let activeNotifications = [];
+let notificationCounter = 0;
+
+/**
+ * Función principal de notificaciones - RESUELVE EL PROBLEMA CRÍTICO
+ * @param {string} mensaje - Mensaje a mostrar
+ * @param {string} tipo - Tipo: 'success', 'error', 'warning', 'info'
+ * @param {number} duracion - Duración en ms (opcional)
+ */
+function mostrarNotificacion(mensaje, tipo = 'info', duracion = null) {
+    // Validar parámetros
+    if (!mensaje || typeof mensaje !== 'string') {
+        console.error('[NOTIFICACIONES] Mensaje inválido:', mensaje);
+        return;
+    }
+    
+    // Normalizar tipo
+    const tiposValidos = ['success', 'error', 'warning', 'info'];
+    if (!tiposValidos.includes(tipo)) {
+        console.warn('[NOTIFICACIONES] Tipo inválido:', tipo, '- usando "info"');
+        tipo = 'info';
+    }
+    
+    // Usar duración por defecto si no se especifica
+    if (duracion === null) {
+        duracion = NOTIFICATION_CONFIG.duration;
+    }
+    
+    // Crear contenedor si no existe
+    createNotificationContainer();
+    
+    // Crear notificación
+    const notification = createNotificationElement(mensaje, tipo, duracion);
+    
+    // Agregar a la cola
+    addNotificationToQueue(notification);
+    
+    // Mostrar notificación
+    showNotification(notification);
+    
+    // Log para debugging
+    console.log(`[NOTIFICACIONES] ${tipo.toUpperCase()}: ${mensaje}`);
+    
+    return notification.id;
+}
+
+/**
+ * Crear contenedor de notificaciones si no existe
+ */
+function createNotificationContainer() {
+    let container = document.getElementById('notifications-container');
+    
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'notifications-container';
+        container.className = `notifications-container ${NOTIFICATION_CONFIG.position}`;
+        
+        // Estilos inline para asegurar que funcione sin CSS externo
+        container.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10000;
+            pointer-events: none;
+            max-width: 400px;
+        `;
+        
+        document.body.appendChild(container);
+    }
+    
+    return container;
+}
+
+/**
+ * Crear elemento de notificación
+ */
+function createNotificationElement(mensaje, tipo, duracion) {
+    notificationCounter++;
+    
+    const notification = document.createElement('div');
+    notification.id = `notification-${notificationCounter}`;
+    notification.className = `notification notification-${tipo}`;
+    
+    // Determinar icono según tipo
+    const iconos = {
+        success: 'fas fa-check-circle',
+        error: 'fas fa-exclamation-circle',
+        warning: 'fas fa-exclamation-triangle',
+        info: 'fas fa-info-circle'
+    };
+    
+    // Determinar colores según tipo
+    const colores = {
+        success: { bg: '#d4edda', border: '#c3e6cb', text: '#155724', icon: '#28a745' },
+        error: { bg: '#f8d7da', border: '#f5c6cb', text: '#721c24', icon: '#dc3545' },
+        warning: { bg: '#fff3cd', border: '#ffeaa7', text: '#856404', icon: '#ffc107' },
+        info: { bg: '#d1ecf1', border: '#bee5eb', text: '#0c5460', icon: '#17a2b8' }
+    };
+    
+    const color = colores[tipo];
+    
+    // Estilos inline para asegurar funcionamiento
+    notification.style.cssText = `
+        background: ${color.bg};
+        border: 1px solid ${color.border};
+        border-left: 4px solid ${color.icon};
+        color: ${color.text};
+        padding: 12px 16px;
+        margin-bottom: 10px;
+        border-radius: 4px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        pointer-events: auto;
+        cursor: pointer;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        font-size: 14px;
+        line-height: 1.4;
+        max-width: 100%;
+        word-wrap: break-word;
+        position: relative;
+        transform: translateX(100%);
+        transition: all 0.3s ease;
+        opacity: 0;
+    `;
+    
+    // Contenido HTML
+    notification.innerHTML = `
+        <div style="display: flex; align-items: flex-start; gap: 10px;">
+            <i class="${iconos[tipo]}" style="color: ${color.icon}; font-size: 16px; margin-top: 2px; flex-shrink: 0;"></i>
+            <div style="flex: 1;">
+                <div style="font-weight: 500; margin-bottom: 2px;">${getTipoLabel(tipo)}</div>
+                <div>${mensaje}</div>
+            </div>
+            <button onclick="cerrarNotificacion('${notification.id}')" 
+                    style="background: none; border: none; color: ${color.text}; cursor: pointer; font-size: 18px; line-height: 1; padding: 0; margin-left: 10px; opacity: 0.7;"
+                    onmouseover="this.style.opacity='1'" 
+                    onmouseout="this.style.opacity='0.7'"
+                    title="Cerrar">
+                &times;
+            </button>
+        </div>
+    `;
+    
+    // Agregar datos de configuración
+    notification.dataset.tipo = tipo;
+    notification.dataset.duracion = duracion;
+    notification.dataset.timestamp = Date.now();
+    
+    // Auto-cerrar si tiene duración
+    if (duracion > 0) {
+        notification.timeoutId = setTimeout(() => {
+            cerrarNotificacion(notification.id);
+        }, duracion);
+    }
+    
+    // Cerrar al hacer click
+    notification.addEventListener('click', () => {
+        cerrarNotificacion(notification.id);
+    });
+    
+    return notification;
+}
+
+/**
+ * Obtener label del tipo de notificación
+ */
+function getTipoLabel(tipo) {
+    const labels = {
+        success: 'Éxito',
+        error: 'Error',
+        warning: 'Advertencia',
+        info: 'Información'
+    };
+    return labels[tipo] || 'Notificación';
+}
+
+/**
+ * Agregar notificación a la cola
+ */
+function addNotificationToQueue(notification) {
+    activeNotifications.push(notification);
+    
+    // Limitar número máximo de notificaciones
+    while (activeNotifications.length > NOTIFICATION_CONFIG.maxNotifications) {
+        const oldest = activeNotifications.shift();
+        if (oldest && oldest.parentNode) {
+            cerrarNotificacion(oldest.id, false);
+        }
+    }
+}
+
+/**
+ * Mostrar notificación con animación
+ */
+function showNotification(notification) {
+    const container = document.getElementById('notifications-container');
+    container.appendChild(notification);
+    
+    // Trigger animación de entrada
+    requestAnimationFrame(() => {
+        notification.style.transform = 'translateX(0)';
+        notification.style.opacity = '1';
+    });
+}
+
+/**
+ * Cerrar notificación específica
+ * @param {string} notificationId - ID de la notificación
+ * @param {boolean} removeFromQueue - Si remover de la cola
+ */
+function cerrarNotificacion(notificationId, removeFromQueue = true) {
+    const notification = document.getElementById(notificationId);
+    if (!notification) return;
+    
+    // Limpiar timeout si existe
+    if (notification.timeoutId) {
+        clearTimeout(notification.timeoutId);
+    }
+    
+    // Animación de salida
+    notification.style.transform = 'translateX(100%)';
+    notification.style.opacity = '0';
+    
+    // Remover del DOM después de la animación
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.parentNode.removeChild(notification);
+        }
+        
+        // Remover de la cola
+        if (removeFromQueue) {
+            activeNotifications = activeNotifications.filter(n => n.id !== notificationId);
+        }
+    }, 300);
+}
+
+/**
+ * Cerrar todas las notificaciones
+ */
+function cerrarTodasLasNotificaciones() {
+    activeNotifications.forEach(notification => {
+        cerrarNotificacion(notification.id, false);
+    });
+    activeNotifications = [];
+}
+
+/**
+ * Funciones de conveniencia para tipos específicos
+ */
+function mostrarExito(mensaje, duracion = null) {
+    return mostrarNotificacion(mensaje, 'success', duracion);
+}
+
+function mostrarError(mensaje, duracion = null) {
+    return mostrarNotificacion(mensaje, 'error', duracion);
+}
+
+function mostrarAdvertencia(mensaje, duracion = null) {
+    return mostrarNotificacion(mensaje, 'warning', duracion);
+}
+
+function mostrarInfo(mensaje, duracion = null) {
+    return mostrarNotificacion(mensaje, 'info', duracion);
+}
+
+/**
+ * Configurar sistema de notificaciones
+ */
+function configurarNotificaciones(opciones = {}) {
+    Object.assign(NOTIFICATION_CONFIG, opciones);
+    
+    // Actualizar posición del contenedor si existe
+    const container = document.getElementById('notifications-container');
+    if (container) {
+        container.className = `notifications-container ${NOTIFICATION_CONFIG.position}`;
+    }
+}
+
+/**
+ * Obtener estadísticas de notificaciones
+ */
+function getNotificationStats() {
+    return {
+        activas: activeNotifications.length,
+        total: notificationCounter,
+        configuracion: { ...NOTIFICATION_CONFIG }
+    };
+}
+
+/**
+ * Inicializar sistema de notificaciones
+ */
+function initializeNotificationSystem() {
+    console.log('[NOTIFICACIONES] Sistema de notificaciones inicializado');
+    
+    // Crear contenedor
+    createNotificationContainer();
+    
+    // Escuchar errores globales para mostrar notificaciones automáticas
+    window.addEventListener('error', (event) => {
+        console.error('[ERROR GLOBAL]', event.error);
+        mostrarError(`Error: ${event.error?.message || 'Error desconocido'}`);
+    });
+    
+    // Escuchar errores de promesas no manejadas
+    window.addEventListener('unhandledrejection', (event) => {
+        console.error('[PROMISE REJECTION]', event.reason);
+        mostrarError(`Error: ${event.reason?.message || 'Error en operación asíncrona'}`);
+    });
+    
+    // Test inicial (solo en desarrollo)
+    if (window.location.hostname === 'localhost' || window.location.hostname.includes('script.google.com')) {
+        setTimeout(() => {
+            mostrarInfo('Sistema de notificaciones inicializado correctamente', 3000);
+        }, 1000);
+    }
+}
+
+// ============================================================================
+// EXPORTAR FUNCIONES GLOBALES
+// ============================================================================
+
+// Hacer disponibles las funciones globalmente
+window.mostrarNotificacion = mostrarNotificacion;
+window.mostrarExito = mostrarExito;
+window.mostrarError = mostrarError;
+window.mostrarAdvertencia = mostrarAdvertencia;
+window.mostrarInfo = mostrarInfo;
+window.cerrarNotificacion = cerrarNotificacion;
+window.cerrarTodasLasNotificaciones = cerrarTodasLasNotificaciones;
+window.configurarNotificaciones = configurarNotificaciones;
+window.getNotificationStats = getNotificationStats;
+
+// Auto-inicialización
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeNotificationSystem);
+} else {
+    initializeNotificationSystem();
+}
+
+console.log('[NOTIFICACIONES] Archivo js/core-notifications.html cargado completamente');
+</script>
