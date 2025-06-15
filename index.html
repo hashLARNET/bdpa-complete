@@ -4,689 +4,765 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BDPA - Base de Datos de Progreso Automatizado</title>
-    
-    <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     
-    <!-- CSS Principal -->
-    <?!= include('css/main'); ?>
-    <?!= include('css/modal'); ?>
+    <!-- Incluir CSS principal -->
+    <?!= include('css/main') ?>
+    <?!= include('css/modal') ?>
 </head>
 <body>
-    <!-- Contenedor de Login -->
-    <div id="login-container" class="login-container">
-        <div class="login-box">
-            <div class="login-header">
-                <img src="https://i.imgur.com/Uw8kbQO.png" alt="Logo Larnet" class="login-logo">
-                <h1>BDPA</h1>
-                <p>Base de Datos de Progreso Automatizado</p>
-            </div>
-            
-            <form id="login-form" class="login-form">
-                <div class="form-group">
-                    <label for="username">Usuario</label>
-                    <input type="text" id="username" name="username" required>
+    <!-- ============================================================================ -->
+    <!-- CONTENEDOR DE LOGIN -->
+    <!-- ============================================================================ -->
+    <div id="login-container" class="container">
+        <div class="login-wrapper">
+            <div class="login-card">
+                <div class="login-header">
+                    <img src="https://i.imgur.com/Uw8kbQO.png" alt="Logo Larnet" class="login-logo">
+                    <h1>BDPA</h1>
+                    <p>Base de Datos de Progreso Automatizado</p>
                 </div>
                 
-                <div class="form-group">
-                    <label for="password">Contraseña</label>
-                    <input type="password" id="password" name="password" required>
-                </div>
+                <form id="login-form" class="login-form">
+                    <div class="form-group">
+                        <label for="username">Usuario</label>
+                        <input type="text" id="username" name="username" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="password">Contraseña</label>
+                        <input type="password" id="password" name="password" required>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary btn-block">
+                        <i class="fas fa-sign-in-alt"></i> Iniciar Sesión
+                    </button>
+                </form>
                 
-                <button type="submit" class="btn btn-primary btn-block">Iniciar Sesión</button>
-            </form>
-            
-            <div id="login-loader" class="loader hidden">
-                <i class="fas fa-spinner fa-spin"></i> Iniciando sesión...
+                <div id="login-loader" class="loader hidden">
+                    <i class="fas fa-spinner fa-spin"></i> Iniciando sesión...
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- Contenedor Principal -->
-    <div id="main-menu-container" class="main-container hidden">
+    <!-- ============================================================================ -->
+    <!-- CONTENEDOR PRINCIPAL (DESPUÉS DEL LOGIN) -->
+    <!-- ============================================================================ -->
+    <div id="main-menu-container" class="hidden">
         <!-- Header -->
-        <?!= include('partials/header'); ?>
+        <?!= include('partials/header') ?>
         
-        <!-- Navegación Principal -->
+        <!-- Navegación principal -->
         <nav class="main-nav">
             <div class="nav-container">
-                <a href="#" class="nav-link" data-section="dashboard">
-                    <i class="fas fa-tachometer-alt"></i> Dashboard
-                </a>
-                <a href="#" class="nav-link" data-section="obras">
-                    <i class="fas fa-building"></i> Obras
-                </a>
-                <a href="#" class="nav-link" data-section="avances">
-                    <i class="fas fa-tasks"></i> Avances
-                </a>
-                <a href="#" class="nav-link" data-section="inventario">
-                    <i class="fas fa-boxes"></i> Inventario
-                </a>
-                <a href="#" class="nav-link" data-section="transferencias">
-                    <i class="fas fa-exchange-alt"></i> Transferencias
-                </a>
-                <a href="#" class="nav-link" data-section="planificacion-metas">
-                    <i class="fas fa-bullseye"></i> Planificación
-                </a>
-                <a href="#" class="nav-link" data-section="mediciones">
-                    <i class="fas fa-ruler"></i> Mediciones
-                </a>
-                <a href="#" class="nav-link" data-section="documentacion">
-                    <i class="fas fa-file-alt"></i> Documentación
-                </a>
-                <a href="#" class="nav-link" data-section="cobranzas">
-                    <i class="fas fa-chart-line"></i> Progreso
-                </a>
-                <a href="#" class="nav-link" data-section="reportes">
-                    <i class="fas fa-chart-bar"></i> Reportes
-                </a>
-                <a href="#" class="nav-link admin-only" data-section="gestion-usuarios">
-                    <i class="fas fa-users"></i> Usuarios
-                </a>
-                <a href="#" class="nav-link admin-only" data-section="configuracion">
-                    <i class="fas fa-cog"></i> Configuración
-                </a>
+                <ul class="nav-menu">
+                    <li><a href="#" data-section="dashboard" class="nav-link"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
+                    <li><a href="#" data-section="obras" class="nav-link"><i class="fas fa-building"></i> Obras</a></li>
+                    <li><a href="#" data-section="avances" class="nav-link"><i class="fas fa-tasks"></i> Avances</a></li>
+                    <li><a href="#" data-section="inventario" class="nav-link"><i class="fas fa-boxes"></i> Inventario</a></li>
+                    <li><a href="#" data-section="transferencias" class="nav-link"><i class="fas fa-exchange-alt"></i> Transferencias</a></li>
+                    <li><a href="#" data-section="planificacion-metas" class="nav-link"><i class="fas fa-bullseye"></i> Planificación</a></li>
+                    <li><a href="#" data-section="mediciones" class="nav-link"><i class="fas fa-ruler"></i> Mediciones</a></li>
+                    <li><a href="#" data-section="documentacion" class="nav-link"><i class="fas fa-file-alt"></i> Documentos</a></li>
+                    <li><a href="#" data-section="cobranzas" class="nav-link"><i class="fas fa-chart-line"></i> Progreso</a></li>
+                    <li><a href="#" data-section="reportes" class="nav-link"><i class="fas fa-chart-bar"></i> Reportes</a></li>
+                    <li><a href="#" data-section="gestion-usuarios" class="nav-link admin-only"><i class="fas fa-users"></i> Usuarios</a></li>
+                    <li><a href="#" data-section="configuracion" class="nav-link admin-only"><i class="fas fa-cog"></i> Configuración</a></li>
+                </ul>
             </div>
         </nav>
 
-        <!-- Contenido Principal -->
-        <main class="main-content">
-            <!-- Dashboard -->
-            <div id="dashboard" class="container hidden">
-                <h2><i class="fas fa-tachometer-alt"></i> Dashboard</h2>
-                <div class="dashboard-grid">
-                    <div class="dashboard-card">
-                        <h3>Obras Activas</h3>
-                        <div class="dashboard-number" id="obras-activas">0</div>
-                    </div>
-                    <div class="dashboard-card">
-                        <h3>Avances Hoy</h3>
-                        <div class="dashboard-number" id="avances-hoy">0</div>
-                    </div>
-                    <div class="dashboard-card">
-                        <h3>Materiales Críticos</h3>
-                        <div class="dashboard-number" id="materiales-criticos">0</div>
-                    </div>
-                    <div class="dashboard-card">
-                        <h3>Transferencias Pendientes</h3>
-                        <div class="dashboard-number" id="transferencias-pendientes">0</div>
-                    </div>
+        <!-- Breadcrumb -->
+        <div id="breadcrumb" class="breadcrumb"></div>
+    </div>
+
+    <!-- ============================================================================ -->
+    <!-- SECCIONES DE CONTENIDO -->
+    <!-- ============================================================================ -->
+
+    <!-- Dashboard -->
+    <div id="dashboard" class="container hidden">
+        <div class="page-header">
+            <h2><i class="fas fa-tachometer-alt"></i> Dashboard</h2>
+            <p>Resumen general del sistema</p>
+        </div>
+        
+        <div class="dashboard-grid">
+            <div class="dashboard-card">
+                <div class="card-icon"><i class="fas fa-building"></i></div>
+                <div class="card-content">
+                    <h3 id="total-obras">0</h3>
+                    <p>Obras Activas</p>
                 </div>
             </div>
-
-            <!-- Gestión de Obras -->
-            <div id="obras" class="container hidden">
-                <div class="section-header">
-                    <h2><i class="fas fa-building"></i> Gestión de Obras</h2>
-                    <button class="btn btn-primary" onclick="mostrarFormularioObra()">
-                        <i class="fas fa-plus"></i> Nueva Obra
-                    </button>
-                </div>
-                
-                <div class="filters-section">
-                    <div class="filters-row">
-                        <input type="text" id="buscar-obra" placeholder="Buscar obras..." class="form-control">
-                        <select id="filtro-estado-obra" class="form-control">
-                            <option value="">Todos los estados</option>
-                            <option value="planificacion">Planificación</option>
-                            <option value="en-progreso">En Progreso</option>
-                            <option value="completada">Completada</option>
-                            <option value="pausada">Pausada</option>
-                        </select>
-                        <button class="btn btn-secondary" onclick="limpiarFiltrosObras()">Limpiar</button>
-                    </div>
-                </div>
-                
-                <div id="obras-loader" class="loader hidden">
-                    <i class="fas fa-spinner fa-spin"></i> Cargando obras...
-                </div>
-                
-                <div class="table-container">
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Nombre</th>
-                                <th>Cliente</th>
-                                <th>Estado</th>
-                                <th>Progreso</th>
-                                <th>Fecha Inicio</th>
-                                <th>Fecha Término</th>
-                                <th>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody id="obras-tbody">
-                            <!-- Contenido dinámico -->
-                        </tbody>
-                    </table>
-                </div>
-                
-                <!-- Formulario de Obra -->
-                <div id="formulario-obra" class="form-container hidden">
-                    <h3>Nueva Obra</h3>
-                    <form>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="nombre-obra">Nombre de la Obra</label>
-                                <input type="text" id="nombre-obra" class="form-control" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="cliente-obra">Cliente</label>
-                                <input type="text" id="cliente-obra" class="form-control" required>
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="direccion-obra">Dirección</label>
-                                <input type="text" id="direccion-obra" class="form-control">
-                            </div>
-                            <div class="form-group">
-                                <label for="tipo-obra">Tipo de Obra</label>
-                                <select id="tipo-obra" class="form-control">
-                                    <option value="edificio">Edificio</option>
-                                    <option value="casa">Casa</option>
-                                    <option value="oficina">Oficina</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="fecha-inicio-obra">Fecha de Inicio</label>
-                                <input type="date" id="fecha-inicio-obra" class="form-control">
-                            </div>
-                            <div class="form-group">
-                                <label for="fecha-termino-obra">Fecha de Término</label>
-                                <input type="date" id="fecha-termino-obra" class="form-control">
-                            </div>
-                        </div>
-                        <div class="form-actions">
-                            <button type="button" class="btn btn-secondary" onclick="cancelarObra()">Cancelar</button>
-                            <button type="button" class="btn btn-primary" onclick="guardarObra()">Guardar</button>
-                        </div>
-                    </form>
+            
+            <div class="dashboard-card">
+                <div class="card-icon"><i class="fas fa-tasks"></i></div>
+                <div class="card-content">
+                    <h3 id="avances-mes">0</h3>
+                    <p>Avances este mes</p>
                 </div>
             </div>
-
-            <!-- Registro de Avances -->
-            <div id="avances" class="container hidden">
-                <div class="section-header">
-                    <h2><i class="fas fa-tasks"></i> Registro de Avances</h2>
-                    <button class="btn btn-primary" onclick="mostrarFormularioAvance()">
-                        <i class="fas fa-plus"></i> Nuevo Avance
-                    </button>
-                </div>
-                
-                <div class="filters-section">
-                    <div class="filters-row">
-                        <select id="filtro-obra-avance" class="form-control">
-                            <option value="">Todas las obras</option>
-                        </select>
-                        <select id="filtro-tipo-avance" class="form-control">
-                            <option value="">Todos los tipos</option>
-                        </select>
-                        <input type="date" id="filtro-fecha-avance" class="form-control">
-                        <button class="btn btn-secondary" onclick="limpiarFiltrosAvances()">Limpiar</button>
-                    </div>
-                </div>
-                
-                <div id="avances-loader" class="loader hidden">
-                    <i class="fas fa-spinner fa-spin"></i> Cargando avances...
-                </div>
-                
-                <div class="table-container">
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Fecha</th>
-                                <th>Obra</th>
-                                <th>Ubicación</th>
-                                <th>Tipo</th>
-                                <th>Descripción</th>
-                                <th>Técnico</th>
-                                <th>Estado</th>
-                                <th>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody id="avances-tbody">
-                            <!-- Contenido dinámico -->
-                        </tbody>
-                    </table>
-                </div>
-                
-                <!-- Formulario de Avance -->
-                <div id="formulario-avance" class="form-container hidden">
-                    <h3>Nuevo Avance</h3>
-                    <form>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="obra-avance">Obra</label>
-                                <select id="obra-avance" class="form-control" required>
-                                    <option value="">Seleccionar obra...</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label for="tipo-avance">Tipo de Avance</label>
-                                <select id="tipo-avance" class="form-control" required>
-                                    <option value="">Seleccionar tipo...</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="ubicacion-avance">Ubicación</label>
-                                <input type="text" id="ubicacion-avance" class="form-control" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="fecha-avance">Fecha</label>
-                                <input type="date" id="fecha-avance" class="form-control" required>
-                            </div>
-                        </div>
-                        <div class="form-group">
-                            <label for="descripcion-avance">Descripción</label>
-                            <textarea id="descripcion-avance" class="form-control" rows="3" required></textarea>
-                        </div>
-                        <div class="form-actions">
-                            <button type="button" class="btn btn-secondary" onclick="cancelarAvance()">Cancelar</button>
-                            <button type="button" class="btn btn-primary" onclick="guardarAvance()">Guardar</button>
-                        </div>
-                    </form>
+            
+            <div class="dashboard-card">
+                <div class="card-icon"><i class="fas fa-users"></i></div>
+                <div class="card-content">
+                    <h3 id="usuarios-activos">0</h3>
+                    <p>Usuarios Activos</p>
                 </div>
             </div>
-
-            <!-- Gestión de Inventario -->
-            <div id="inventario" class="container hidden">
-                <div class="section-header">
-                    <h2><i class="fas fa-boxes"></i> Gestión de Inventario</h2>
-                    <div class="header-actions">
-                        <button class="btn btn-primary" onclick="mostrarFormularioMaterial()">
-                            <i class="fas fa-plus"></i> Nuevo Material
-                        </button>
-                        <button class="btn btn-success" onclick="registrarEntrada()">
-                            <i class="fas fa-arrow-down"></i> Entrada
-                        </button>
-                        <button class="btn btn-warning" onclick="registrarSalida()">
-                            <i class="fas fa-arrow-up"></i> Salida
-                        </button>
-                    </div>
-                </div>
-                
-                <div class="filters-section">
-                    <div class="filters-row">
-                        <input type="text" id="buscar-material" placeholder="Buscar materiales..." class="form-control">
-                        <select id="filtro-categoria" class="form-control">
-                            <option value="">Todas las categorías</option>
-                        </select>
-                        <select id="filtro-stock" class="form-control">
-                            <option value="">Todo el stock</option>
-                            <option value="critico">Stock crítico</option>
-                            <option value="bajo">Stock bajo</option>
-                            <option value="normal">Stock normal</option>
-                        </select>
-                        <button class="btn btn-secondary" onclick="limpiarFiltrosMateriales()">Limpiar</button>
-                    </div>
-                </div>
-                
-                <div id="materiales-loader" class="loader hidden">
-                    <i class="fas fa-spinner fa-spin"></i> Cargando materiales...
-                </div>
-                
-                <div class="table-container">
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Código</th>
-                                <th>Nombre</th>
-                                <th>Categoría</th>
-                                <th>Stock Actual</th>
-                                <th>Stock Mínimo</th>
-                                <th>Unidad</th>
-                                <th>Estado</th>
-                                <th>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody id="materiales-tbody">
-                            <!-- Contenido dinámico -->
-                        </tbody>
-                    </table>
-                </div>
-                
-                <!-- Formulario de Material -->
-                <div id="formulario-material" class="form-container hidden">
-                    <h3>Nuevo Material</h3>
-                    <form>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="codigo-material">Código</label>
-                                <input type="text" id="codigo-material" class="form-control" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="nombre-material">Nombre</label>
-                                <input type="text" id="nombre-material" class="form-control" required>
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="categoria-material">Categoría</label>
-                                <select id="categoria-material" class="form-control" required>
-                                    <option value="">Seleccionar categoría...</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label for="unidad-material">Unidad</label>
-                                <select id="unidad-material" class="form-control" required>
-                                    <option value="unidad">Unidad</option>
-                                    <option value="metro">Metro</option>
-                                    <option value="kilogramo">Kilogramo</option>
-                                    <option value="litro">Litro</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="stock-inicial">Stock Inicial</label>
-                                <input type="number" id="stock-inicial" class="form-control" min="0">
-                            </div>
-                            <div class="form-group">
-                                <label for="stock-minimo">Stock Mínimo</label>
-                                <input type="number" id="stock-minimo" class="form-control" min="0" required>
-                            </div>
-                        </div>
-                        <div class="form-group">
-                            <label for="descripcion-material">Descripción</label>
-                            <textarea id="descripcion-material" class="form-control" rows="3"></textarea>
-                        </div>
-                        <div class="form-actions">
-                            <button type="button" class="btn btn-secondary" onclick="cancelarMaterial()">Cancelar</button>
-                            <button type="button" class="btn btn-primary" onclick="guardarMaterial()">Guardar</button>
-                        </div>
-                    </form>
+            
+            <div class="dashboard-card">
+                <div class="card-icon"><i class="fas fa-chart-line"></i></div>
+                <div class="card-content">
+                    <h3 id="progreso-general">0%</h3>
+                    <p>Progreso General</p>
                 </div>
             </div>
-
-            <!-- Transferencias -->
-            <div id="transferencias" class="container hidden">
-                <div class="section-header">
-                    <h2><i class="fas fa-exchange-alt"></i> Transferencias de Material</h2>
-                    <button class="btn btn-primary" onclick="mostrarFormularioTransferencia()">
-                        <i class="fas fa-plus"></i> Nueva Transferencia
-                    </button>
-                </div>
-                
-                <div class="filters-section">
-                    <div class="filters-row">
-                        <select id="filtro-obra-origen-trans" class="form-control">
-                            <option value="">Obra origen...</option>
-                        </select>
-                        <select id="filtro-obra-destino-trans" class="form-control">
-                            <option value="">Obra destino...</option>
-                        </select>
-                        <select id="filtro-estado-trans" class="form-control">
-                            <option value="">Todos los estados</option>
-                            <option value="pendiente">Pendiente</option>
-                            <option value="en-transito">En tránsito</option>
-                            <option value="completada">Completada</option>
-                            <option value="cancelada">Cancelada</option>
-                        </select>
-                        <input type="date" id="filtro-fecha-desde-trans" class="form-control">
-                        <input type="date" id="filtro-fecha-hasta-trans" class="form-control">
-                        <button class="btn btn-secondary" onclick="filtrarTransferencias()">Filtrar</button>
-                    </div>
-                </div>
-                
-                <div id="transferencias-loader" class="loader hidden">
-                    <i class="fas fa-spinner fa-spin"></i> Cargando transferencias...
-                </div>
-                
-                <div class="table-container">
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Fecha</th>
-                                <th>Obra Origen</th>
-                                <th>Obra Destino</th>
-                                <th>Material</th>
-                                <th>Cantidad</th>
-                                <th>Responsable</th>
-                                <th>Estado</th>
-                                <th>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody id="transferencias-tbody">
-                            <!-- Contenido dinámico -->
-                        </tbody>
-                    </table>
-                </div>
-                
-                <div id="paginacion-transferencias" class="pagination-container">
-                    <!-- Paginación dinámica -->
-                </div>
-                
-                <!-- Formulario de Transferencia -->
-                <div id="formulario-transferencia" class="form-container hidden">
-                    <h3>Nueva Transferencia</h3>
-                    <form>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="obra-origen">Obra Origen</label>
-                                <select id="obra-origen" class="form-control" required>
-                                    <option value="">Seleccionar obra origen...</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label for="obra-destino">Obra Destino</label>
-                                <select id="obra-destino" class="form-control" required>
-                                    <option value="">Seleccionar obra destino...</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="material-transferencia">Material</label>
-                                <select id="material-transferencia" class="form-control" required>
-                                    <option value="">Seleccionar material...</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label for="cantidad-transferencia">Cantidad</label>
-                                <input type="number" id="cantidad-transferencia" class="form-control" min="1" required>
-                            </div>
-                        </div>
-                        <div class="form-group">
-                            <label for="responsable-transferencia">Responsable</label>
-                            <input type="text" id="responsable-transferencia" class="form-control" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="motivo-transferencia">Motivo</label>
-                            <textarea id="motivo-transferencia" class="form-control" rows="3"></textarea>
-                        </div>
-                        <div class="form-actions">
-                            <button type="button" class="btn btn-secondary" onclick="cancelarTransferencia()">Cancelar</button>
-                            <button type="button" class="btn btn-primary" onclick="guardarTransferencia()">Guardar</button>
-                        </div>
-                    </form>
+        </div>
+        
+        <div class="dashboard-content">
+            <div class="dashboard-section">
+                <h3>Actividad Reciente</h3>
+                <div id="actividad-reciente" class="activity-list">
+                    <!-- Se carga dinámicamente -->
                 </div>
             </div>
+            
+            <div class="dashboard-section">
+                <h3>Obras en Progreso</h3>
+                <div id="obras-progreso" class="progress-list">
+                    <!-- Se carga dinámicamente -->
+                </div>
+            </div>
+        </div>
+    </div>
 
-            <!-- Planificación y Metas -->
-            <div id="planificacion-metas" class="container hidden">
-                <div class="section-header">
-                    <h2><i class="fas fa-bullseye"></i> Planificación y Metas</h2>
-                </div>
+    <!-- Gestión de Obras -->
+    <div id="obras" class="container hidden">
+        <div class="page-header">
+            <h2><i class="fas fa-building"></i> Gestión de Obras</h2>
+            <button class="btn btn-primary" onclick="mostrarFormularioObra()">
+                <i class="fas fa-plus"></i> Nueva Obra
+            </button>
+        </div>
+        
+        <div class="filters-section">
+            <div class="filters-row">
+                <select id="filtro-estado-obra">
+                    <option value="">Todos los estados</option>
+                    <option value="planificacion">Planificación</option>
+                    <option value="en-progreso">En Progreso</option>
+                    <option value="completada">Completada</option>
+                    <option value="suspendida">Suspendida</option>
+                </select>
                 
-                <div class="filters-section">
-                    <div class="filters-row">
-                        <select id="metas-obra" class="form-control" onchange="cargarMetasObra()">
-                            <option value="">Seleccione una obra</option>
-                        </select>
-                        <select id="filtro-tipo-meta" class="form-control">
-                            <option value="">Todos los tipos</option>
-                            <option value="avance">Avance</option>
-                            <option value="tiempo">Tiempo</option>
-                            <option value="calidad">Calidad</option>
-                        </select>
-                        <select id="filtro-estado-meta" class="form-control">
-                            <option value="">Todos los estados</option>
-                            <option value="pendiente">Pendiente</option>
-                            <option value="en-curso">En curso</option>
-                            <option value="completada">Completada</option>
-                            <option value="retrasada">Retrasada</option>
-                        </select>
-                        <button class="btn btn-secondary" onclick="filtrarMetas()">Filtrar</button>
-                    </div>
-                </div>
+                <input type="text" id="buscar-obra" placeholder="Buscar obras...">
                 
-                <div id="metas-container" class="hidden">
-                    <div class="section-actions">
-                        <button class="btn btn-primary" onclick="mostrarFormularioMeta()">
-                            <i class="fas fa-plus"></i> Nueva Meta
-                        </button>
+                <button class="btn btn-secondary" onclick="limpiarFiltrosObras()">
+                    <i class="fas fa-times"></i> Limpiar
+                </button>
+            </div>
+        </div>
+        
+        <div id="obras-loader" class="loader hidden">
+            <i class="fas fa-spinner fa-spin"></i> Cargando obras...
+        </div>
+        
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Obra</th>
+                        <th>Cliente</th>
+                        <th>Estado</th>
+                        <th>Progreso</th>
+                        <th>Fecha Inicio</th>
+                        <th>Fecha Término</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="obras-tbody">
+                    <!-- Se carga dinámicamente -->
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Formulario de obra (oculto por defecto) -->
+        <div id="formulario-obra" class="form-container hidden">
+            <div class="form-header">
+                <h3><i class="fas fa-building"></i> <span id="titulo-formulario-obra">Nueva Obra</span></h3>
+                <button class="btn btn-secondary" onclick="cancelarObra()">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+            </div>
+            
+            <form id="form-obra">
+                <input type="hidden" id="obra-id">
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="nombre-obra">Nombre de la Obra *</label>
+                        <input type="text" id="nombre-obra" required>
                     </div>
                     
-                    <div id="metas-loader" class="loader hidden">
-                        <i class="fas fa-spinner fa-spin"></i> Cargando metas...
+                    <div class="form-group">
+                        <label for="cliente-obra">Cliente *</label>
+                        <input type="text" id="cliente-obra" required>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="direccion-obra">Dirección</label>
+                        <input type="text" id="direccion-obra">
                     </div>
                     
-                    <div id="metas-lista" class="goals-container">
-                        <!-- Contenido dinámico -->
+                    <div class="form-group">
+                        <label for="tipo-obra">Tipo de Obra</label>
+                        <select id="tipo-obra">
+                            <option value="edificio">Edificio</option>
+                            <option value="casa">Casa</option>
+                            <option value="oficina">Oficina</option>
+                            <option value="otro">Otro</option>
+                        </select>
                     </div>
                 </div>
                 
-                <!-- Formulario de Meta -->
-                <div id="formulario-meta" class="form-container hidden">
-                    <h3>Nueva Meta</h3>
-                    <form>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="nombre-meta">Nombre de la Meta</label>
-                                <input type="text" id="nombre-meta" class="form-control" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="tipo-meta">Tipo</label>
-                                <select id="tipo-meta" class="form-control" required>
-                                    <option value="avance">Avance</option>
-                                    <option value="tiempo">Tiempo</option>
-                                    <option value="calidad">Calidad</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="categoria-meta">Categoría</label>
-                                <select id="categoria-meta" class="form-control" required>
-                                    <option value="general">General</option>
-                                    <option value="coaxial">Coaxial</option>
-                                    <option value="fo">Fibra Óptica</option>
-                                    <option value="inalambrico">Inalámbrico</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label for="valor-meta">Valor Objetivo</label>
-                                <input type="number" id="valor-meta" class="form-control" min="0" step="0.01" required>
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="unidad-meta">Unidad</label>
-                                <select id="unidad-meta" class="form-control" required>
-                                    <option value="porcentaje">Porcentaje (%)</option>
-                                    <option value="unidades">Unidades</option>
-                                    <option value="metros">Metros</option>
-                                    <option value="dias">Días</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="fecha-inicio-meta">Fecha de Inicio</label>
-                                <input type="date" id="fecha-inicio-meta" class="form-control" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="fecha-termino-meta">Fecha de Término</label>
-                                <input type="date" id="fecha-termino-meta" class="form-control" required>
-                            </div>
-                        </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="fecha-inicio-obra">Fecha de Inicio</label>
+                        <input type="date" id="fecha-inicio-obra">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="fecha-termino-obra">Fecha de Término</label>
+                        <input type="date" id="fecha-termino-obra">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="descripcion-obra">Descripción</label>
+                    <textarea id="descripcion-obra" rows="3"></textarea>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn btn-primary" onclick="guardarObra()">
+                        <i class="fas fa-save"></i> Guardar Obra
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Registro de Avances -->
+    <div id="avances" class="container hidden">
+        <div class="page-header">
+            <h2><i class="fas fa-tasks"></i> Registro de Avances</h2>
+            <button class="btn btn-primary" onclick="mostrarFormularioAvance()">
+                <i class="fas fa-plus"></i> Nuevo Avance
+            </button>
+        </div>
+        
+        <div class="filters-section">
+            <div class="filters-row">
+                <select id="filtro-obra-avance">
+                    <option value="">Todas las obras</option>
+                </select>
+                
+                <select id="filtro-tipo-avance">
+                    <option value="">Todos los tipos</option>
+                </select>
+                
+                <input type="date" id="filtro-fecha-desde">
+                <input type="date" id="filtro-fecha-hasta">
+                
+                <button class="btn btn-secondary" onclick="filtrarAvances()">
+                    <i class="fas fa-search"></i> Filtrar
+                </button>
+            </div>
+        </div>
+        
+        <div id="avances-loader" class="loader hidden">
+            <i class="fas fa-spinner fa-spin"></i> Cargando avances...
+        </div>
+        
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Obra</th>
+                        <th>Ubicación</th>
+                        <th>Tipo</th>
+                        <th>Descripción</th>
+                        <th>Técnico</th>
+                        <th>Estado</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="avances-tbody">
+                    <!-- Se carga dinámicamente -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Gestión de Inventario -->
+    <div id="inventario" class="container hidden">
+        <div class="page-header">
+            <h2><i class="fas fa-boxes"></i> Gestión de Inventario</h2>
+            <div class="page-actions">
+                <button class="btn btn-primary" onclick="mostrarFormularioMaterial()">
+                    <i class="fas fa-plus"></i> Nuevo Material
+                </button>
+                <button class="btn btn-success" onclick="registrarEntrada()">
+                    <i class="fas fa-arrow-down"></i> Entrada
+                </button>
+                <button class="btn btn-warning" onclick="registrarSalida()">
+                    <i class="fas fa-arrow-up"></i> Salida
+                </button>
+            </div>
+        </div>
+        
+        <div class="filters-section">
+            <div class="filters-row">
+                <select id="filtro-categoria">
+                    <option value="">Todas las categorías</option>
+                </select>
+                
+                <select id="filtro-stock">
+                    <option value="">Todo el stock</option>
+                    <option value="bajo">Stock bajo</option>
+                    <option value="agotado">Agotado</option>
+                </select>
+                
+                <input type="text" id="buscar-material" placeholder="Buscar materiales...">
+                
+                <button class="btn btn-secondary" onclick="filtrarMateriales()">
+                    <i class="fas fa-search"></i> Filtrar
+                </button>
+            </div>
+        </div>
+        
+        <div id="inventario-loader" class="loader hidden">
+            <i class="fas fa-spinner fa-spin"></i> Cargando inventario...
+        </div>
+        
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Material</th>
+                        <th>Código</th>
+                        <th>Categoría</th>
+                        <th>Stock Actual</th>
+                        <th>Stock Mínimo</th>
+                        <th>Unidad</th>
+                        <th>Estado</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="inventario-tbody">
+                    <!-- Se carga dinámicamente -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Transferencias -->
+    <div id="transferencias" class="container hidden">
+        <div class="page-header">
+            <h2><i class="fas fa-exchange-alt"></i> Transferencias de Material</h2>
+            <button class="btn btn-primary" onclick="mostrarFormularioTransferencia()">
+                <i class="fas fa-plus"></i> Nueva Transferencia
+            </button>
+        </div>
+        
+        <div class="filters-section">
+            <div class="filters-row">
+                <select id="filtro-obra-origen-trans">
+                    <option value="">Obra origen</option>
+                </select>
+                
+                <select id="filtro-obra-destino-trans">
+                    <option value="">Obra destino</option>
+                </select>
+                
+                <select id="filtro-estado-trans">
+                    <option value="">Todos los estados</option>
+                    <option value="pendiente">Pendiente</option>
+                    <option value="en-transito">En tránsito</option>
+                    <option value="completada">Completada</option>
+                    <option value="cancelada">Cancelada</option>
+                </select>
+                
+                <button class="btn btn-secondary" onclick="filtrarTransferencias()">
+                    <i class="fas fa-search"></i> Filtrar
+                </button>
+            </div>
+        </div>
+        
+        <div id="transferencias-loader" class="loader hidden">
+            <i class="fas fa-spinner fa-spin"></i> Cargando transferencias...
+        </div>
+        
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Obra Origen</th>
+                        <th>Obra Destino</th>
+                        <th>Material</th>
+                        <th>Cantidad</th>
+                        <th>Responsable</th>
+                        <th>Estado</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="transferencias-tbody">
+                    <!-- Se carga dinámicamente -->
+                </tbody>
+            </table>
+        </div>
+        
+        <div id="paginacion-transferencias" class="pagination">
+            <!-- Se carga dinámicamente -->
+        </div>
+        
+        <!-- Formulario de transferencia (oculto por defecto) -->
+        <div id="formulario-transferencia" class="form-container hidden">
+            <div class="form-header">
+                <h3><i class="fas fa-exchange-alt"></i> Nueva Transferencia</h3>
+                <button class="btn btn-secondary" onclick="cancelarTransferencia()">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+            </div>
+            
+            <form id="form-transferencia">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="obra-origen">Obra Origen *</label>
+                        <select id="obra-origen" required onchange="cargarMaterialesDisponiblesObraOrigen()">
+                            <option value="">Seleccionar obra origen...</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="obra-destino">Obra Destino *</label>
+                        <select id="obra-destino" required>
+                            <option value="">Seleccionar obra destino...</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="material-transferencia">Material *</label>
+                        <select id="material-transferencia" required>
+                            <option value="">Seleccionar material...</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="cantidad-transferencia">Cantidad *</label>
+                        <input type="number" id="cantidad-transferencia" min="1" required>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="responsable-transferencia">Responsable *</label>
+                    <input type="text" id="responsable-transferencia" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="motivo-transferencia">Motivo</label>
+                    <textarea id="motivo-transferencia" rows="3"></textarea>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn btn-primary" onclick="guardarTransferencia()">
+                        <i class="fas fa-save"></i> Guardar Transferencia
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Planificación y Metas -->
+    <div id="planificacion-metas" class="container hidden">
+        <div class="page-header">
+            <h2><i class="fas fa-bullseye"></i> Planificación y Metas</h2>
+        </div>
+        
+        <div class="filters-section">
+            <div class="filters-row">
+                <select id="metas-obra" onchange="cargarMetasObra()">
+                    <option value="">Seleccione una obra</option>
+                </select>
+            </div>
+        </div>
+        
+        <div id="metas-container" class="hidden">
+            <div class="section-header">
+                <h3>Metas de la Obra</h3>
+                <button class="btn btn-primary" onclick="mostrarFormularioMeta()">
+                    <i class="fas fa-plus"></i> Nueva Meta
+                </button>
+            </div>
+            
+            <div class="filters-section">
+                <div class="filters-row">
+                    <select id="filtro-tipo-meta">
+                        <option value="">Todos los tipos</option>
+                        <option value="avance">Avance</option>
+                        <option value="tiempo">Tiempo</option>
+                        <option value="calidad">Calidad</option>
+                    </select>
+                    
+                    <select id="filtro-estado-meta">
+                        <option value="">Todos los estados</option>
+                        <option value="pendiente">Pendiente</option>
+                        <option value="en-curso">En curso</option>
+                        <option value="completada">Completada</option>
+                        <option value="retrasada">Retrasada</option>
+                    </select>
+                    
+                    <button class="btn btn-secondary" onclick="filtrarMetas()">
+                        <i class="fas fa-search"></i> Filtrar
+                    </button>
+                </div>
+            </div>
+            
+            <div id="metas-loader" class="loader hidden">
+                <i class="fas fa-spinner fa-spin"></i> Cargando metas...
+            </div>
+            
+            <div id="metas-lista" class="goals-grid">
+                <!-- Se carga dinámicamente -->
+            </div>
+            
+            <!-- Formulario de meta (oculto por defecto) -->
+            <div id="formulario-meta" class="form-container hidden">
+                <div class="form-header">
+                    <h3><i class="fas fa-bullseye"></i> Nueva Meta</h3>
+                    <button class="btn btn-secondary" onclick="cancelarMeta()">
+                        <i class="fas fa-times"></i> Cancelar
+                    </button>
+                </div>
+                
+                <form id="form-meta">
+                    <div class="form-row">
                         <div class="form-group">
-                            <label for="descripcion-meta">Descripción</label>
-                            <textarea id="descripcion-meta" class="form-control" rows="3"></textarea>
+                            <label for="nombre-meta">Nombre de la Meta *</label>
+                            <input type="text" id="nombre-meta" required>
                         </div>
-                        <div class="form-actions">
-                            <button type="button" class="btn btn-secondary" onclick="cancelarMeta()">Cancelar</button>
-                            <button type="button" class="btn btn-primary" onclick="guardarMeta()">Guardar</button>
+                        
+                        <div class="form-group">
+                            <label for="tipo-meta">Tipo *</label>
+                            <select id="tipo-meta" required>
+                                <option value="avance">Avance</option>
+                                <option value="tiempo">Tiempo</option>
+                                <option value="calidad">Calidad</option>
+                            </select>
                         </div>
-                    </form>
-                </div>
-            </div>
-
-            <!-- Mediciones -->
-            <div id="mediciones" class="container hidden">
-                <div class="section-header">
-                    <h2><i class="fas fa-ruler"></i> Sistema de Mediciones</h2>
-                    <button class="btn btn-primary" onclick="mostrarModalMediciones()">
-                        <i class="fas fa-plus"></i> Nueva Medición
-                    </button>
-                </div>
-                
-                <div class="filters-section">
-                    <div class="filters-row">
-                        <select id="filtro-obra-medicion" class="form-control">
-                            <option value="">Todas las obras</option>
-                        </select>
-                        <select id="filtro-tipo-medicion" class="form-control">
-                            <option value="">Todos los tipos</option>
-                            <option value="coaxial">Coaxial</option>
-                            <option value="fo">Fibra Óptica</option>
-                        </select>
-                        <select id="filtro-estado-medicion" class="form-control">
-                            <option value="">Todos los estados</option>
-                            <option value="ok">OK</option>
-                            <option value="falla">Falla</option>
-                            <option value="pendiente">Pendiente</option>
-                        </select>
-                        <button class="btn btn-secondary" onclick="filtrarMediciones()">Filtrar</button>
                     </div>
-                </div>
-                
-                <div id="mediciones-loader" class="loader hidden">
-                    <i class="fas fa-spinner fa-spin"></i> Cargando mediciones...
-                </div>
-                
-                <div class="table-container">
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Obra</th>
-                                <th>Torre</th>
-                                <th>Piso</th>
-                                <th>Unidad</th>
-                                <th>Tipo Señal</th>
-                                <th>Valor</th>
-                                <th>Unidad</th>
-                                <th>Estado</th>
-                                <th>Fecha</th>
-                                <th>Técnico</th>
-                                <th>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody id="mediciones-tbody">
-                            <!-- Contenido dinámico -->
-                        </tbody>
-                    </table>
-                </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="categoria-meta">Categoría</label>
+                            <select id="categoria-meta">
+                                <option value="general">General</option>
+                                <option value="coaxial">Coaxial</option>
+                                <option value="fo">Fibra Óptica</option>
+                                <option value="inalambrico">Inalámbrico</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="valor-meta">Valor Objetivo *</label>
+                            <input type="number" id="valor-meta" min="0" step="0.01" required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="unidad-meta">Unidad</label>
+                            <select id="unidad-meta">
+                                <option value="porcentaje">Porcentaje (%)</option>
+                                <option value="unidades">Unidades</option>
+                                <option value="metros">Metros</option>
+                                <option value="dias">Días</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="fecha-inicio-meta">Fecha Inicio</label>
+                            <input type="date" id="fecha-inicio-meta">
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="fecha-termino-meta">Fecha Término *</label>
+                            <input type="date" id="fecha-termino-meta" required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="descripcion-meta">Descripción</label>
+                        <textarea id="descripcion-meta" rows="3"></textarea>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-primary" onclick="guardarMeta()">
+                            <i class="fas fa-save"></i> Guardar Meta
+                        </button>
+                    </div>
+                </form>
             </div>
+        </div>
+    </div>
 
-            <!-- Documentación -->
-            <div id="documentacion" class="container hidden">
-                <div class="section-header">
-                    <h2><i class="fas fa-file-alt"></i> Gestión Documental</h2>
-                    <button class="btn btn-primary" onclick="mostrarFormularioDocumento()">
-                        <i class="fas fa-plus"></i> Subir Documento
-                    </button>
-                </div>
+    <!-- Mediciones -->
+    <div id="mediciones" class="container hidden">
+        <div class="page-header">
+            <h2><i class="fas fa-ruler"></i> Sistema de Mediciones</h2>
+            <button class="btn btn-primary" onclick="mostrarModalMediciones()">
+                <i class="fas fa-plus"></i> Nueva Medición
+            </button>
+        </div>
+        
+        <div class="filters-section">
+            <div class="filters-row">
+                <select id="filtro-obra-medicion">
+                    <option value="">Todas las obras</option>
+                </select>
                 
-                <div class="filters-section">
-                    <div class="filters-row">
-                        <input type="text" id="buscar-doc" placeholder="Buscar documentos..." class="form-control">
-                        <select id="filtro-tipo-doc" class="form-control">
-                            <option value="">Todos los tipos</option>
+                <select id="filtro-tipo-medicion">
+                    <option value="">Todos los tipos</option>
+                    <option value="COAXIAL_ALAMBRICO">Coaxial Alámbrico</option>
+                    <option value="COAXIAL_INALAMBRICO">Coaxial Inalámbrico</option>
+                    <option value="FO">Fibra Óptica</option>
+                </select>
+                
+                <select id="filtro-estado-medicion">
+                    <option value="">Todos los estados</option>
+                    <option value="OK">OK</option>
+                    <option value="FALLA">Falla</option>
+                    <option value="PENDIENTE">Pendiente</option>
+                </select>
+                
+                <button class="btn btn-secondary" onclick="filtrarMediciones()">
+                    <i class="fas fa-search"></i> Filtrar
+                </button>
+            </div>
+        </div>
+        
+        <div id="mediciones-loader" class="loader hidden">
+            <i class="fas fa-spinner fa-spin"></i> Cargando mediciones...
+        </div>
+        
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Obra</th>
+                        <th>Torre</th>
+                        <th>Piso</th>
+                        <th>Unidad</th>
+                        <th>Tipo Señal</th>
+                        <th>Valor</th>
+                        <th>Unidad</th>
+                        <th>Estado</th>
+                        <th>Fecha</th>
+                        <th>Técnico</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="mediciones-tbody">
+                    <!-- Se carga dinámicamente -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Documentación -->
+    <div id="documentacion" class="container hidden">
+        <div class="page-header">
+            <h2><i class="fas fa-file-alt"></i> Gestión Documental</h2>
+            <button class="btn btn-primary" onclick="mostrarFormularioDocumento()">
+                <i class="fas fa-plus"></i> Subir Documento
+            </button>
+        </div>
+        
+        <div class="filters-section">
+            <div class="filters-row">
+                <select id="filtro-tipo-doc">
+                    <option value="">Todos los tipos</option>
+                    <option value="plano">Plano</option>
+                    <option value="memoria">Memoria Técnica</option>
+                    <option value="manual">Manual</option>
+                    <option value="certificado">Certificado</option>
+                    <option value="informe">Informe</option>
+                    <option value="otro">Otro</option>
+                </select>
+                
+                <select id="filtro-obra-doc">
+                    <option value="">Todas las obras</option>
+                </select>
+                
+                <input type="text" id="buscar-doc" placeholder="Buscar documentos...">
+                
+                <button class="btn btn-secondary" onclick="filtrarDocumentos()">
+                    <i class="fas fa-search"></i> Filtrar
+                </button>
+            </div>
+        </div>
+        
+        <div id="documentos-loader" class="loader hidden">
+            <i class="fas fa-spinner fa-spin"></i> Cargando documentos...
+        </div>
+        
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Documento</th>
+                        <th>Tipo</th>
+                        <th>Obra</th>
+                        <th>Fecha</th>
+                        <th>Usuario</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="documentos-tbody">
+                    <!-- Se carga dinámicamente -->
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Formulario de documento (oculto por defecto) -->
+        <div id="formulario-documento" class="form-container hidden">
+            <div class="form-header">
+                <h3><i class="fas fa-file-alt"></i> Subir Documento</h3>
+                <button class="btn btn-secondary" onclick="cancelarDocumento()">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+            </div>
+            
+            <form id="form-documento">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="doc-nombre">Nombre del Documento *</label>
+                        <input type="text" id="doc-nombre" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="doc-tipo">Tipo *</label>
+                        <select id="doc-tipo" required>
                             <option value="plano">Plano</option>
                             <option value="memoria">Memoria Técnica</option>
                             <option value="manual">Manual</option>
@@ -694,402 +770,423 @@
                             <option value="informe">Informe</option>
                             <option value="otro">Otro</option>
                         </select>
-                        <select id="filtro-obra-doc" class="form-control">
-                            <option value="">Todas las obras</option>
-                        </select>
-                        <button class="btn btn-secondary" onclick="filtrarDocumentos()">Filtrar</button>
                     </div>
                 </div>
                 
-                <div id="documentos-loader" class="loader hidden">
-                    <i class="fas fa-spinner fa-spin"></i> Cargando documentos...
+                <div class="form-group">
+                    <label for="doc-obra">Obra</label>
+                    <select id="doc-obra">
+                        <option value="">General (sin obra específica)</option>
+                    </select>
                 </div>
                 
-                <div class="table-container">
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Nombre</th>
-                                <th>Tipo</th>
-                                <th>Obra</th>
-                                <th>Fecha</th>
-                                <th>Usuario</th>
-                                <th>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody id="documentos-tbody">
-                            <!-- Contenido dinámico -->
-                        </tbody>
-                    </table>
+                <div class="form-group">
+                    <label for="doc-archivo">Archivo *</label>
+                    <input type="file" id="doc-archivo" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.dwg,.dxf" required>
+                    <small class="form-text">Formatos permitidos: PDF, DOC, DOCX, XLS, XLSX, JPG, PNG, DWG, DXF (máx. 10MB)</small>
                 </div>
                 
-                <!-- Formulario de Documento -->
-                <div id="formulario-documento" class="form-container hidden">
-                    <h3>Subir Documento</h3>
-                    <form>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="doc-nombre">Nombre del Documento</label>
-                                <input type="text" id="doc-nombre" class="form-control" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="doc-tipo">Tipo</label>
-                                <select id="doc-tipo" class="form-control" required>
-                                    <option value="plano">Plano</option>
-                                    <option value="memoria">Memoria Técnica</option>
-                                    <option value="manual">Manual</option>
-                                    <option value="certificado">Certificado</option>
-                                    <option value="informe">Informe</option>
-                                    <option value="otro">Otro</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="form-group">
-                            <label for="doc-obra">Obra (opcional)</label>
-                            <select id="doc-obra" class="form-control">
-                                <option value="">General (sin obra específica)</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="doc-archivo">Archivo</label>
-                            <input type="file" id="doc-archivo" class="form-control" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.dwg,.dxf" required>
-                            <small class="form-text">Formatos permitidos: PDF, DOC, DOCX, XLS, XLSX, JPG, PNG, DWG, DXF (máx. 10MB)</small>
-                        </div>
-                        <div class="form-group">
-                            <label for="doc-descripcion">Descripción</label>
-                            <textarea id="doc-descripcion" class="form-control" rows="3"></textarea>
-                        </div>
-                        <div class="form-actions">
-                            <button type="button" class="btn btn-secondary" onclick="cancelarDocumento()">Cancelar</button>
-                            <button type="button" class="btn btn-primary" onclick="guardarDocumento()">Subir</button>
-                        </div>
-                    </form>
+                <div class="form-group">
+                    <label for="doc-descripcion">Descripción</label>
+                    <textarea id="doc-descripcion" rows="3"></textarea>
                 </div>
-            </div>
-
-            <!-- Registro de Progreso (Cobranzas) -->
-            <div id="cobranzas" class="container hidden">
-                <div class="section-header">
-                    <h2><i class="fas fa-chart-line"></i> Registro de Progreso para Cobranzas</h2>
-                    <button class="btn btn-primary" onclick="mostrarModalRegistroProgreso()">
-                        <i class="fas fa-plus"></i> Nuevo Registro
+                
+                <div class="form-actions">
+                    <button type="button" class="btn btn-primary" onclick="guardarDocumento()">
+                        <i class="fas fa-save"></i> Guardar Documento
                     </button>
                 </div>
-                
-                <div id="progreso-loader" class="loader hidden">
-                    <i class="fas fa-spinner fa-spin"></i> Cargando registros...
-                </div>
-                
-                <div id="registros-progreso-container" class="progress-records-container">
-                    <!-- Contenido dinámico -->
-                </div>
-            </div>
+            </form>
+        </div>
+    </div>
 
-            <!-- Reportes -->
-            <div id="reportes" class="container hidden">
-                <div class="section-header">
-                    <h2><i class="fas fa-chart-bar"></i> Reportes y Análisis</h2>
-                </div>
-                
-                <div class="reports-grid">
-                    <div class="report-card">
-                        <h3><i class="fas fa-tasks"></i> Reporte de Avances</h3>
-                        <p>Generar reporte detallado de avances por obra y período</p>
-                        <button class="btn btn-primary" onclick="generarReporte('avances')">Generar</button>
-                    </div>
-                    
-                    <div class="report-card">
-                        <h3><i class="fas fa-boxes"></i> Reporte de Inventario</h3>
-                        <p>Estado actual del inventario y movimientos</p>
-                        <button class="btn btn-primary" onclick="generarReporte('inventario')">Generar</button>
-                    </div>
-                    
-                    <div class="report-card">
-                        <h3><i class="fas fa-exchange-alt"></i> Reporte de Transferencias</h3>
-                        <p>Historial de transferencias entre obras</p>
-                        <button class="btn btn-primary" onclick="generarReporte('transferencias')">Generar</button>
-                    </div>
-                    
-                    <div class="report-card">
-                        <h3><i class="fas fa-chart-line"></i> Reporte de Progreso</h3>
-                        <p>Análisis de progreso y cumplimiento de metas</p>
-                        <button class="btn btn-primary" onclick="generarReporte('progreso')">Generar</button>
-                    </div>
-                </div>
-            </div>
+    <!-- Registro de Progreso (Cobranzas) -->
+    <div id="cobranzas" class="container hidden">
+        <div class="page-header">
+            <h2><i class="fas fa-chart-line"></i> Registro de Progreso para Cobranzas</h2>
+            <button class="btn btn-primary" onclick="mostrarModalRegistroProgreso()">
+                <i class="fas fa-plus"></i> Nuevo Registro
+            </button>
+        </div>
+        
+        <div id="progreso-loader" class="loader hidden">
+            <i class="fas fa-spinner fa-spin"></i> Cargando registros...
+        </div>
+        
+        <div id="registros-progreso-container" class="progress-cards">
+            <!-- Se carga dinámicamente -->
+        </div>
+    </div>
 
-            <!-- Gestión de Usuarios -->
-            <div id="gestion-usuarios" class="container hidden">
-                <div class="section-header">
-                    <h2><i class="fas fa-users"></i> Gestión de Usuarios</h2>
-                    <button class="btn btn-primary" onclick="mostrarFormularioUsuario()">
-                        <i class="fas fa-plus"></i> Nuevo Usuario
+    <!-- Reportes -->
+    <div id="reportes" class="container hidden">
+        <div class="page-header">
+            <h2><i class="fas fa-chart-bar"></i> Sistema de Reportes</h2>
+        </div>
+        
+        <div class="reports-grid">
+            <div class="report-card">
+                <div class="report-icon">
+                    <i class="fas fa-tasks"></i>
+                </div>
+                <div class="report-content">
+                    <h3>Reporte de Avances</h3>
+                    <p>Generar reporte detallado de avances por obra y período</p>
+                    <button class="btn btn-primary" onclick="generarReporte('avances')">
+                        <i class="fas fa-file-pdf"></i> Generar
                     </button>
                 </div>
+            </div>
+            
+            <div class="report-card">
+                <div class="report-icon">
+                    <i class="fas fa-boxes"></i>
+                </div>
+                <div class="report-content">
+                    <h3>Reporte de Inventario</h3>
+                    <p>Estado actual del inventario y movimientos</p>
+                    <button class="btn btn-primary" onclick="generarReporte('inventario')">
+                        <i class="fas fa-file-excel"></i> Generar
+                    </button>
+                </div>
+            </div>
+            
+            <div class="report-card">
+                <div class="report-icon">
+                    <i class="fas fa-chart-line"></i>
+                </div>
+                <div class="report-content">
+                    <h3>Reporte de Progreso</h3>
+                    <p>Progreso general de obras y cumplimiento de metas</p>
+                    <button class="btn btn-primary" onclick="generarReporte('progreso')">
+                        <i class="fas fa-file-pdf"></i> Generar
+                    </button>
+                </div>
+            </div>
+            
+            <div class="report-card">
+                <div class="report-icon">
+                    <i class="fas fa-exchange-alt"></i>
+                </div>
+                <div class="report-content">
+                    <h3>Reporte de Transferencias</h3>
+                    <p>Movimientos de materiales entre obras</p>
+                    <button class="btn btn-primary" onclick="generarReporte('transferencias')">
+                        <i class="fas fa-file-excel"></i> Generar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gestión de Usuarios -->
+    <div id="gestion-usuarios" class="container hidden">
+        <div class="page-header">
+            <h2><i class="fas fa-users"></i> Gestión de Usuarios</h2>
+            <button class="btn btn-primary" onclick="mostrarFormularioUsuario()">
+                <i class="fas fa-plus"></i> Nuevo Usuario
+            </button>
+        </div>
+        
+        <div class="filters-section">
+            <div class="filters-row">
+                <input type="text" id="buscar-usuario" placeholder="Buscar usuarios...">
                 
-                <div class="filters-section">
-                    <div class="filters-row">
-                        <input type="text" id="buscar-usuario" placeholder="Buscar usuarios..." class="form-control">
-                        <select id="filtro-rol" class="form-control">
-                            <option value="">Todos los roles</option>
-                            <option value="Admin">Administrador</option>
-                            <option value="Supervisor">Supervisor</option>
+                <select id="filtro-rol">
+                    <option value="">Todos los roles</option>
+                    <option value="Admin">Administrador</option>
+                    <option value="Supervisor">Supervisor</option>
+                    <option value="Técnico">Técnico</option>
+                    <option value="Ayudante">Ayudante</option>
+                </select>
+                
+                <select id="filtro-estado">
+                    <option value="">Todos los estados</option>
+                    <option value="activo">Activo</option>
+                    <option value="bloqueado">Bloqueado</option>
+                    <option value="inactivo">Inactivo</option>
+                </select>
+                
+                <button class="btn btn-secondary" onclick="limpiarFiltrosUsuarios()">
+                    <i class="fas fa-times"></i> Limpiar
+                </button>
+            </div>
+        </div>
+        
+        <div id="usuarios-loader" class="loader hidden">
+            <i class="fas fa-spinner fa-spin"></i> Cargando usuarios...
+        </div>
+        
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Usuario</th>
+                        <th>Nombre de Usuario</th>
+                        <th>Rol</th>
+                        <th>Email</th>
+                        <th>Estado</th>
+                        <th>Último Acceso</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="usuarios-tbody">
+                    <!-- Se carga dinámicamente -->
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Formulario de usuario (oculto por defecto) -->
+        <div id="formulario-usuario" class="form-container hidden">
+            <div class="form-header">
+                <h3><i class="fas fa-user"></i> <span id="titulo-formulario-usuario">Nuevo Usuario</span></h3>
+                <button class="btn btn-secondary" onclick="cancelarEdicionUsuario()">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+            </div>
+            
+            <form id="form-usuario">
+                <input type="hidden" id="usuario-id">
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="nombre-usuario">Nombre *</label>
+                        <input type="text" id="nombre-usuario" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="apellido-usuario">Apellido *</label>
+                        <input type="text" id="apellido-usuario" required>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="username-usuario">Nombre de Usuario *</label>
+                        <input type="text" id="username-usuario" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="rol-usuario">Rol *</label>
+                        <select id="rol-usuario" required>
                             <option value="Técnico">Técnico</option>
                             <option value="Ayudante">Ayudante</option>
+                            <option value="Supervisor">Supervisor</option>
+                            <option value="Admin">Administrador</option>
                         </select>
-                        <select id="filtro-estado" class="form-control">
-                            <option value="">Todos los estados</option>
-                            <option value="activo">Activo</option>
-                            <option value="bloqueado">Bloqueado</option>
-                            <option value="inactivo">Inactivo</option>
-                        </select>
-                        <button class="btn btn-secondary" onclick="limpiarFiltrosUsuarios()">Limpiar</button>
-                        <button class="btn btn-info" onclick="exportarUsuarios()">
-                            <i class="fas fa-download"></i> Exportar
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="email-usuario">Email</label>
+                        <input type="email" id="email-usuario">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="telefono-usuario">Teléfono</label>
+                        <input type="tel" id="telefono-usuario">
+                    </div>
+                </div>
+                
+                <div id="contrasena-info" class="alert alert-info hidden">
+                    <i class="fas fa-info-circle"></i> Deje los campos de contraseña vacíos para mantener la contraseña actual.
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="contrasena-usuario">Contraseña</label>
+                        <div class="password-input">
+                            <input type="password" id="contrasena-usuario">
+                            <button type="button" class="btn btn-sm btn-secondary" onclick="toggleMostrarContrasena('contrasena-usuario')">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="confirmar-contrasena-usuario">Confirmar Contraseña</label>
+                        <div class="password-input">
+                            <input type="password" id="confirmar-contrasena-usuario">
+                            <button type="button" class="btn btn-sm btn-secondary" onclick="toggleMostrarContrasena('confirmar-contrasena-usuario')">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <button type="button" class="btn btn-info" onclick="mostrarGenerarContrasena()">
+                            <i class="fas fa-random"></i> Generar Contraseña
                         </button>
                     </div>
                 </div>
                 
-                <div id="usuarios-loader" class="loader hidden">
-                    <i class="fas fa-spinner fa-spin"></i> Cargando usuarios...
-                </div>
-                
-                <div class="table-container">
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Usuario</th>
-                                <th>Nombre de Usuario</th>
-                                <th>Rol</th>
-                                <th>Email</th>
-                                <th>Estado</th>
-                                <th>Último Acceso</th>
-                                <th>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody id="usuarios-tbody">
-                            <!-- Contenido dinámico -->
-                        </tbody>
-                    </table>
-                </div>
-                
-                <!-- Formulario de Usuario -->
-                <div id="formulario-usuario" class="form-container hidden">
-                    <h3>Nuevo Usuario</h3>
-                    <form>
-                        <input type="hidden" id="usuario-id">
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="nombre-usuario">Nombre</label>
-                                <input type="text" id="nombre-usuario" class="form-control" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="apellido-usuario">Apellido</label>
-                                <input type="text" id="apellido-usuario" class="form-control" required>
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="username-usuario">Nombre de Usuario</label>
-                                <input type="text" id="username-usuario" class="form-control" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="rol-usuario">Rol</label>
-                                <select id="rol-usuario" class="form-control" required>
-                                    <option value="Técnico">Técnico</option>
-                                    <option value="Ayudante">Ayudante</option>
-                                    <option value="Supervisor">Supervisor</option>
-                                    <option value="Admin">Administrador</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="contrasena-usuario">Contraseña</label>
-                                <div class="password-input-group">
-                                    <input type="password" id="contrasena-usuario" class="form-control">
-                                    <button type="button" class="btn btn-outline" onclick="toggleMostrarContrasena('contrasena-usuario')">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                    <button type="button" class="btn btn-outline" onclick="mostrarGenerarContrasena()">
-                                        <i class="fas fa-random"></i>
-                                    </button>
-                                </div>
-                            </div>
-                            <div class="form-group">
-                                <label for="confirmar-contrasena-usuario">Confirmar Contraseña</label>
-                                <input type="password" id="confirmar-contrasena-usuario" class="form-control">
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="email-usuario">Email</label>
-                                <input type="email" id="email-usuario" class="form-control">
-                            </div>
-                            <div class="form-group">
-                                <label for="telefono-usuario">Teléfono</label>
-                                <input type="tel" id="telefono-usuario" class="form-control">
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="activo-usuario" checked>
-                                    Usuario activo
-                                </label>
-                            </div>
-                            <div class="form-group">
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="requiere-cambio-contrasena" checked>
-                                    Requiere cambio de contraseña
-                                </label>
-                            </div>
-                        </div>
-                        <div id="contrasena-info" class="alert alert-info hidden">
-                            <i class="fas fa-info-circle"></i> Deje los campos de contraseña vacíos para mantener la contraseña actual.
-                        </div>
-                        <div class="form-actions">
-                            <button type="button" class="btn btn-secondary" onclick="cancelarEdicionUsuario()">Cancelar</button>
-                            <button type="button" class="btn btn-primary" onclick="guardarUsuario()">Guardar</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-
-            <!-- Configuración -->
-            <div id="configuracion" class="container hidden">
-                <div class="section-header">
-                    <h2><i class="fas fa-cog"></i> Configuración del Sistema</h2>
-                </div>
-                
-                <div class="config-tabs">
-                    <nav class="tabs-nav">
-                        <a href="#" class="nav-link active" onclick="mostrarTabConfig('general')">
-                            <i class="fas fa-cogs"></i> General
-                        </a>
-                        <a href="#" class="nav-link" onclick="mostrarTabConfig('avances')">
-                            <i class="fas fa-tasks"></i> Avances
-                        </a>
-                        <a href="#" class="nav-link" onclick="mostrarTabConfig('notificaciones')">
-                            <i class="fas fa-bell"></i> Notificaciones
-                        </a>
-                        <a href="#" class="nav-link" onclick="mostrarTabConfig('backup')">
-                            <i class="fas fa-database"></i> Backup
-                        </a>
-                    </nav>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="activo-usuario" checked>
+                            Usuario activo
+                        </label>
+                    </div>
                     
-                    <div class="tabs-content">
-                        <div id="config-loader" class="loader hidden">
-                            <i class="fas fa-spinner fa-spin"></i> Cargando configuración...
-                        </div>
-                        
-                        <!-- Configuración General -->
-                        <div id="config-general" class="tab-content">
-                            <h3>Configuración General</h3>
-                            <form>
-                                <div class="form-group">
-                                    <label for="nombre-empresa">Nombre de la Empresa</label>
-                                    <input type="text" id="nombre-empresa" class="form-control" value="Larnet Telecomunicaciones">
-                                </div>
-                                <div class="form-group">
-                                    <label for="email-notificaciones">Email para Notificaciones</label>
-                                    <input type="email" id="email-notificaciones" class="form-control">
-                                </div>
-                                <div class="form-group">
-                                    <label for="items-por-pagina">Items por Página</label>
-                                    <input type="number" id="items-por-pagina" class="form-control" min="10" max="100" value="20">
-                                </div>
-                                <button type="button" class="btn btn-primary" onclick="guardarConfiguracionGeneral()">
-                                    Guardar Configuración
-                                </button>
-                            </form>
-                        </div>
-                        
-                        <!-- Configuración de Avances -->
-                        <div id="config-avances" class="tab-content hidden">
-                            <h3>Configuración de Avances</h3>
-                            <form>
-                                <div class="form-group">
-                                    <label for="permitir-edicion-avances">Permitir Edición de Avances</label>
-                                    <select id="permitir-edicion-avances" class="form-control">
-                                        <option value="si">Sí</option>
-                                        <option value="no">No</option>
-                                        <option value="solo-admin">Solo Administradores</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label for="dias-edicion-avances">Días Permitidos para Editar Avances</label>
-                                    <input type="number" id="dias-edicion-avances" class="form-control" min="0" max="30" value="7">
-                                </div>
-                                <button type="button" class="btn btn-primary" onclick="guardarConfiguracionAvances()">
-                                    Guardar Configuración
-                                </button>
-                            </form>
-                        </div>
-                        
-                        <!-- Configuración de Notificaciones -->
-                        <div id="config-notificaciones" class="tab-content hidden">
-                            <h3>Configuración de Notificaciones</h3>
-                            <form>
-                                <div class="form-group">
-                                    <label class="checkbox-label">
-                                        <input type="checkbox" id="notificar-avances-completados" checked>
-                                        Notificar cuando se completen avances
-                                    </label>
-                                </div>
-                                <div class="form-group">
-                                    <label class="checkbox-label">
-                                        <input type="checkbox" id="notificar-stock-bajo" checked>
-                                        Notificar cuando el stock esté bajo
-                                    </label>
-                                </div>
-                                <div class="form-group">
-                                    <label class="checkbox-label">
-                                        <input type="checkbox" id="notificar-obras-retrasadas" checked>
-                                        Notificar obras retrasadas
-                                    </label>
-                                </div>
-                                <button type="button" class="btn btn-primary" onclick="guardarConfiguracionNotificaciones()">
-                                    Guardar Configuración
-                                </button>
-                            </form>
-                        </div>
-                        
-                        <!-- Configuración de Backup -->
-                        <div id="config-backup" class="tab-content hidden">
-                            <h3>Configuración de Backup</h3>
-                            <form>
-                                <div class="form-group">
-                                    <label for="frecuencia-backup">Frecuencia de Backup Automático</label>
-                                    <select id="frecuencia-backup" class="form-control">
-                                        <option value="diario">Diario</option>
-                                        <option value="semanal">Semanal</option>
-                                        <option value="mensual">Mensual</option>
-                                        <option value="manual">Solo Manual</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label for="hora-backup">Hora de Backup</label>
-                                    <input type="time" id="hora-backup" class="form-control" value="02:00">
-                                </div>
-                                <div class="form-actions">
-                                    <button type="button" class="btn btn-primary" onclick="guardarConfiguracionBackup()">
-                                        Guardar Configuración
-                                    </button>
-                                    <button type="button" class="btn btn-warning" onclick="realizarBackupManual()">
-                                        <i class="fas fa-database"></i> Backup Manual
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="requiere-cambio-contrasena" checked>
+                            Requiere cambio de contraseña en próximo login
+                        </label>
                     </div>
                 </div>
-            </div>
-        </main>
-
-        <!-- Footer -->
-        <?!= include('partials/footer'); ?>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn btn-primary" onclick="guardarUsuario()">
+                        <i class="fas fa-save"></i> Guardar Usuario
+                    </button>
+                </div>
+            </form>
+        </div>
     </div>
+
+    <!-- Configuración -->
+    <div id="configuracion" class="container hidden">
+        <div class="page-header">
+            <h2><i class="fas fa-cog"></i> Configuración del Sistema</h2>
+        </div>
+        
+        <div class="config-nav">
+            <ul class="nav-tabs">
+                <li><a href="#" class="nav-link active" onclick="mostrarTabConfig('general')">General</a></li>
+                <li><a href="#" class="nav-link" onclick="mostrarTabConfig('avances')">Avances</a></li>
+                <li><a href="#" class="nav-link" onclick="mostrarTabConfig('notificaciones')">Notificaciones</a></li>
+                <li><a href="#" class="nav-link" onclick="mostrarTabConfig('backup')">Backup</a></li>
+            </ul>
+        </div>
+        
+        <div id="config-loader" class="loader hidden">
+            <i class="fas fa-spinner fa-spin"></i> Cargando configuración...
+        </div>
+        
+        <!-- Configuración General -->
+        <div id="config-general" class="config-tab">
+            <h3>Configuración General</h3>
+            
+            <div class="form-group">
+                <label for="nombre-empresa">Nombre de la Empresa</label>
+                <input type="text" id="nombre-empresa" value="Larnet Telecomunicaciones">
+            </div>
+            
+            <div class="form-group">
+                <label for="email-notificaciones">Email para Notificaciones</label>
+                <input type="email" id="email-notificaciones">
+            </div>
+            
+            <div class="form-group">
+                <label for="items-por-pagina">Items por Página</label>
+                <input type="number" id="items-por-pagina" min="10" max="100" value="20">
+            </div>
+            
+            <div class="form-actions">
+                <button class="btn btn-primary" onclick="guardarConfiguracionGeneral()">
+                    <i class="fas fa-save"></i> Guardar Configuración
+                </button>
+            </div>
+        </div>
+        
+        <!-- Configuración de Avances -->
+        <div id="config-avances" class="config-tab hidden">
+            <h3>Configuración de Avances</h3>
+            
+            <div class="form-group">
+                <label for="permitir-edicion-avances">Permitir Edición de Avances</label>
+                <select id="permitir-edicion-avances">
+                    <option value="si">Sí</option>
+                    <option value="no">No</option>
+                    <option value="solo-admin">Solo Administradores</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="dias-edicion-avances">Días Permitidos para Editar Avances</label>
+                <input type="number" id="dias-edicion-avances" min="0" max="30" value="7">
+            </div>
+            
+            <div class="form-actions">
+                <button class="btn btn-primary" onclick="guardarConfiguracionAvances()">
+                    <i class="fas fa-save"></i> Guardar Configuración
+                </button>
+            </div>
+        </div>
+        
+        <!-- Configuración de Notificaciones -->
+        <div id="config-notificaciones" class="config-tab hidden">
+            <h3>Configuración de Notificaciones</h3>
+            
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="notificar-avances-completados" checked>
+                    Notificar cuando se completen avances
+                </label>
+            </div>
+            
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="notificar-stock-bajo" checked>
+                    Notificar cuando el stock esté bajo
+                </label>
+            </div>
+            
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="notificar-obras-retrasadas" checked>
+                    Notificar obras retrasadas
+                </label>
+            </div>
+            
+            <div class="form-actions">
+                <button class="btn btn-primary" onclick="guardarConfiguracionNotificaciones()">
+                    <i class="fas fa-save"></i> Guardar Configuración
+                </button>
+            </div>
+        </div>
+        
+        <!-- Configuración de Backup -->
+        <div id="config-backup" class="config-tab hidden">
+            <h3>Configuración de Backup</h3>
+            
+            <div class="form-group">
+                <label for="frecuencia-backup">Frecuencia de Backup Automático</label>
+                <select id="frecuencia-backup">
+                    <option value="diario">Diario</option>
+                    <option value="semanal">Semanal</option>
+                    <option value="mensual">Mensual</option>
+                    <option value="desactivado">Desactivado</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="hora-backup">Hora de Backup</label>
+                <input type="time" id="hora-backup" value="02:00">
+            </div>
+            
+            <div class="form-actions">
+                <button class="btn btn-primary" onclick="guardarConfiguracionBackup()">
+                    <i class="fas fa-save"></i> Guardar Configuración
+                </button>
+                
+                <button class="btn btn-warning" onclick="realizarBackupManual()">
+                    <i class="fas fa-download"></i> Backup Manual
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <?!= include('partials/footer') ?>
+
+    <!-- ============================================================================ -->
+    <!-- MODALES GLOBALES -->
+    <!-- ============================================================================ -->
 
     <!-- Modal de Mediciones -->
     <div id="modal-mediciones" class="modal-overlay hidden">
@@ -1099,23 +1196,25 @@
                 <button class="modal-close" onclick="cerrarModalMediciones()">&times;</button>
             </div>
             <div class="modal-body">
-                <div class="mediciones-config">
+                <div class="medicion-setup">
                     <div class="form-row">
                         <div class="form-group">
                             <label for="medicion-obra">Obra</label>
-                            <select id="medicion-obra" class="form-control" onchange="cargarEstructuraMedicion()">
+                            <select id="medicion-obra" onchange="cargarEstructuraMedicion()">
                                 <option value="">Seleccionar obra...</option>
                             </select>
                         </div>
+                        
                         <div class="form-group">
                             <label for="medicion-torre">Torre</label>
-                            <select id="medicion-torre" class="form-control" onchange="cambiarTipoMedicion()">
+                            <select id="medicion-torre">
                                 <option value="">Seleccionar torre...</option>
                             </select>
                         </div>
+                        
                         <div class="form-group">
                             <label for="medicion-tipo-senal">Tipo de Señal</label>
-                            <select id="medicion-tipo-senal" class="form-control" onchange="cambiarTipoMedicion()">
+                            <select id="medicion-tipo-senal" onchange="cambiarTipoMedicion()">
                                 <option value="">Seleccionar tipo...</option>
                                 <option value="COAXIAL_ALAMBRICO">Coaxial Alámbrico</option>
                                 <option value="COAXIAL_INALAMBRICO">Coaxial Inalámbrico</option>
@@ -1150,7 +1249,7 @@
                                 </tr>
                             </thead>
                             <tbody id="tbody-mediciones-coaxial">
-                                <!-- Contenido dinámico -->
+                                <!-- Se carga dinámicamente -->
                             </tbody>
                         </table>
                     </div>
@@ -1170,32 +1269,35 @@
                                 </tr>
                             </thead>
                             <tbody id="tbody-mediciones-fo">
-                                <!-- Contenido dinámico -->
+                                <!-- Se carga dinámicamente -->
                             </tbody>
                         </table>
                     </div>
                 </div>
                 
-                <div id="acciones-mediciones" class="mediciones-actions hidden">
-                    <button class="btn btn-info" onclick="mostrarValoresReferencia()">
-                        <i class="fas fa-info-circle"></i> Valores de Referencia
-                    </button>
-                    <button class="btn btn-warning" onclick="previsualizarHoja()">
-                        <i class="fas fa-eye"></i> Vista Previa
-                    </button>
-                    <button class="btn btn-secondary" onclick="limpiarMediciones()">
-                        <i class="fas fa-eraser"></i> Limpiar
-                    </button>
+                <div id="acciones-mediciones" class="hidden">
+                    <div class="mediciones-actions">
+                        <button class="btn btn-info" onclick="mostrarValoresReferencia()">
+                            <i class="fas fa-info-circle"></i> Valores de Referencia
+                        </button>
+                        
+                        <button class="btn btn-warning" onclick="previsualizarHoja()">
+                            <i class="fas fa-eye"></i> Vista Previa
+                        </button>
+                        
+                        <button class="btn btn-secondary" onclick="limpiarMediciones()">
+                            <i class="fas fa-eraser"></i> Limpiar
+                        </button>
+                        
+                        <button class="btn btn-success" onclick="exportarHojaMediciones()">
+                            <i class="fas fa-file-excel"></i> Exportar Excel
+                        </button>
+                        
+                        <button class="btn btn-primary" onclick="guardarMediciones()">
+                            <i class="fas fa-save"></i> Guardar Mediciones
+                        </button>
+                    </div>
                 </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="cerrarModalMediciones()">Cancelar</button>
-                <button class="btn btn-success" onclick="exportarHojaMediciones()">
-                    <i class="fas fa-file-excel"></i> Exportar Excel
-                </button>
-                <button class="btn btn-primary" onclick="guardarMediciones()">
-                    <i class="fas fa-save"></i> Guardar
-                </button>
             </div>
         </div>
     </div>
@@ -1208,13 +1310,13 @@
                 <button class="modal-close" onclick="cerrarModalValoresReferencia()">&times;</button>
             </div>
             <div class="modal-body">
-                <h4>Coaxial</h4>
+                <h4>Coaxial (dBμV)</h4>
                 <table class="reference-table">
                     <thead>
                         <tr>
                             <th>Frecuencia</th>
                             <th>Rango Aceptable</th>
-                            <th>Tolerancia</th>
+                            <th>Tolerancia dB</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1241,7 +1343,7 @@
                     </tbody>
                 </table>
                 
-                <h4>Fibra Óptica</h4>
+                <h4>Fibra Óptica (dBm)</h4>
                 <table class="reference-table">
                     <thead>
                         <tr>
@@ -1251,16 +1353,16 @@
                     </thead>
                     <tbody>
                         <tr>
-                            <td>Potencia Mínima</td>
+                            <td>Potencia mínima</td>
                             <td>-30 dBm</td>
                         </tr>
                         <tr>
-                            <td>Potencia Máxima</td>
+                            <td>Potencia máxima</td>
                             <td>-8 dBm</td>
                         </tr>
                         <tr>
-                            <td>Atenuación Máxima</td>
-                            <td>0.5 dB/km</td>
+                            <td>Atenuación máxima</td>
+                            <td>0.5 dB</td>
                         </tr>
                     </tbody>
                 </table>
@@ -1275,61 +1377,63 @@
     <div id="modal-registro-progreso" class="modal-overlay hidden">
         <div class="modal-content large-modal">
             <div class="modal-header">
-                <h3 class="modal-title"><i class="fas fa-chart-line"></i> Registro de Progreso para Cobranza</h3>
+                <h3 class="modal-title"><i class="fas fa-chart-line"></i> Registro de Progreso para Cobranzas</h3>
                 <button class="modal-close" onclick="cerrarModalRegistroProgreso()">&times;</button>
             </div>
             <div class="modal-body">
-                <div class="progress-form">
+                <div class="progress-setup">
                     <div class="form-row">
                         <div class="form-group">
                             <label for="progreso-obra">Obra</label>
-                            <select id="progreso-obra" class="form-control" onchange="cargarProgresoObra()">
+                            <select id="progreso-obra" onchange="cargarProgresoObra()">
                                 <option value="">Seleccione una obra...</option>
                             </select>
                         </div>
-                    </div>
-                    
-                    <div id="info-obra-progreso" class="obra-info-card hidden">
-                        <h4>Información de la Obra</h4>
-                        <div class="info-grid">
-                            <div class="info-item">
-                                <strong>Empresa:</strong> <span id="progreso-empresa"></span>
-                            </div>
-                            <div class="info-item">
-                                <strong>Fecha Inicio:</strong> <span id="progreso-fecha-inicio"></span>
-                            </div>
-                            <div class="info-item">
-                                <strong>Tipo:</strong> <span id="progreso-tipo-obra"></span>
-                            </div>
+                        
+                        <div class="form-group">
+                            <label for="periodo-desde">Período Desde</label>
+                            <input type="date" id="periodo-desde">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="periodo-hasta">Período Hasta</label>
+                            <input type="date" id="periodo-hasta">
                         </div>
                     </div>
+                </div>
+                
+                <div id="info-obra-progreso" class="obra-info hidden">
+                    <h4>Información de la Obra</h4>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <strong>Empresa:</strong> <span id="progreso-empresa"></span>
+                        </div>
+                        <div class="info-item">
+                            <strong>Fecha Inicio:</strong> <span id="progreso-fecha-inicio"></span>
+                        </div>
+                        <div class="info-item">
+                            <strong>Tipo:</strong> <span id="progreso-tipo-obra"></span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="progreso-detallado" class="hidden">
+                    <h4>Progreso Detallado</h4>
                     
-                    <div id="progreso-detallado" class="progress-details hidden">
-                        <h4>Progreso por Tipo de Señal</h4>
-                        
-                        <!-- Progreso Alámbrico -->
+                    <div class="progress-sections">
+                        <!-- Alámbrico -->
                         <div class="progress-section">
                             <h5><i class="fas fa-plug"></i> Alámbrico</h5>
-                            <div class="progress-stats">
-                                <div class="stat-item">
-                                    <span class="stat-label">Progreso:</span>
-                                    <span class="stat-value" id="porcentaje-alambrico">0%</span>
+                            <div class="progress-info">
+                                <div class="progress-bar-container">
+                                    <div id="bar-alambrico" class="progress-bar"></div>
+                                    <span id="porcentaje-alambrico" class="progress-percentage">0%</span>
                                 </div>
-                                <div class="stat-item">
-                                    <span class="stat-label">Completadas:</span>
-                                    <span class="stat-value" id="alambrico-completadas">0</span>
+                                <div class="progress-stats">
+                                    <span>Completadas: <strong id="alambrico-completadas">0</strong></span>
+                                    <span>Total: <strong id="alambrico-total">0</strong></span>
+                                    <span>Último: <strong id="alambrico-ultimo">-</strong></span>
                                 </div>
-                                <div class="stat-item">
-                                    <span class="stat-label">Total:</span>
-                                    <span class="stat-value" id="alambrico-total">0</span>
-                                </div>
-                                <div class="stat-item">
-                                    <span class="stat-label">Último avance:</span>
-                                    <span class="stat-value" id="alambrico-ultimo">-</span>
-                                </div>
-                            </div>
-                            <div class="progress-bar-container">
-                                <div class="progress-bar" id="bar-alambrico" style="width: 0%"></div>
                             </div>
                             <div class="trabajos-realizados">
                                 <h6>Trabajos Realizados:</h6>
@@ -1337,29 +1441,19 @@
                             </div>
                         </div>
                         
-                        <!-- Progreso Inalámbrico -->
+                        <!-- Inalámbrico -->
                         <div class="progress-section">
                             <h5><i class="fas fa-wifi"></i> Inalámbrico</h5>
-                            <div class="progress-stats">
-                                <div class="stat-item">
-                                    <span class="stat-label">Progreso:</span>
-                                    <span class="stat-value" id="porcentaje-inalambrico">0%</span>
+                            <div class="progress-info">
+                                <div class="progress-bar-container">
+                                    <div id="bar-inalambrico" class="progress-bar"></div>
+                                    <span id="porcentaje-inalambrico" class="progress-percentage">0%</span>
                                 </div>
-                                <div class="stat-item">
-                                    <span class="stat-label">Completadas:</span>
-                                    <span class="stat-value" id="inalambrico-completadas">0</span>
+                                <div class="progress-stats">
+                                    <span>Completadas: <strong id="inalambrico-completadas">0</strong></span>
+                                    <span>Total: <strong id="inalambrico-total">0</strong></span>
+                                    <span>Último: <strong id="inalambrico-ultimo">-</strong></span>
                                 </div>
-                                <div class="stat-item">
-                                    <span class="stat-label">Total:</span>
-                                    <span class="stat-value" id="inalambrico-total">0</span>
-                                </div>
-                                <div class="stat-item">
-                                    <span class="stat-label">Último avance:</span>
-                                    <span class="stat-value" id="inalambrico-ultimo">-</span>
-                                </div>
-                            </div>
-                            <div class="progress-bar-container">
-                                <div class="progress-bar" id="bar-inalambrico" style="width: 0%"></div>
                             </div>
                             <div class="trabajos-realizados">
                                 <h6>Trabajos Realizados:</h6>
@@ -1367,29 +1461,19 @@
                             </div>
                         </div>
                         
-                        <!-- Progreso Fibra Óptica -->
+                        <!-- Fibra Óptica -->
                         <div class="progress-section">
                             <h5><i class="fas fa-network-wired"></i> Fibra Óptica</h5>
-                            <div class="progress-stats">
-                                <div class="stat-item">
-                                    <span class="stat-label">Progreso:</span>
-                                    <span class="stat-value" id="porcentaje-fo">0%</span>
+                            <div class="progress-info">
+                                <div class="progress-bar-container">
+                                    <div id="bar-fo" class="progress-bar"></div>
+                                    <span id="porcentaje-fo" class="progress-percentage">0%</span>
                                 </div>
-                                <div class="stat-item">
-                                    <span class="stat-label">Completadas:</span>
-                                    <span class="stat-value" id="fo-completadas">0</span>
+                                <div class="progress-stats">
+                                    <span>Completadas: <strong id="fo-completadas">0</strong></span>
+                                    <span>Total: <strong id="fo-total">0</strong></span>
+                                    <span>Último: <strong id="fo-ultimo">-</strong></span>
                                 </div>
-                                <div class="stat-item">
-                                    <span class="stat-label">Total:</span>
-                                    <span class="stat-value" id="fo-total">0</span>
-                                </div>
-                                <div class="stat-item">
-                                    <span class="stat-label">Último avance:</span>
-                                    <span class="stat-value" id="fo-ultimo">-</span>
-                                </div>
-                            </div>
-                            <div class="progress-bar-container">
-                                <div class="progress-bar" id="bar-fo" style="width: 0%"></div>
                             </div>
                             <div class="trabajos-realizados">
                                 <h6>Trabajos Realizados:</h6>
@@ -1397,34 +1481,23 @@
                             </div>
                         </div>
                     </div>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="periodo-desde">Período Desde</label>
-                            <input type="date" id="periodo-desde" class="form-control" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="periodo-hasta">Período Hasta</label>
-                            <input type="date" id="periodo-hasta" class="form-control" required>
-                        </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="descripcion-progreso">Descripción del Progreso</label>
-                        <textarea id="descripcion-progreso" class="form-control" rows="3" required></textarea>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="observaciones-progreso">Observaciones</label>
-                        <textarea id="observaciones-progreso" class="form-control" rows="2"></textarea>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="incluir-fotos-progreso">
-                            Incluir fotografías en el reporte
-                        </label>
-                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="descripcion-progreso">Descripción del Progreso</label>
+                    <textarea id="descripcion-progreso" rows="3" placeholder="Describa el progreso realizado en este período..."></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label for="observaciones-progreso">Observaciones</label>
+                    <textarea id="observaciones-progreso" rows="2" placeholder="Observaciones adicionales..."></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="incluir-fotos-progreso">
+                        Incluir fotografías en el reporte
+                    </label>
                 </div>
             </div>
             <div class="modal-footer">
@@ -1437,31 +1510,113 @@
     </div>
 
     <!-- Modal de Maquetación -->
-    <?!= include('partials/modal-maquetacion'); ?>
+    <?!= include('partials/modal-maquetacion') ?>
 
-    <!-- SCRIPTS CORE - CARGAR PRIMERO -->
-    <?!= include('js/core-notifications'); ?>
-    <?!= include('js/core-navigation'); ?>
-    <?!= include('js/core-utils'); ?>
-    
+    <!-- ============================================================================ -->
     <!-- SCRIPTS PRINCIPALES -->
-    <?!= include('js/main'); ?>
-    <?!= include('js/api'); ?>
-    
-    <!-- SCRIPTS DE MÓDULOS -->
-    <?!= include('js/usuarios'); ?>
-    <?!= include('js/transferencias'); ?>
-    <?!= include('js/planificacion'); ?>
-    <?!= include('js/mediciones'); ?>
-    <?!= include('js/documentacion'); ?>
-    <?!= include('js/cobranzas'); ?>
-    <?!= include('js/configuracion'); ?>
-    
-    <!-- SCRIPTS FALTANTES (PLACEHOLDER) -->
-    <?!= include('js/obras'); ?>
-    <?!= include('js/avances'); ?>
-    <?!= include('js/inventario'); ?>
-    <?!= include('js/reportes'); ?>
-    <?!= include('js/maquetacion'); ?>
+    <!-- ============================================================================ -->
+
+    <!-- Variables globales -->
+    <script>
+        // Variables de sesión
+        let usuarioActual = null;
+        let tokenSesion = null;
+        
+        // Variables de estado
+        let sistemaInicializado = false;
+    </script>
+
+    <!-- Incluir módulos core (CRÍTICOS) -->
+    <?!= include('js/core-notifications') ?>
+    <?!= include('js/core-navigation') ?>
+    <?!= include('js/core-utils') ?>
+
+    <!-- Incluir módulos principales -->
+    <?!= include('js/api') ?>
+    <?!= include('js/main') ?>
+
+    <!-- Incluir módulos específicos -->
+    <?!= include('js/usuarios') ?>
+    <?!= include('js/obras') ?>
+    <?!= include('js/avances') ?>
+    <?!= include('js/inventario') ?>
+    <?!= include('js/transferencias') ?>
+    <?!= include('js/planificacion') ?>
+    <?!= include('js/mediciones') ?>
+    <?!= include('js/documentacion') ?>
+    <?!= include('js/cobranzas') ?>
+    <?!= include('js/reportes') ?>
+    <?!= include('js/configuracion') ?>
+    <?!= include('js/maquetacion') ?>
+
+    <!-- Script de inicialización final -->
+    <script>
+        // Inicialización del sistema cuando el DOM esté listo
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('[BDPA] Inicializando sistema...');
+            
+            // Verificar si hay sesión guardada
+            const savedToken = localStorage.getItem('bdpa_session_token');
+            const savedUser = localStorage.getItem('bdpa_user_data');
+            
+            if (savedToken && savedUser) {
+                try {
+                    tokenSesion = savedToken;
+                    usuarioActual = JSON.parse(savedUser);
+                    
+                    // Verificar sesión con el servidor
+                    if (typeof apiVerificarSesion === 'function') {
+                        apiVerificarSesion().then(response => {
+                            if (response.success) {
+                                mostrarSeccion('dashboard');
+                                actualizarInfoUsuario();
+                            } else {
+                                mostrarSeccion('login');
+                            }
+                        }).catch(() => {
+                            mostrarSeccion('login');
+                        });
+                    } else {
+                        mostrarSeccion('dashboard');
+                        actualizarInfoUsuario();
+                    }
+                } catch (error) {
+                    console.error('[BDPA] Error recuperando sesión:', error);
+                    mostrarSeccion('login');
+                }
+            } else {
+                mostrarSeccion('login');
+            }
+            
+            sistemaInicializado = true;
+            console.log('[BDPA] Sistema inicializado correctamente');
+        });
+        
+        // Función para actualizar información del usuario en la interfaz
+        function actualizarInfoUsuario() {
+            if (usuarioActual) {
+                const currentUserElement = document.getElementById('current-user');
+                const currentRoleElement = document.getElementById('current-role');
+                
+                if (currentUserElement) {
+                    currentUserElement.textContent = `${usuarioActual.nombre} ${usuarioActual.apellido}`;
+                }
+                
+                if (currentRoleElement) {
+                    currentRoleElement.textContent = usuarioActual.rol;
+                }
+                
+                // Ocultar elementos según rol
+                const adminElements = document.querySelectorAll('.admin-only');
+                adminElements.forEach(element => {
+                    if (usuarioActual.rol !== 'Admin') {
+                        element.style.display = 'none';
+                    }
+                });
+            }
+        }
+        
+        console.log('[BDPA] index.html cargado completamente');
+    </script>
 </body>
 </html>
