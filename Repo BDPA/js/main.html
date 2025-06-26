@@ -5,6 +5,15 @@ let tokenSesion = null;
 let obrasData = [];
 let materialesData = [];
 let categoriasData = [];
+let shaftsPorTorrePiso = [];
+let dispositivosPorShaft = [];
+let maquetacionModificada = false;
+let maquetacionObraId = null;
+let avancesCache = new Map();
+let tiposAvanceCache = new Map();
+let transferenciasData = [];
+let documentosData = [];
+let configuracionActual = {};
 
 function mostrarNotificacion(mensaje, tipo = 'info') {
     const el = document.createElement('div');
@@ -12,6 +21,24 @@ function mostrarNotificacion(mensaje, tipo = 'info') {
     el.textContent = mensaje;
     document.body.appendChild(el);
     setTimeout(() => el.remove(), 4000);
+}
+
+function mostrarLoader(loaderId) {
+    const loader = document.getElementById(loaderId);
+    if (loader) loader.classList.remove('hidden');
+}
+
+function ocultarLoader(loaderId) {
+    const loader = document.getElementById(loaderId);
+    if (loader) loader.classList.add('hidden');
+}
+
+function marcarMaquetacionComoModificada() {
+    window.maquetacionModificada = true;
+    const modalTitle = document.querySelector('#modal-maquetacion .modal-title');
+    if (modalTitle && !modalTitle.textContent.includes('*')) {
+        modalTitle.textContent += ' *';
+    }
 }
 
 function volverAlMenu() {
