@@ -2,24 +2,9 @@
 // ============================================================================
 // BDPA - js/maquetacion.html - Sistema Completo de Maquetación de Obras
 // ============================================================================
-// Variables globales para maquetación (compatibles con el código existente)
-if (typeof window.shaftsPorTorrePiso === 'undefined') {
-    window.shaftsPorTorrePiso = [];
-}
-if (typeof window.dispositivosPorShaft === 'undefined') {
-    window.dispositivosPorShaft = [];
-}
-if (typeof window.maquetacionModificada === 'undefined') {
-    window.maquetacionModificada = false;
-}
-if (typeof window.maquetacionObraId === 'undefined') {
-    window.maquetacionObraId = null;
-}
-
 // Variables adicionales específicas para maquetación
 let configuracionPisosPorTorre = {};
 let espaciosComunesPorObra = [];
-
 // ============================================================================
 // FUNCIONES DE NAVEGACIÓN Y CONTROL PRINCIPAL
 // ============================================================================
@@ -79,16 +64,6 @@ function toggleComponente(componenteId, mostrar) {
     }
 }
 
-// Marcar que la maquetación ha sido modificada
-function marcarMaquetacionComoModificada() {
-    window.maquetacionModificada = true;
-    
-    // Agregar indicador visual en el título del modal
-    const modalTitle = document.querySelector('#modal-maquetacion .modal-title');
-    if (modalTitle && !modalTitle.textContent.includes('*')) {
-        modalTitle.textContent += ' *';
-    }
-}
 
 // ============================================================================
 // FUNCIONES DE INICIALIZACIÓN POR PESTAÑA
