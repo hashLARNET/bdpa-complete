@@ -2,11 +2,10 @@
 //============================================================================
 //BDPA - js/inventario.html - PARTE 1: Funciones principales de inventario
 //============================================================================
-//
 // Variables globales para inventario
-let materialesData = [];
-let categoriasData = [];
-let movimientosData = [];
+// Estas colecciones se definen en js/main.html para evitar
+// declaraciones duplicadas al cargar los módulos dinámicamente.
+
 
 // Función para cargar materiales con filtros opcionales
 async function cargarMateriales(filtros = {}) {
