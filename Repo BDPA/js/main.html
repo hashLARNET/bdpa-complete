@@ -15,39 +15,6 @@
     let shaftsPorTorrePiso = [];
     let dispositivosPorShaft = [];
 
-    // Función principal para llamar a la API
-    async function callAPI(accion, datos = {}) {
-        try {
-            // Mostrar loader si existe
-            const loaderElement = document.getElementById('login-loader') || 
-                                 document.getElementById('obras-loader') || 
-                                 document.getElementById('usuarios-loader');
-            if (loaderElement) loaderElement.classList.remove('hidden');
-            
-            const response = await new Promise((resolve, reject) => {
-                google.script.run
-                    .withSuccessHandler(resolve)
-                    .withFailureHandler(reject)
-                    .procesarAPI(accion, datos, tokenSesion);
-            });
-            
-            // Ocultar loader
-            if (loaderElement) loaderElement.classList.add('hidden');
-            
-            return response;
-        } catch (error) {
-            // Ocultar loader y mostrar error
-            const loaderElement = document.getElementById('login-loader') || 
-                                 document.getElementById('obras-loader') || 
-                                 document.getElementById('usuarios-loader');
-            if (loaderElement) loaderElement.classList.add('hidden');
-            
-            console.error("Error en API:", error);
-            mostrarNotificacion("Error de conexión. Intente nuevamente.", "error");
-            throw error;
-        }
-    }
-
     // Función para mostrar notificaciones
     function mostrarNotificacion(mensaje, tipo = 'info') {
         // Crear elemento de notificación
