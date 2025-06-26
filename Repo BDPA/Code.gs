@@ -3958,11 +3958,3 @@ function include(filename) {
     return `<!-- Error cargando ${filename}: ${error.message} -->`;
   }
 }
-
-/**
- * Función principal de API para el frontend
- * Esta función maneja todas las llamadas desde JavaScript del cliente
- */
-function callAPI(accion, datos, token) {
-  return procesarAPI(accion, datos, token);
-}
