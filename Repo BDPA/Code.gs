@@ -603,11 +603,11 @@ function obtenerObras(datos = {}) {
     
     let obras = obtenerDatosHoja(CONFIG.SHEETS.OBRAS);
     
-    if (!obras) {
-      // Inicializar hoja si no existe
-      inicializarHojaObras();
-      obras = [];
-    }
+    if (!obras) {␊
+      // Inicializar hoja si no existe␊
+      inicializarHoja(CONFIG.SHEETS.OBRAS);
+      obras = [];␊
+    }␊
     
     // Aplicar búsqueda
     if (busqueda) {
@@ -1693,6 +1693,37 @@ function guardarMaterial(datos) {
 }
 
 /**
+ * Eliminar material del inventario (marcar como inactivo)
+ * @param {string} id - ID del material
+ * @returns {Object} Resultado de la operación
+ */
+function eliminarMaterial(id) {
+  try {
+    if (!id) {
+      return { success: false, message: 'ID de material requerido' };
+    }
+
+    const materiales = obtenerDatosHoja(CONFIG.SHEETS.MATERIALES) || [];
+    const index = materiales.findIndex(m => m.id === id);
+
+    if (index === -1) {
+      return { success: false, message: 'Material no encontrado' };
+    }
+
+    materiales[index].activo = false;
+    materiales[index].fechaModificacion = new Date().toISOString();
+
+    guardarDatosHoja(CONFIG.SHEETS.MATERIALES, materiales);
+    logAction('Material Eliminado', { materialId: id });
+
+    return { success: true, message: 'Material eliminado correctamente' };
+
+  } catch (error) {
+    logError('eliminarMaterial', error, { id });
+    return { success: false, message: 'Error al eliminar material' };
+  }
+}
+/**
  * Determinar estado de stock de un material
  * @param {number} stockActual - Stock actual
  * @param {number} stockMinimo - Stock mínimo
@@ -1803,6 +1834,71 @@ function registrarMovimientoInventario(datos) {
       success: false,
       message: 'Error al registrar el movimiento'
     };
+  }
+}
+
+/**
+ * Registrar múltiples movimientos de materiales
+ * @param {Array} lista - Lista de materiales
+ * @param {string} obraId - ID de la obra
+ * @param {string} avanceId - ID del avance relacionado
+ * @param {string} tipoMovimiento - Tipo de movimiento (entrada/salida)
+ */
+function registrarMovimientosMateriales(lista, obraId, avanceId, tipoMovimiento) {
+  if (!Array.isArray(lista)) return;
+  lista.forEach(item => {
+    try {
+      registrarMovimientoInventario({
+        materialId: item.materialId || item.id,
+        tipoMovimiento,
+        cantidad: item.cantidad || 0,
+        motivo: item.motivo || '',
+        observaciones: item.observaciones || '',
+        obraId,
+        avanceId
+      });
+    } catch (e) {
+      logError('registrarMovimientosMateriales', e, { item, obraId, avanceId });
+    }
+  });
+}
+
+/**
+ * Registrar entrada de material
+ */
+function registrarEntradaMaterial(datos) {
+  datos.tipoMovimiento = 'entrada';
+  return registrarMovimientoInventario(datos);
+}
+
+/**
+ * Registrar salida de material
+ */
+function registrarSalidaMaterial(datos) {
+  datos.tipoMovimiento = 'salida';
+  return registrarMovimientoInventario(datos);
+}
+
+/**
+ * Obtener movimientos de inventario con filtros opcionales
+ */
+function obtenerMovimientosInventario(datos = {}) {
+  try {
+    const { materialId, tipoMovimiento, obraId } = datos;
+    let movimientos = obtenerDatosHoja(CONFIG.SHEETS.MOVIMIENTOS) || [];
+    if (materialId) {
+      movimientos = movimientos.filter(m => m.materialId === materialId);
+    }
+    if (tipoMovimiento) {
+      movimientos = movimientos.filter(m => m.tipoMovimiento === tipoMovimiento);
+    }
+    if (obraId) {
+      movimientos = movimientos.filter(m => m.obraId === obraId);
+    }
+    return { success: true, datos: movimientos };
+  } catch (error) {
+    logError('obtenerMovimientosInventario', error, datos);
+    return { success: false, message: 'Error al obtener movimientos' };
   }
 }
 // ============================================================================
@@ -3460,14 +3556,28 @@ function generarExcelMediciones(datos) {
       url: `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${base64}`,
       fileId: ss.getId()
     };
-    
-  } catch (error) {
+ } catch (error) {
     console.error('Error generando Excel:', error);
     return {
       success: false,
       message: error.message
     };
   }
+}
+
+// Configurar hoja para mediciones de fibra óptica
+function configurarHojaFO(sheet, mediciones) {
+  sheet.getRange('A1').setValue('MEDICIONES FO');
+  sheet.getRange('A1:E1').merge();
+  const headers = [['Piso', 'N° Depto', 'RX (dBm)', 'TX (dBm)', 'Pérdida (dB)']];
+  sheet.getRange('A3:E3').setValues(headers);
+
+  let row = 4;
+  Object.values(mediciones).forEach(m => {
+    const data = [m.piso, m.numeroDepto, m.rx || '', m.tx || '', m.loss || ''];
+    sheet.getRange(row, 1, 1, 5).setValues([data]);
+    row++;
+  });
 }
 
 // Configurar hoja para mediciones coaxiales
@@ -3544,6 +3654,19 @@ function aplicarFormatoMediciones(sheet) {
   for (let i = 3; i <= 10; i++) {
     sheet.setColumnWidth(i, 100);
   }
+}
+
+// Resaltar valores fuera de rango en mediciones coaxiales
+function aplicarFormatoCondicional(sheet, row) {
+  const range = sheet.getRange(row, 3, 1, 8);
+  const rules = sheet.getConditionalFormatRules();
+  const rule = SpreadsheetApp.newConditionalFormatRule()
+    .whenNumberGreaterThan(100)
+    .setBackground('#f8d7da')
+    .setRanges([range])
+    .build();
+  rules.push(rule);
+  sheet.setConditionalFormatRules(rules);
 }
 // ============================================================================
 // FUNCIONES DE DOCUMENTACIÓN
@@ -3887,6 +4010,49 @@ function eliminarDocumento(datos) {
  * Función principal exportada que debe ser llamada desde el frontend
  * Esta función reemplaza a procesarAPI para evitar conflictos
  */
+// ============================================================================
+// FUNCIONES PENDIENTES (STUBS)
+// ============================================================================
+function obtenerTorresObra() {
+  return { success: false, message: 'obtenerTorresObra no implementado' };
+}
+
+function obtenerPisosTorre() {
+  return { success: false, message: 'obtenerPisosTorre no implementado' };
+}
+
+function obtenerDepartamentosPiso() {
+  return { success: false, message: 'obtenerDepartamentosPiso no implementado' };
+}
+
+function obtenerTiposAvance() {
+  return { success: false, message: 'obtenerTiposAvance no implementado' };
+}
+
+function obtenerEspaciosComunes() {
+  return { success: false, message: 'obtenerEspaciosComunes no implementado' };
+}
+
+function obtenerMaterialesDisponiblesObra() {
+  return { success: false, message: 'obtenerMaterialesDisponiblesObra no implementado' };
+}
+
+function registrarTransferencia() {
+  return { success: false, message: 'registrarTransferencia no implementado' };
+}
+
+function obtenerHistorialCobranzas() {
+  return { success: false, message: 'obtenerHistorialCobranzas no implementado' };
+}
+
+function exportarReporteAvances() {
+  return { success: false, message: 'exportarReporteAvances no implementado' };
+}
+
+function exportarReporteInventario() {
+  return { success: false, message: 'exportarReporteInventario no implementado' };
+}
+
 function callAPI(accion, datos = {}, token = null) {
   return procesarAPI(accion, datos, token);
 }
