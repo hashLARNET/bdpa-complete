@@ -205,7 +205,7 @@ async function guardarRegistroProgreso() {
  */
 async function cargarRegistrosProgreso() {
     try {
-        mostrarLoader(true);
+        mostrarLoader('progreso-loader');
         
         const filtros = obtenerFiltrosProgreso();
         const response = await callAPI('obtenerRegistrosProgreso', filtros);
@@ -221,7 +221,7 @@ async function cargarRegistrosProgreso() {
         console.error('[PROGRESO] Error cargando registros:', error);
         mostrarNotificacion('Error al cargar registros de progreso', 'error');
     } finally {
-        mostrarLoader(false);
+        ocultarLoader('progreso-loader');
     }
 }
 
@@ -344,12 +344,6 @@ function getEstadoBadgeClass(estado) {
     return clases[estado] || 'secondary';
 }
 
-function mostrarLoader(mostrar) {
-    const loader = document.getElementById('progreso-loader');
-    if (loader) {
-        loader.classList.toggle('hidden', !mostrar);
-    }
-}
 
 // ============================================================================
 // INICIALIZACIÓN
