@@ -10,17 +10,7 @@
     <?!= HtmlService.createHtmlOutputFromFile('css/modal').getContent(); ?>
     
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <script>
-      // Función para comunicarse con el servidor Google Apps Script
-      function callAPI(action, data = {}) {
-        return new Promise((resolve, reject) => {
-          google.script.run
-            .withSuccessHandler(resolve)
-            .withFailureHandler(reject)
-            .callAPI(action, data, localStorage.getItem('bdpa_token'));
-        });
-      }
-    </script>
+
 </head>
 <body>
     <!-- Contenedor de Login -->
