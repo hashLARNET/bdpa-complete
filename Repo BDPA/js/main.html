@@ -7,6 +7,8 @@
     let categoriasData = [];
     let usuariosData = [];
     let transferenciasItems = [];
+    // Materiales utilizados en el registro de avances
+    let materialesUtilizados = [];
     let paginaActual = 1;
 
     // Variables específicas para maquetación
@@ -4077,6 +4079,77 @@ function generarVistaPrevia() {
     mostrarNotificacion('Vista previa generada correctamente', 'success');
 }
 
+    // =====================================================================
+    // FUNCIONES AGREGADAS PARA COMPATIBILIDAD CON index.html
+    // =====================================================================
+
+    // Agregar material utilizado al avance actual
+    function agregarMaterial() {
+        if (materialesData.length === 0) {
+            mostrarNotificacion('No hay materiales cargados', 'error');
+            return;
+        }
+
+        const materialId = prompt('ID del material utilizado:');
+        if (!materialId) return;
+
+        const material = materialesData.find(m => m.id == materialId);
+        if (!material) {
+            mostrarNotificacion('Material no encontrado', 'error');
+            return;
+        }
+
+        const cantidad = parseFloat(prompt('Cantidad utilizada:', '1'));
+        if (isNaN(cantidad) || cantidad <= 0) {
+            mostrarNotificacion('Cantidad inválida', 'error');
+            return;
+        }
+
+        materialesUtilizados.push({ materialId: material.id, cantidad });
+
+        const list = document.getElementById('materiales-seleccionados');
+        if (list) {
+            const item = document.createElement('div');
+            item.textContent = `${material.codigo} - ${material.nombre} (${cantidad} ${material.unidad})`;
+            list.appendChild(item);
+        }
+    }
+
+    // Compatibilidad con botón "Guardar Avance" de index.html
+    function guardarAvance() {
+        registrarAvance();
+    }
+
+    // Compatibilidad con botón "Generar EDT" de index.html
+    function generarEDT() {
+        cargarEDTObra();
+    }
+
+    // Compatibilidad con botón "Guardar Medición" de index.html
+    function guardarMedicion() {
+        guardarMediciones();
+    }
+
+    // Vista previa básica del reporte de progreso
+    function previsualizarReporteProgreso() {
+        const obra = document.getElementById('progreso-obra');
+        const desde = document.getElementById('periodo-desde').value;
+        const hasta = document.getElementById('periodo-hasta').value;
+        const desc = document.getElementById('descripcion-progreso').value;
+        const obs = document.getElementById('observaciones-progreso').value;
+
+        const html = `
+            <h2>Reporte de Progreso</h2>
+            <p><strong>Obra:</strong> ${obra ? obra.options[obra.selectedIndex].text : ''}</p>
+            <p><strong>Período:</strong> ${desde} - ${hasta}</p>
+            <p><strong>Descripción:</strong> ${desc}</p>
+            <p><strong>Observaciones:</strong> ${obs}</p>
+        `;
+
+        const win = window.open('', '_blank');
+        win.document.write(html);
+        win.document.close();
+    }
 // Funciones de utilidad final
 function limpiarFormularios() {
     // Limpiar formularios principales cuando sea necesario
