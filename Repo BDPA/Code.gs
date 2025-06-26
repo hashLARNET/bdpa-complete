@@ -4011,50 +4011,271 @@ function eliminarDocumento(datos) {
  * Esta función reemplaza a procesarAPI para evitar conflictos
  */
 // ============================================================================
-// FUNCIONES PENDIENTES (STUBS)
+// FUNCIONES EXTRAS DE MANEJO DE DATOS
 // ============================================================================
-function obtenerTorresObra() {
-  return { success: false, message: 'obtenerTorresObra no implementado' };
+function obtenerTorresObra(obraId) {
+  try {
+    if (!obraId) {
+      return { success: false, message: 'ID de obra requerido' };
+    }
+
+    const maquetacion = obtenerMaquetacion(obraId);
+    if (!maquetacion.success) return maquetacion;
+
+    const torres = maquetacion.datos.configuracion?.infraestructura?.torres || [];
+    return { success: true, datos: torres };
+  } catch (error) {
+    logError('obtenerTorresObra', error, { obraId });
+    return { success: false, message: 'Error al obtener torres' };
+  }
 }
 
-function obtenerPisosTorre() {
-  return { success: false, message: 'obtenerPisosTorre no implementado' };
+function obtenerPisosTorre(torreId) {
+  try {
+    if (!torreId) {
+      return { success: false, message: 'ID de torre requerido' };
+    }
+
+    const maquetaciones = obtenerDatosHoja('Maquetaciones') || [];
+    for (const m of maquetaciones) {
+      const torres = m.configuracion?.infraestructura?.torres || [];
+      const torre = torres.find(t => t.id === torreId);
+      if (torre) {
+        return { success: true, datos: torre.pisos || [] };
+      }
+    }
+
+    return { success: false, message: 'Torre no encontrada' };
+  } catch (error) {
+    logError('obtenerPisosTorre', error, { torreId });
+    return { success: false, message: 'Error al obtener pisos' };
+  }
 }
 
-function obtenerDepartamentosPiso() {
-  return { success: false, message: 'obtenerDepartamentosPiso no implementado' };
+function obtenerDepartamentosPiso(pisoId) {
+  try {
+    if (!pisoId) {
+      return { success: false, message: 'ID de piso requerido' };
+    }
+
+    const maquetaciones = obtenerDatosHoja('Maquetaciones') || [];
+    for (const m of maquetaciones) {
+      const torres = m.configuracion?.infraestructura?.torres || [];
+      for (const torre of torres) {
+        const piso = (torre.pisos || []).find(p => p.id === pisoId);
+        if (piso) {
+          return { success: true, datos: piso.departamentos || [] };
+        }
+      }
+    }
+
+    return { success: false, message: 'Piso no encontrado' };
+  } catch (error) {
+    logError('obtenerDepartamentosPiso', error, { pisoId });
+    return { success: false, message: 'Error al obtener departamentos' };
+  }
 }
 
-function obtenerTiposAvance() {
-  return { success: false, message: 'obtenerTiposAvance no implementado' };
+function obtenerTiposAvance(datos = {}) {
+  try {
+    const { filtros = {} } = datos;
+    let tipos = obtenerCategorias().datos || [];
+    tipos = tipos.filter(t => t.tipo === 'avance');
+    if (filtros.nombre) {
+      const search = filtros.nombre.toLowerCase();
+      tipos = tipos.filter(t => t.nombre.toLowerCase().includes(search));
+    }
+    return { success: true, datos: tipos };
+  } catch (error) {
+    logError('obtenerTiposAvance', error, datos);
+    return { success: false, message: 'Error al obtener tipos de avance' };
+  }
 }
 
-function obtenerEspaciosComunes() {
-  return { success: false, message: 'obtenerEspaciosComunes no implementado' };
+function obtenerEspaciosComunes(obraId) {
+  try {
+    if (!obraId) {
+      return { success: false, message: 'ID de obra requerido' };
+    }
+
+    const maquetacion = obtenerMaquetacion(obraId);
+    if (!maquetacion.success) return maquetacion;
+
+    const espacios = maquetacion.datos.configuracion?.infraestructura?.espaciosComunes || [];
+    return { success: true, datos: espacios };
+  } catch (error) {
+    logError('obtenerEspaciosComunes', error, { obraId });
+    return { success: false, message: 'Error al obtener espacios comunes' };
+  }
 }
 
-function obtenerMaterialesDisponiblesObra() {
-  return { success: false, message: 'obtenerMaterialesDisponiblesObra no implementado' };
+function obtenerMaterialesDisponiblesObra(obraId) {
+  try {
+    if (!obraId) {
+      return { success: false, message: 'ID de obra requerido' };
+    }
+
+    const materiales = obtenerDatosHoja(CONFIG.SHEETS.MATERIALES) || [];
+    const movimientos = obtenerDatosHoja(CONFIG.SHEETS.MOVIMIENTOS) || [];
+
+    const stockPorMaterial = {};
+    movimientos
+      .filter(m => m.obraId === obraId)
+      .forEach(m => {
+        const cant = parseFloat(m.cantidad) || 0;
+        stockPorMaterial[m.materialId] = stockPorMaterial[m.materialId] || 0;
+        stockPorMaterial[m.materialId] += m.tipoMovimiento === 'entrada' ? cant : -cant;
+      });
+
+    const disponibles = materiales
+      .map(mat => ({
+        id: mat.id,
+        codigo: mat.codigo,
+        nombre: mat.nombre,
+        unidad: mat.unidad,
+        stockDisponible: stockPorMaterial[mat.id] || 0
+      }))
+      .filter(m => m.stockDisponible > 0);
+
+    return { success: true, datos: disponibles };
+  } catch (error) {
+    logError('obtenerMaterialesDisponiblesObra', error, { obraId });
+    return { success: false, message: 'Error al obtener materiales disponibles' };
+  }
 }
 
-function registrarTransferencia() {
-  return { success: false, message: 'registrarTransferencia no implementado' };
+function registrarTransferencia(datos) {
+  try {
+    const {
+      obraOrigenId,
+      obraDestinoId,
+      materialId,
+      cantidad,
+      responsable,
+      motivo,
+      fecha = new Date().toISOString(),
+      estado = 'Pendiente'
+    } = datos;
+
+    if (!obraOrigenId || !obraDestinoId || !materialId || !cantidad) {
+      return { success: false, message: 'Datos de transferencia incompletos' };
+    }
+
+    registrarMovimientoInventario({
+      materialId,
+      tipoMovimiento: 'salida',
+      cantidad,
+      obraId: obraOrigenId,
+      motivo: `Transferencia a ${obraDestinoId}`
+    });
+
+    registrarMovimientoInventario({
+      materialId,
+      tipoMovimiento: 'entrada',
+      cantidad,
+      obraId: obraDestinoId,
+      motivo: `Transferencia desde ${obraOrigenId}`
+    });
+
+    const transferencias = obtenerDatosHoja(CONFIG.SHEETS.TRANSFERENCIAS) || [];
+    const nuevoId = generarId();
+
+    transferencias.push({
+      id: nuevoId,
+      obraOrigenId,
+      obraDestinoId,
+      materialId,
+      cantidad: parseFloat(cantidad),
+      responsable: responsable || '',
+      motivo: motivo || '',
+      fecha,
+      estado,
+      usuarioRegistro: datos.usuarioActual?.id || 'Sistema'
+    });
+
+    guardarDatosHoja(CONFIG.SHEETS.TRANSFERENCIAS, transferencias);
+
+    return { success: true, message: 'Transferencia registrada', id: nuevoId };
+  } catch (error) {
+    logError('registrarTransferencia', error, datos);
+    return { success: false, message: 'Error al registrar transferencia' };
+  }
 }
 
-function obtenerHistorialCobranzas() {
-  return { success: false, message: 'obtenerHistorialCobranzas no implementado' };
+function obtenerHistorialCobranzas(obraId) {
+  try {
+    if (!obraId) {
+      return { success: false, message: 'ID de obra requerido' };
+    }
+
+    const cobranzas = obtenerDatosHoja(CONFIG.SHEETS.COBRANZAS) || [];
+    const historial = cobranzas
+      .filter(c => c.obraId === obraId)
+      .sort((a, b) => new Date(b.fechaFactura) - new Date(a.fechaFactura));
+
+    return { success: true, datos: historial };
+  } catch (error) {
+    logError('obtenerHistorialCobranzas', error, { obraId });
+    return { success: false, message: 'Error al obtener historial de cobranzas' };
+  }
 }
 
-function exportarReporteAvances() {
-  return { success: false, message: 'exportarReporteAvances no implementado' };
+function exportarReporteAvances(datos) {
+  try {
+    const { filtros = {}, formato = 'excel' } = datos || {};
+    const reporte = generarReporteAvances(filtros);
+    if (!reporte.success) return reporte;
+
+    const avances = reporte.datos.avances || [];
+    const ss = SpreadsheetApp.create('Reporte_Avances');
+    const sheet = ss.getActiveSheet();
+
+    if (avances.length > 0) {
+      const headers = Object.keys(avances[0]);
+      sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+      const values = avances.map(a => headers.map(h => a[h]));
+      sheet.getRange(2, 1, values.length, headers.length).setValues(values);
+    }
+
+    const file = DriveApp.getFileById(ss.getId());
+    const blob = file.getBlob();
+    const base64 = Utilities.base64Encode(blob.getBytes());
+    const url = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${base64}`;
+
+    return { success: true, urlArchivo: url, fileId: ss.getId() };
+  } catch (error) {
+    logError('exportarReporteAvances', error, datos);
+    return { success: false, message: 'Error al exportar reporte de avances' };
+  }
 }
 
-function exportarReporteInventario() {
-  return { success: false, message: 'exportarReporteInventario no implementado' };
-}
+function exportarReporteInventario(datos) {
+  try {
+    const { filtros = {}, formato = 'excel' } = datos || {};
+    const reporte = generarReporteInventario(filtros);
+    if (!reporte.success) return reporte;
 
-function callAPI(accion, datos = {}, token = null) {
-  return procesarAPI(accion, datos, token);
+    const materiales = reporte.datos.materiales || [];
+    const ss = SpreadsheetApp.create('Reporte_Inventario');
+    const sheet = ss.getActiveSheet();
+
+    if (materiales.length > 0) {
+      const headers = Object.keys(materiales[0]);
+      sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+      const values = materiales.map(m => headers.map(h => m[h]));
+      sheet.getRange(2, 1, values.length, headers.length).setValues(values);
+    }
+
+    const file = DriveApp.getFileById(ss.getId());
+    const blob = file.getBlob();
+    const base64 = Utilities.base64Encode(blob.getBytes());
+    const url = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${base64}`;
+
+    return { success: true, urlArchivo: url, fileId: ss.getId() };
+  } catch (error) {
+    logError('exportarReporteInventario', error, datos);
+    return { success: false, message: 'Error al exportar reporte de inventario' };
+  }
 }
 // ============================================================================
 // FUNCIÓN PARA WEB APP - OBLIGATORIA
