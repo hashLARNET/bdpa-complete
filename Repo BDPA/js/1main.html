@@ -1,0 +1,294 @@
+<script>
+// BDPA - Archivo principal de funciones globales
+let usuarioActual = null;
+let tokenSesion = null;
+let obrasData = [];
+let materialesData = [];
+let categoriasData = [];
+
+function mostrarNotificacion(mensaje, tipo = 'info') {
+    const el = document.createElement('div');
+    el.className = `notification ${tipo}`;
+    el.textContent = mensaje;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 4000);
+}
+
+function volverAlMenu() {
+    document.querySelectorAll('.container').forEach(c => c.classList.add('hidden'));
+    document.getElementById('main-menu-container').classList.remove('hidden');
+}
+
+function mostrarSeccion(seccion) {
+    document.querySelectorAll('.container').forEach(c => c.classList.add('hidden'));
+    const cont = document.getElementById(seccion);
+    if (cont) cont.classList.remove('hidden');
+
+    switch (seccion) {
+        case 'registrar-avance':
+        case 'consultar-avances':
+        case 'gestion-obras':
+        case 'documentacion':
+        case 'planificacion-metas':
+        case 'cobranzas':
+            if (typeof cargarObras === 'function') cargarObras();
+            break;
+        case 'gestion-inventario':
+            if (typeof cargarCategorias === 'function') cargarCategorias();
+            if (typeof cargarMateriales === 'function') cargarMateriales();
+            break;
+        case 'gestion-usuarios':
+            if (typeof cargarUsuarios === 'function') cargarUsuarios();
+            break;
+        case 'reportes':
+            if (typeof cargarObras === 'function') cargarObras();
+            if (typeof cargarCategorias === 'function') cargarCategorias();
+            break;
+        case 'transferencias':
+            if (typeof cargarObras === 'function') cargarObras();
+            if (typeof cargarMateriales === 'function') cargarMateriales();
+            break;
+    }
+}
+
+function mostrarTabInventario(tab) {
+    document.querySelectorAll('#gestion-inventario .tab-content').forEach(c => c.classList.add('hidden'));
+    document.querySelectorAll('#gestion-inventario .nav-link').forEach(l => l.classList.remove('active'));
+    const cont = document.getElementById(`inventario-${tab}`);
+    if (cont) cont.classList.remove('hidden');
+    const link = document.querySelector(`#gestion-inventario .nav-link[onclick="mostrarTabInventario('${tab}')"]`);
+    if (link) link.classList.add('active');
+
+    if (tab === 'consultar' || tab === 'entradas' || tab === 'salidas') {
+        if (typeof cargarMateriales === 'function') cargarMateriales();
+    } else if (tab === 'movimientos') {
+        if (typeof cargarMovimientosInventario === 'function') cargarMovimientosInventario();
+    }
+}
+
+async function iniciarSesion() {
+    const username = document.getElementById('username').value;
+    const password = document.getElementById('password').value;
+    if (!username || !password) {
+        mostrarNotificacion('Por favor, complete todos los campos.', 'error');
+        return;
+    }
+    try {
+        const response = await callAPI('iniciarSesion', { username, password });
+        if (!response.success) {
+            mostrarNotificacion(response.message, 'error');
+            return;
+        }
+        usuarioActual = response.usuario;
+        tokenSesion = response.token;
+        document.getElementById('current-user').textContent = usuarioActual.nombre + ' ' + usuarioActual.apellido;
+        document.getElementById('current-role').textContent = usuarioActual.rol;
+        aplicarControlAcceso();
+        document.getElementById('login-container').classList.add('hidden');
+        document.getElementById('main-menu-container').classList.remove('hidden');
+        if (typeof cargarObras === 'function') await cargarObras();
+        if (typeof cargarCategorias === 'function') await cargarCategorias();
+        if (usuarioActual.requiereCambioContrasena) {
+            mostrarModalContrasena();
+        }
+        mostrarNotificacion('Sesión iniciada correctamente.', 'success');
+    } catch (e) {
+        mostrarNotificacion('Error al iniciar sesión.', 'error');
+    }
+}
+
+function aplicarControlAcceso() {
+    if (!usuarioActual) return;
+    const items = [
+        { id: 'registrar-avance-btn', roles: ['Admin', 'Supervisor', 'Técnico'] },
+        { id: 'gestion-obras-btn', roles: ['Admin', 'Supervisor'] },
+        { id: 'gestion-inventario-btn', roles: ['Admin', 'Supervisor'] },
+        { id: 'gestion-usuarios-btn', roles: ['Admin'] },
+        { id: 'configuracion-btn', roles: ['Admin'] },
+        { id: 'planificacion-metas-btn', roles: ['Admin', 'Supervisor'] },
+        { id: 'cobranzas-btn', roles: ['Admin', 'Supervisor'] },
+        { id: 'transferencias-btn', roles: ['Admin', 'Supervisor'] }
+    ];
+    items.forEach(it => {
+        const el = document.getElementById(it.id);
+        if (!el) return;
+        el.style.display = it.roles.includes(usuarioActual.rol) ? 'flex' : 'none';
+    });
+}
+
+async function cerrarSesion() {
+    try {
+        await callAPI('cerrarSesion');
+        usuarioActual = null;
+        tokenSesion = null;
+        document.getElementById('main-menu-container').classList.add('hidden');
+        document.getElementById('login-container').classList.remove('hidden');
+        document.getElementById('username').value = '';
+        document.getElementById('password').value = '';
+        document.querySelectorAll('.container:not(#login-container)').forEach(s => s.classList.add('hidden'));
+        mostrarNotificacion('Sesión cerrada correctamente.', 'success');
+    } catch (e) {
+        mostrarNotificacion('Error al cerrar sesión.', 'error');
+    }
+}
+
+async function cambiarContrasena() {
+    const actual = document.getElementById('contrasena-actual').value;
+    const nueva = document.getElementById('contrasena-nueva').value;
+    const confirmar = document.getElementById('contrasena-confirmar').value;
+    const errorEl = document.getElementById('cambiar-contrasena-error');
+    if (nueva !== confirmar) {
+        errorEl.textContent = 'Las contraseñas no coinciden';
+        errorEl.classList.remove('hidden');
+        return;
+    }
+    if (nueva.length < 8) {
+        errorEl.textContent = 'La contraseña debe tener al menos 8 caracteres';
+        errorEl.classList.remove('hidden');
+        return;
+    }
+    try {
+        const response = await callAPI('cambiarContrasena', { contrasenaActual: actual, nuevaContrasena: nueva });
+        if (response.success) {
+            mostrarNotificacion('Contraseña cambiada correctamente.', 'success');
+            cerrarModalContrasena();
+        } else {
+            errorEl.textContent = response.message;
+            errorEl.classList.remove('hidden');
+        }
+    } catch (e) {
+        errorEl.textContent = 'Error al cambiar la contraseña';
+        errorEl.classList.remove('hidden');
+    }
+}
+
+function mostrarModalContrasena() {
+    const modal = document.getElementById('modal-cambiar-contrasena');
+    if (modal) {
+        modal.classList.remove('hidden');
+        document.getElementById('contrasena-actual').value = '';
+        document.getElementById('contrasena-nueva').value = '';
+        document.getElementById('contrasena-confirmar').value = '';
+        const errorEl = document.getElementById('cambiar-contrasena-error');
+        if (errorEl) errorEl.classList.add('hidden');
+    }
+}
+
+function cerrarModalContrasena() {
+    const modal = document.getElementById('modal-cambiar-contrasena');
+    if (modal) modal.classList.add('hidden');
+}
+
+// Funciones faltantes usadas en index.html
+function agregarMaterial() {
+    if (materialesData.length === 0) {
+        mostrarNotificacion('No hay materiales cargados', 'error');
+        return;
+    }
+    const materialId = prompt('ID del material utilizado:');
+    if (!materialId) return;
+    const material = materialesData.find(m => m.id == materialId);
+    if (!material) {
+        mostrarNotificacion('Material no encontrado', 'error');
+        return;
+    }
+    const cantidad = parseFloat(prompt('Cantidad utilizada:', '1'));
+    if (isNaN(cantidad) || cantidad <= 0) {
+        mostrarNotificacion('Cantidad inválida', 'error');
+        return;
+    }
+    if (!window.materialesUtilizados) window.materialesUtilizados = [];
+    window.materialesUtilizados.push({ materialId: material.id, cantidad });
+    const list = document.getElementById('materiales-seleccionados');
+    if (list) {
+        const item = document.createElement('div');
+        item.textContent = `${material.codigo} - ${material.nombre} (${cantidad} ${material.unidad})`;
+        list.appendChild(item);
+    }
+}
+
+function guardarAvance() {
+    if (typeof registrarAvance === 'function') {
+        registrarAvance();
+    }
+}
+
+function generarEDT() {
+    if (typeof cargarEDTObra === 'function') {
+        cargarEDTObra();
+    }
+}
+
+function guardarMedicion() {
+    if (typeof guardarMediciones === 'function') {
+        guardarMediciones();
+    }
+}
+
+function previsualizarReporteProgreso() {
+    const obra = document.getElementById('progreso-obra');
+    const desde = document.getElementById('periodo-desde').value;
+    const hasta = document.getElementById('periodo-hasta').value;
+    const desc = document.getElementById('descripcion-progreso').value;
+    const obs = document.getElementById('observaciones-progreso').value;
+    const html = `
+        <h2>Reporte de Progreso</h2>
+        <p><strong>Obra:</strong> ${obra ? obra.options[obra.selectedIndex].text : ''}</p>
+        <p><strong>Período:</strong> ${desde} - ${hasta}</p>
+        <p><strong>Descripción:</strong> ${desc}</p>
+        <p><strong>Observaciones:</strong> ${obs}</p>
+    `;
+    const win = window.open('', '_blank');
+    win.document.write(html);
+    win.document.close();
+}
+
+function filtrarMateriales() {
+    const texto = document.getElementById('buscar-material').value.toLowerCase();
+    const categoria = document.getElementById('filtro-categoria-inventario').value;
+    const filtrados = materialesData.filter(m => {
+        const tMatch = m.nombre.toLowerCase().includes(texto) || m.codigo.toLowerCase().includes(texto);
+        const cMatch = !categoria || String(m.categoriaId) === categoria;
+        return tMatch && cMatch;
+    });
+    renderTablaInventario(filtrados);
+}
+
+function renderTablaInventario(lista) {
+    const tbody = document.getElementById('inventario-tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    lista.forEach(material => {
+        const tr = document.createElement('tr');
+        if (material.stock <= 0) {
+            tr.classList.add('stock-zero');
+        } else if (material.stock <= material.stockMinimo) {
+            tr.classList.add('stock-low');
+        } else {
+            tr.classList.add('stock-ok');
+        }
+        const categoria = categoriasData.find(c => c.id === material.categoriaId);
+        const nombreCat = categoria ? categoria.nombre : 'Sin categoría';
+        const colorCat = categoria ? categoria.color : '#999';
+        tr.innerHTML = `
+            <td>${material.codigo}</td>
+            <td>${material.nombre}</td>
+            <td>${material.descripcion || '-'}</td>
+            <td><span class="badge" style="background-color: ${colorCat}">${nombreCat}</span></td>
+            <td class="${material.stock <= material.stockMinimo ? 'text-danger' : ''}">${material.stock}</td>
+            <td>${material.stockMinimo}</td>
+            <td>${material.unidad}</td>
+            <td>${material.ubicacion || '-'}</td>
+            <td>
+                <button class="btn btn-sm btn-primary" onclick="editarMaterial('${material.id}')"><i class="fas fa-edit"></i></button>
+                <button class="btn btn-sm btn-success" onclick="mostrarEntradaRapida('${material.id}')"><i class="fas fa-plus"></i></button>
+                <button class="btn btn-sm btn-warning" onclick="mostrarSalidaRapida('${material.id}')"><i class="fas fa-minus"></i></button>
+                <button class="btn btn-sm btn-danger" onclick="eliminarMaterial('${material.id}')"><i class="fas fa-trash"></i></button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+console.log('%cBDPA cargado', 'color:#2ecc71');
+</script>
