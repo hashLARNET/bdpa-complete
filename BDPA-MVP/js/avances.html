@@ -1,0 +1,353 @@
+<script>
+// BDPA MVP - Gestión de Avances
+
+// Función principal para guardar avance
+async function guardarAvance() {
+    const tipoEspacio = document.getElementById('tipo-espacio').value;
+    const torre = document.getElementById('torre-avance').value;
+    const piso = document.getElementById('piso-avance').value;
+    const sector = document.getElementById('sector-avance').value;
+    const ubicacion = document.getElementById('ubicacion-especifica').value;
+    const categoria = document.getElementById('categoria-trabajo').value;
+    const porcentajeCustom = document.getElementById('porcentaje-custom').value;
+    const observaciones = document.getElementById('observaciones-avance').value;
+    const fotoInput = document.getElementById('foto-avance');
+    
+    // Validaciones básicas
+    if (!tipoEspacio) {
+        mostrarNotificacion('Debe seleccionar un tipo de espacio', 'error');
+        return;
+    }
+    
+    if (!torre) {
+        mostrarNotificacion('Debe seleccionar una torre', 'error');
+        return;
+    }
+    
+    if (tipoEspacio === 'unidad' && (!piso || !sector)) {
+        mostrarNotificacion('Para unidades debe seleccionar piso y sector', 'error');
+        return;
+    }
+    
+    if (!ubicacion) {
+        mostrarNotificacion('Debe seleccionar una ubicación específica', 'error');
+        return;
+    }
+    
+    if (!categoria) {
+        mostrarNotificacion('Debe seleccionar una categoría de trabajo', 'error');
+        return;
+    }
+    
+    const porcentaje = parseInt(porcentajeCustom);
+    if (isNaN(porcentaje) || porcentaje < 0 || porcentaje > 100) {
+        mostrarNotificacion('Debe ingresar un porcentaje válido (0-100)', 'error');
+        return;
+    }
+    
+    mostrarLoader(true);
+    
+    try {
+        // Preparar datos del avance
+        const datosAvance = {
+            tipoEspacio,
+            torre,
+            piso: tipoEspacio === 'unidad' ? piso : null,
+            sector: tipoEspacio === 'unidad' ? sector : null,
+            ubicacion,
+            categoria,
+            porcentaje,
+            observaciones: observaciones.trim(),
+            fecha: new Date().toISOString(),
+            usuario: usuarioActual.nombre,
+            usuarioId: usuarioActual.id
+        };
+        
+        // Manejar foto si existe
+        if (fotoInput.files[0]) {
+            const foto = fotoInput.files[0];
+            
+            // Validar tamaño (máximo 5MB)
+            if (foto.size > 5 * 1024 * 1024) {
+                mostrarNotificacion('La foto no puede superar los 5MB', 'error');
+                mostrarLoader(false);
+                return;
+            }
+            
+            // Convertir a base64 para envío
+            const fotoBase64 = await convertirArchivoABase64(foto);
+            datosAvance.foto = {
+                nombre: foto.name,
+                tipo: foto.type,
+                tamaño: foto.size,
+                datos: fotoBase64
+            };
+        }
+        
+        // Guardar avance
+        const response = await guardarAvance(datosAvance);
+        
+        if (response.success) {
+            mostrarNotificacion('Avance guardado correctamente', 'success');
+            
+            // Guardar última ubicación
+            guardarUltimaUbicacion();
+            
+            // Limpiar formulario
+            limpiarFormulario();
+            
+            // Actualizar datos locales
+            avancesData.unshift({
+                id: response.id,
+                ...datosAvance
+            });
+            
+        } else {
+            throw new Error(response.message || 'Error al guardar avance');
+        }
+        
+    } catch (error) {
+        console.error('Error guardando avance:', error);
+        
+        // Guardar en modo offline
+        guardarDatosOffline('avances', datosAvance);
+        mostrarNotificacion('Sin conexión. Avance guardado localmente', 'warning');
+        
+        // Limpiar formulario de todos modos
+        limpiarFormulario();
+    } finally {
+        mostrarLoader(false);
+    }
+}
+
+// Función para cargar avances
+async function cargarAvances() {
+    mostrarLoader(true);
+    
+    try {
+        const filtros = {
+            torre: document.getElementById('filtro-torre')?.value || '',
+            tipo: document.getElementById('filtro-tipo')?.value || ''
+        };
+        
+        const response = await getAvances(filtros);
+        
+        if (response.success) {
+            avancesData = response.data;
+            mostrarListaAvances();
+            mostrarResumenProgreso();
+        } else {
+            throw new Error(response.message || 'Error al cargar avances');
+        }
+        
+    } catch (error) {
+        console.error('Error cargando avances:', error);
+        mostrarNotificacion('Error al cargar avances', 'error');
+        
+        // Cargar datos locales como fallback
+        cargarAvancesLocales();
+    } finally {
+        mostrarLoader(false);
+    }
+}
+
+// Función para mostrar lista de avances
+function mostrarListaAvances() {
+    const container = document.getElementById('lista-avances');
+    if (!container) return;
+    
+    if (avancesData.length === 0) {
+        container.innerHTML = `
+            <div class="avance-item">
+                <div class="avance-info">
+                    <div class="avance-location">No hay avances registrados</div>
+                    <div class="avance-details">Comience registrando el primer avance</div>
+                </div>
+            </div>
+        `;
+        return;
+    }
+    
+    let html = '';
+    avancesData.forEach(avance => {
+        const progressClass = getProgressClass(avance.porcentaje);
+        const ubicacionCompleta = construirUbicacionCompleta(avance);
+        
+        html += `
+            <div class="avance-item">
+                <div class="avance-info">
+                    <div class="avance-location">${ubicacionCompleta}</div>
+                    <div class="avance-details">
+                        <strong>${avance.categoria}</strong><br>
+                        ${formatearFecha(avance.fecha)} - ${avance.usuario}
+                        ${avance.observaciones ? `<br><em>${avance.observaciones}</em>` : ''}
+                    </div>
+                </div>
+                <div class="avance-progress">
+                    <div class="progress-circle ${progressClass}">
+                        ${avance.porcentaje}%
+                    </div>
+                    <small>${getEstadoTexto(avance.porcentaje)}</small>
+                </div>
+            </div>
+        `;
+    });
+    
+    container.innerHTML = html;
+}
+
+// Función para mostrar resumen de progreso
+function mostrarResumenProgreso() {
+    const container = document.getElementById('resumen-progreso');
+    if (!container) return;
+    
+    // Calcular estadísticas
+    const total = avancesData.length;
+    const completados = avancesData.filter(a => a.porcentaje >= 100).length;
+    const enProgreso = avancesData.filter(a => a.porcentaje > 0 && a.porcentaje < 100).length;
+    const pendientes = avancesData.filter(a => a.porcentaje === 0).length;
+    const promedioGeneral = total > 0 ? Math.round(avancesData.reduce((sum, a) => sum + a.porcentaje, 0) / total) : 0;
+    
+    // Estadísticas por torre
+    const estadisticasPorTorre = {};
+    OBRA_CONFIG.torres.forEach(torre => {
+        const avancesTorre = avancesData.filter(a => a.torre === torre);
+        const completadosTorre = avancesTorre.filter(a => a.porcentaje >= 100).length;
+        estadisticasPorTorre[torre] = {
+            total: avancesTorre.length,
+            completados: completadosTorre,
+            porcentaje: avancesTorre.length > 0 ? Math.round((completadosTorre / avancesTorre.length) * 100) : 0
+        };
+    });
+    
+    container.innerHTML = `
+        <h3><i class="fas fa-chart-line"></i> Resumen de Progreso</h3>
+        <div class="summary-grid">
+            <div class="summary-item">
+                <div class="summary-number">${total}</div>
+                <div class="summary-label">Total Avances</div>
+            </div>
+            <div class="summary-item">
+                <div class="summary-number">${completados}</div>
+                <div class="summary-label">Completados</div>
+            </div>
+            <div class="summary-item">
+                <div class="summary-number">${enProgreso}</div>
+                <div class="summary-label">En Progreso</div>
+            </div>
+            <div class="summary-item">
+                <div class="summary-number">${promedioGeneral}%</div>
+                <div class="summary-label">Promedio General</div>
+            </div>
+        </div>
+        
+        <div class="progress-bar-container">
+            <div class="progress-bar" style="width: ${promedioGeneral}%"></div>
+        </div>
+        
+        <h4 style="margin-top: 30px; margin-bottom: 15px;">Progreso por Torre</h4>
+        <div class="summary-grid">
+            ${OBRA_CONFIG.torres.map(torre => {
+                const stats = estadisticasPorTorre[torre];
+                return `
+                    <div class="summary-item">
+                        <div class="summary-number">${stats.porcentaje}%</div>
+                        <div class="summary-label">Torre ${torre}</div>
+                        <small>${stats.completados}/${stats.total}</small>
+                    </div>
+                `;
+            }).join('')}
+        </div>
+    `;
+}
+
+// Función para filtrar avances
+function filtrarAvances() {
+    cargarAvances();
+}
+
+// Funciones auxiliares
+function construirUbicacionCompleta(avance) {
+    let ubicacion = `Torre ${avance.torre}`;
+    
+    if (avance.piso) {
+        ubicacion += ` - Piso ${avance.piso}`;
+    }
+    
+    if (avance.sector) {
+        ubicacion += ` - ${avance.sector}`;
+    }
+    
+    ubicacion += ` - ${avance.ubicacion}`;
+    
+    return ubicacion;
+}
+
+function getProgressClass(porcentaje) {
+    if (porcentaje >= 100) return 'progress-100';
+    if (porcentaje >= 75) return 'progress-75';
+    if (porcentaje >= 50) return 'progress-50';
+    if (porcentaje >= 25) return 'progress-25';
+    return 'progress-0';
+}
+
+function getEstadoTexto(porcentaje) {
+    if (porcentaje >= 100) return 'Completado';
+    if (porcentaje >= 75) return 'Avanzado';
+    if (porcentaje >= 50) return 'En progreso';
+    if (porcentaje >= 25) return 'Iniciado';
+    return 'Pendiente';
+}
+
+function convertirArchivoABase64(archivo) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(archivo);
+        reader.onload = () => {
+            // Remover el prefijo "data:image/jpeg;base64," etc.
+            const base64 = reader.result.split(',')[1];
+            resolve(base64);
+        };
+        reader.onerror = error => reject(error);
+    });
+}
+
+function cargarAvancesLocales() {
+    // Cargar avances desde localStorage como fallback
+    const avancesLocales = JSON.parse(localStorage.getItem('avances_mock') || '[]');
+    avancesData = avancesLocales;
+    mostrarListaAvances();
+    mostrarResumenProgreso();
+}
+
+// Función para exportar avances (opcional)
+function exportarAvances() {
+    if (avancesData.length === 0) {
+        mostrarNotificacion('No hay avances para exportar', 'warning');
+        return;
+    }
+    
+    // Crear CSV simple
+    let csv = 'Fecha,Torre,Tipo,Ubicacion,Categoria,Porcentaje,Usuario,Observaciones\n';
+    
+    avancesData.forEach(avance => {
+        const ubicacion = construirUbicacionCompleta(avance);
+        csv += `"${formatearFecha(avance.fecha)}","${avance.torre}","${avance.tipoEspacio}","${ubicacion}","${avance.categoria}","${avance.porcentaje}%","${avance.usuario}","${avance.observaciones || ''}"\n`;
+    });
+    
+    // Descargar archivo
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `avances_los_encinos_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    mostrarNotificacion('Avances exportados correctamente', 'success');
+}
+
+console.log('BDPA MVP - Módulo de avances cargado');
+</script>

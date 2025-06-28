@@ -1,0 +1,573 @@
+<script>
+// BDPA MVP - Funciones principales
+let usuarioActual = null;
+let estructuraObra = null;
+let avancesData = [];
+let medicionesData = [];
+
+// Configuración de la obra Los Encinos
+const OBRA_CONFIG = {
+    nombre: "Los Encinos",
+    torres: ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"],
+    pisos: [1, 3],
+    sectores: {
+        normal: ["Norte", "Poniente", "Oriente"],
+        sinNorte: ["Poniente", "Oriente"] // Para torres C y H
+    }
+};
+
+// Categorías de trabajo por tipo de espacio
+const CATEGORIAS_AVANCE = {
+    unidad: [
+        "Cableado alámbrico T1",
+        "Cableado inalámbrico T1/T2", 
+        "Instalación PAU",
+        "Conexión PAU",
+        "Fibra Óptica"
+    ],
+    sotu: [
+        "Instalación de dispositivos",
+        "Conexiones de entrada",
+        "Conexiones de salida",
+        "Configuración",
+        "Certificación"
+    ],
+    shaft: [
+        "Tendido de troncales",
+        "Instalación de derivadores",
+        "Conexiones a SOTU",
+        "Sellado y seguridad"
+    ],
+    lateral: [
+        "Tendido coaxial PAU-SOTU",
+        "Tendido F.O. PAU-SOTU",
+        "Protección y acabados"
+    ],
+    antena: [
+        "Instalación física",
+        "Orientación y ajuste",
+        "Cableado de bajada",
+        "Pruebas de señal"
+    ]
+};
+
+// Estructura detallada de unidades por torre
+const ESTRUCTURA_UNIDADES = {
+    A: {
+        1: { Oriente: ["A101", "A102", "A103", "A104", "A105", "A106", "A107", "A108", "A109"] },
+        3: { Oriente: ["A301", "A302", "A303", "A304", "A305", "A306", "A307", "A308", "A309"] }
+    },
+    B: {
+        1: { 
+            Poniente: ["B107", "B108", "B109", "B110"],
+            Norte: ["B101", "B102", "B103", "B104", "B105", "B106"],
+            Oriente: ["B111", "B112", "B113", "B114", "B115"]
+        },
+        3: { 
+            Poniente: ["B307", "B308", "B309", "B310"],
+            Norte: ["B301", "B302", "B303", "B304", "B305", "B306"],
+            Oriente: ["B311", "B312", "B313", "B314", "B315"]
+        }
+    },
+    C: {
+        1: { 
+            Poniente: ["C101", "C102", "C103", "C104", "C105", "C106", "C107"],
+            Oriente: ["C108", "C109", "C110", "C111", "C112", "C113", "C114"]
+        },
+        3: { 
+            Poniente: ["C301", "C302", "C303", "C304", "C305", "C306", "C307"],
+            Oriente: ["C308", "C309", "C310", "C311", "C312", "C313", "C314"]
+        }
+    },
+    D: {
+        1: { 
+            Poniente: ["D107", "D108", "D109", "D110", "D111"],
+            Norte: ["D101", "D102", "D103", "D104", "D105", "D106"],
+            Oriente: ["D112", "D113", "D114", "D115", "D116"]
+        },
+        3: { 
+            Poniente: ["D307", "D308", "D309", "D310", "D311"],
+            Norte: ["D301", "D302", "D303", "D304", "D305", "D306"],
+            Oriente: ["D312", "D313", "D314", "D315", "D316"]
+        }
+    },
+    E: {
+        1: { 
+            Poniente: ["E107", "E108", "E109", "E110", "E111"],
+            Norte: ["E101", "E102", "E103", "E104", "E105", "E106"],
+            Oriente: ["E112", "E113", "E114", "E115", "E116"]
+        },
+        3: { 
+            Poniente: ["E307", "E308", "E309", "E310", "E311"],
+            Norte: ["E301", "E302", "E303", "E304", "E305", "E306"],
+            Oriente: ["E312", "E313", "E314", "E315", "E316"]
+        }
+    },
+    F: {
+        1: { 
+            Poniente: ["F107", "F108", "F109", "F110"],
+            Norte: ["F101", "F102", "F103", "F104", "F105", "F106"],
+            Oriente: ["F111", "F112", "F113", "F114", "F115"]
+        },
+        3: { 
+            Poniente: ["F307", "F308", "F309", "F310"],
+            Norte: ["F301", "F302", "F303", "F304", "F305", "F306"],
+            Oriente: ["F311", "F312", "F313", "F314", "F315"]
+        }
+    },
+    G: {
+        1: { 
+            Poniente: ["G107", "G109", "G110"],
+            Norte: ["G101", "G102", "G103", "G104", "G105", "G106"],
+            Oriente: ["G111", "G112", "G113", "G114", "G115"]
+        },
+        3: { 
+            Poniente: ["G307", "G309", "G310"],
+            Norte: ["G301", "G302", "G303", "G304", "G305", "G306"],
+            Oriente: ["G311", "G312", "G313", "G314", "G315"]
+        }
+    },
+    H: {
+        1: { 
+            Poniente: ["H101", "H102", "H103", "H104", "H105", "H106", "H107"],
+            Oriente: ["H108", "H109", "H110", "H111", "H112", "H113", "H114"]
+        },
+        3: { 
+            Poniente: ["H301", "H302", "H303", "H304", "H305", "H306", "H307"],
+            Oriente: ["H308", "H309", "H310", "H311", "H312", "H313", "H314"]
+        }
+    },
+    I: {
+        1: { 
+            Poniente: ["I107", "I108", "I109", "I110", "I111"],
+            Norte: ["I101", "I102", "I103", "I104", "I105", "I106"],
+            Oriente: ["I112", "I113", "I114", "I115", "I116"]
+        },
+        3: { 
+            Poniente: ["I307", "I308", "I309", "I310", "I311"],
+            Norte: ["I301", "I302", "I303", "I304", "I305", "I306"],
+            Oriente: ["I312", "I313", "I314", "I315", "I316"]
+        }
+    },
+    J: {
+        1: { 
+            Poniente: ["J109", "J110", "J111", "J112"],
+            Norte: ["J101", "J102", "J103", "J104", "J105", "J106", "J107", "J108"],
+            Oriente: ["J113", "J114", "J115", "J116", "J117"]
+        },
+        3: { 
+            Poniente: ["J309", "J310", "J311", "J312"],
+            Norte: ["J301", "J302", "J303", "J304", "J305", "J306", "J307", "J308"],
+            Oriente: ["J313", "J314", "J315", "J316", "J317"]
+        }
+    }
+};
+
+// Funciones de utilidad
+function mostrarNotificacion(mensaje, tipo = 'info') {
+    const container = document.getElementById('notifications-container');
+    const notification = document.createElement('div');
+    notification.className = `notification ${tipo}`;
+    notification.textContent = mensaje;
+    
+    container.appendChild(notification);
+    
+    // Auto-remover después de 4 segundos
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.parentNode.removeChild(notification);
+        }
+    }, 4000);
+}
+
+function mostrarLoader(mostrar = true) {
+    const loader = document.getElementById('loader');
+    if (mostrar) {
+        loader.classList.remove('hidden');
+    } else {
+        loader.classList.add('hidden');
+    }
+}
+
+function formatearFecha(fecha) {
+    if (!fecha) return '-';
+    const date = new Date(fecha);
+    return date.toLocaleDateString('es-CL') + ' ' + date.toLocaleTimeString('es-CL', {
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
+// Funciones de navegación
+function mostrarSeccion(seccion) {
+    // Ocultar todas las secciones
+    document.querySelectorAll('.container').forEach(container => {
+        container.classList.add('hidden');
+    });
+    
+    // Mostrar la sección solicitada
+    const seccionElement = document.getElementById(seccion);
+    if (seccionElement) {
+        seccionElement.classList.remove('hidden');
+        
+        // Cargar datos específicos de la sección
+        switch(seccion) {
+            case 'registrar-avance':
+                cargarUltimaUbicacion();
+                break;
+            case 'consultar-avances':
+                cargarAvances();
+                break;
+            case 'mediciones':
+                cargarMediciones();
+                break;
+        }
+    }
+}
+
+function volverAlMenu() {
+    mostrarSeccion('main-menu-container');
+}
+
+// Función de login
+async function iniciarSesion() {
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value.trim();
+    
+    if (!username || !password) {
+        mostrarNotificacion('Por favor complete todos los campos', 'error');
+        return;
+    }
+    
+    mostrarLoader(true);
+    
+    try {
+        const response = await login(username, password);
+        
+        if (response.success) {
+            usuarioActual = response.usuario;
+            
+            // Actualizar interfaz
+            document.getElementById('current-user').textContent = usuarioActual.nombre;
+            document.getElementById('current-role').textContent = usuarioActual.rol;
+            
+            // Cambiar a menú principal
+            document.getElementById('login-container').classList.add('hidden');
+            document.getElementById('main-menu-container').classList.remove('hidden');
+            
+            // Cargar estructura de la obra
+            await cargarEstructuraObra();
+            
+            mostrarNotificacion('Sesión iniciada correctamente', 'success');
+        } else {
+            mostrarNotificacion(response.message || 'Credenciales incorrectas', 'error');
+        }
+    } catch (error) {
+        console.error('Error en login:', error);
+        mostrarNotificacion('Error al iniciar sesión', 'error');
+    } finally {
+        mostrarLoader(false);
+    }
+}
+
+async function cerrarSesion() {
+    usuarioActual = null;
+    
+    // Limpiar formularios
+    document.getElementById('username').value = '';
+    document.getElementById('password').value = '';
+    
+    // Volver a login
+    document.getElementById('main-menu-container').classList.add('hidden');
+    document.getElementById('login-container').classList.remove('hidden');
+    
+    // Ocultar otras secciones
+    document.querySelectorAll('.container:not(#login-container)').forEach(container => {
+        container.classList.add('hidden');
+    });
+    
+    mostrarNotificacion('Sesión cerrada', 'info');
+}
+
+// Cargar estructura de la obra
+async function cargarEstructuraObra() {
+    try {
+        const response = await getEstructura();
+        if (response.success) {
+            estructuraObra = response.data;
+        }
+    } catch (error) {
+        console.error('Error cargando estructura:', error);
+    }
+}
+
+// Funciones para el formulario de avances
+function cargarUbicaciones() {
+    const tipoEspacio = document.getElementById('tipo-espacio').value;
+    const torre = document.getElementById('torre-avance').value;
+    const piso = document.getElementById('piso-avance').value;
+    const sector = document.getElementById('sector-avance').value;
+    
+    const ubicacionSelect = document.getElementById('ubicacion-especifica');
+    const categoriaSelect = document.getElementById('categoria-trabajo');
+    const pisoSectorRow = document.getElementById('piso-sector-row');
+    
+    // Limpiar selects
+    ubicacionSelect.innerHTML = '<option value="">Seleccionar ubicación...</option>';
+    categoriaSelect.innerHTML = '<option value="">Seleccionar categoría...</option>';
+    
+    // Mostrar/ocultar piso y sector según el tipo
+    if (tipoEspacio === 'unidad') {
+        pisoSectorRow.style.display = 'grid';
+    } else {
+        pisoSectorRow.style.display = 'none';
+    }
+    
+    // Cargar categorías según el tipo de espacio
+    if (tipoEspacio && CATEGORIAS_AVANCE[tipoEspacio]) {
+        CATEGORIAS_AVANCE[tipoEspacio].forEach(categoria => {
+            const option = document.createElement('option');
+            option.value = categoria;
+            option.textContent = categoria;
+            categoriaSelect.appendChild(option);
+        });
+    }
+    
+    // Cargar ubicaciones específicas
+    if (tipoEspacio && torre) {
+        let ubicaciones = [];
+        
+        switch(tipoEspacio) {
+            case 'unidad':
+                if (piso && sector && ESTRUCTURA_UNIDADES[torre] && ESTRUCTURA_UNIDADES[torre][piso] && ESTRUCTURA_UNIDADES[torre][piso][sector]) {
+                    ubicaciones = ESTRUCTURA_UNIDADES[torre][piso][sector];
+                }
+                break;
+            case 'sotu':
+                ubicaciones = [`SOTU-${torre}1`, `SOTU-${torre}3`];
+                break;
+            case 'shaft':
+                ubicaciones = [`SHAFT-${torre}`];
+                break;
+            case 'lateral':
+                ubicaciones = [`LAT-${torre}-1`, `LAT-${torre}-2`, `LAT-${torre}-3`];
+                break;
+            case 'antena':
+                ubicaciones = [`ANT-${torre}1`, `ANT-${torre}2`];
+                break;
+        }
+        
+        ubicaciones.forEach(ubicacion => {
+            const option = document.createElement('option');
+            option.value = ubicacion;
+            option.textContent = ubicacion;
+            ubicacionSelect.appendChild(option);
+        });
+    }
+    
+    // Actualizar sectores disponibles según la torre
+    const sectorSelect = document.getElementById('sector-avance');
+    if (torre) {
+        const sectoresDisponibles = (torre === 'C' || torre === 'H') ? 
+            OBRA_CONFIG.sectores.sinNorte : OBRA_CONFIG.sectores.normal;
+        
+        sectorSelect.innerHTML = '<option value="">Seleccionar...</option>';
+        sectoresDisponibles.forEach(sector => {
+            const option = document.createElement('option');
+            option.value = sector;
+            option.textContent = sector;
+            sectorSelect.appendChild(option);
+        });
+    }
+}
+
+function seleccionarPorcentaje(porcentaje) {
+    // Limpiar selección anterior
+    document.querySelectorAll('.progress-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    // Marcar botón activo
+    event.target.classList.add('active');
+    
+    // Actualizar campo personalizado
+    document.getElementById('porcentaje-custom').value = porcentaje;
+}
+
+function cargarUltimaUbicacion() {
+    // Cargar última ubicación desde localStorage
+    const ultimaUbicacion = localStorage.getItem('ultimaUbicacion');
+    if (ultimaUbicacion) {
+        try {
+            const ubicacion = JSON.parse(ultimaUbicacion);
+            document.getElementById('tipo-espacio').value = ubicacion.tipo || '';
+            document.getElementById('torre-avance').value = ubicacion.torre || '';
+            document.getElementById('piso-avance').value = ubicacion.piso || '';
+            document.getElementById('sector-avance').value = ubicacion.sector || '';
+            
+            // Recargar ubicaciones
+            setTimeout(() => {
+                cargarUbicaciones();
+                document.getElementById('ubicacion-especifica').value = ubicacion.ubicacion || '';
+            }, 100);
+        } catch (error) {
+            console.error('Error cargando última ubicación:', error);
+        }
+    }
+}
+
+function guardarUltimaUbicacion() {
+    const ubicacion = {
+        tipo: document.getElementById('tipo-espacio').value,
+        torre: document.getElementById('torre-avance').value,
+        piso: document.getElementById('piso-avance').value,
+        sector: document.getElementById('sector-avance').value,
+        ubicacion: document.getElementById('ubicacion-especifica').value
+    };
+    
+    localStorage.setItem('ultimaUbicacion', JSON.stringify(ubicacion));
+}
+
+function limpiarFormulario() {
+    document.getElementById('tipo-espacio').value = '';
+    document.getElementById('torre-avance').value = '';
+    document.getElementById('piso-avance').value = '';
+    document.getElementById('sector-avance').value = '';
+    document.getElementById('ubicacion-especifica').innerHTML = '<option value="">Primero seleccione tipo, torre, piso y sector</option>';
+    document.getElementById('categoria-trabajo').innerHTML = '<option value="">Seleccionar categoría...</option>';
+    document.getElementById('porcentaje-custom').value = '';
+    document.getElementById('foto-avance').value = '';
+    document.getElementById('observaciones-avance').value = '';
+    
+    // Limpiar preview de foto
+    const preview = document.getElementById('preview-foto');
+    preview.innerHTML = '';
+    preview.classList.add('hidden');
+    
+    // Limpiar selección de porcentaje
+    document.querySelectorAll('.progress-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+}
+
+// Manejo de foto
+document.addEventListener('DOMContentLoaded', function() {
+    const fotoInput = document.getElementById('foto-avance');
+    if (fotoInput) {
+        fotoInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            const preview = document.getElementById('preview-foto');
+            
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    preview.innerHTML = `<img src="${e.target.result}" alt="Preview">`;
+                    preview.classList.remove('hidden');
+                };
+                reader.readAsDataURL(file);
+            } else {
+                preview.innerHTML = '';
+                preview.classList.add('hidden');
+            }
+        });
+    }
+});
+
+// Función para mostrar resumen de obra
+async function mostrarResumenObra() {
+    try {
+        mostrarLoader(true);
+        const response = await getProgreso();
+        
+        if (response.success) {
+            const progreso = response.data;
+            
+            let html = `
+                <div class="progress-summary">
+                    <h3><i class="fas fa-building"></i> Resumen General - Los Encinos</h3>
+                    <div class="summary-grid">
+                        <div class="summary-item">
+                            <div class="summary-number">${progreso.totalUnidades || 0}</div>
+                            <div class="summary-label">Total Unidades</div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="summary-number">${progreso.unidadesCompletadas || 0}</div>
+                            <div class="summary-label">Completadas</div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="summary-number">${Math.round(progreso.porcentajeGeneral || 0)}%</div>
+                            <div class="summary-label">Progreso General</div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="summary-number">${progreso.totalAvances || 0}</div>
+                            <div class="summary-label">Avances Registrados</div>
+                        </div>
+                    </div>
+                    
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" style="width: ${progreso.porcentajeGeneral || 0}%"></div>
+                    </div>
+                    
+                    <div class="summary-grid" style="margin-top: 30px;">
+                        ${OBRA_CONFIG.torres.map(torre => `
+                            <div class="summary-item">
+                                <div class="summary-number">${Math.round(progreso.porTorre?.[torre] || 0)}%</div>
+                                <div class="summary-label">Torre ${torre}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+            
+            // Crear modal temporal para mostrar resumen
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(0,0,0,0.7); z-index: 10000;
+                display: flex; align-items: center; justify-content: center;
+                padding: 20px;
+            `;
+            
+            modal.innerHTML = `
+                <div style="background: white; border-radius: 8px; max-width: 800px; width: 100%; max-height: 90vh; overflow-y: auto;">
+                    <div style="padding: 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
+                        <h2>Resumen de Obra</h2>
+                        <button onclick="this.closest('div').parentNode.parentNode.remove()" style="background: none; border: none; font-size: 24px; cursor: pointer;">&times;</button>
+                    </div>
+                    <div style="padding: 20px;">
+                        ${html}
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+        }
+    } catch (error) {
+        console.error('Error cargando resumen:', error);
+        mostrarNotificacion('Error al cargar resumen de obra', 'error');
+    } finally {
+        mostrarLoader(false);
+    }
+}
+
+// Auto-guardado cada 30 segundos
+setInterval(() => {
+    if (usuarioActual) {
+        // Guardar datos pendientes si los hay
+        const datosPendientes = localStorage.getItem('avancesPendientes');
+        if (datosPendientes) {
+            try {
+                const datos = JSON.parse(datosPendientes);
+                if (datos.length > 0) {
+                    console.log('Auto-guardando datos pendientes...');
+                    // Aquí se implementaría el envío de datos pendientes
+                }
+            } catch (error) {
+                console.error('Error en auto-guardado:', error);
+            }
+        }
+    }
+}, 30000);
+
+console.log('BDPA MVP - Sistema principal cargado');
+</script>

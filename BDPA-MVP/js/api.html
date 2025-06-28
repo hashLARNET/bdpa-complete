@@ -1,0 +1,271 @@
+<script>
+// BDPA MVP - API Functions
+const API_BASE_URL = 'https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec';
+
+// Función principal para llamadas a la API
+async function callAPI(action, data = {}) {
+    try {
+        const payload = {
+            action: action,
+            data: data,
+            timestamp: new Date().getTime()
+        };
+        
+        // Para desarrollo local, usar Google Apps Script
+        if (typeof google !== 'undefined' && google.script && google.script.run) {
+            return await new Promise((resolve, reject) => {
+                google.script.run
+                    .withSuccessHandler(resolve)
+                    .withFailureHandler(reject)
+                    .processAPI(payload);
+            });
+        }
+        
+        // Fallback para testing sin GAS
+        return await mockAPI(action, data);
+        
+    } catch (error) {
+        console.error('Error en API:', error);
+        return { success: false, message: 'Error de conexión' };
+    }
+}
+
+// Mock API para desarrollo y testing
+async function mockAPI(action, data) {
+    // Simular delay de red
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    switch(action) {
+        case 'login':
+            return mockLogin(data);
+        case 'getEstructura':
+            return mockGetEstructura();
+        case 'guardarAvance':
+            return mockGuardarAvance(data);
+        case 'getAvances':
+            return mockGetAvances(data);
+        case 'getProgreso':
+            return mockGetProgreso();
+        case 'guardarMedicion':
+            return mockGuardarMedicion(data);
+        case 'getMediciones':
+            return mockGetMediciones();
+        default:
+            return { success: false, message: 'Acción no reconocida' };
+    }
+}
+
+// Mock functions para desarrollo
+function mockLogin(data) {
+    const usuarios = {
+        'admin': { password: 'admin123', nombre: 'Administrador', rol: 'Admin' },
+        'supervisor': { password: 'sup123', nombre: 'Supervisor Campo', rol: 'Supervisor' },
+        'tecnico1': { password: 'tec123', nombre: 'Técnico 1', rol: 'Tecnico' }
+    };
+    
+    const usuario = usuarios[data.username];
+    if (usuario && usuario.password === data.password) {
+        return {
+            success: true,
+            usuario: {
+                id: data.username,
+                nombre: usuario.nombre,
+                rol: usuario.rol,
+                username: data.username
+            }
+        };
+    }
+    
+    return { success: false, message: 'Credenciales incorrectas' };
+}
+
+function mockGetEstructura() {
+    return {
+        success: true,
+        data: {
+            obra: "Los Encinos",
+            torres: ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"],
+            pisos: [1, 3],
+            totalUnidades: 1247,
+            totalSOTU: 20,
+            totalShafts: 10,
+            totalAntenas: 20
+        }
+    };
+}
+
+function mockGuardarAvance(data) {
+    // Simular guardado en localStorage para persistencia local
+    let avances = JSON.parse(localStorage.getItem('avances_mock') || '[]');
+    
+    const nuevoAvance = {
+        id: Date.now().toString(),
+        fecha: new Date().toISOString(),
+        usuario: usuarioActual?.nombre || 'Usuario',
+        ...data,
+        timestamp: new Date().getTime()
+    };
+    
+    avances.push(nuevoAvance);
+    localStorage.setItem('avances_mock', JSON.stringify(avances));
+    
+    return { success: true, id: nuevoAvance.id };
+}
+
+function mockGetAvances(filtros = {}) {
+    let avances = JSON.parse(localStorage.getItem('avances_mock') || '[]');
+    
+    // Aplicar filtros
+    if (filtros.torre) {
+        avances = avances.filter(a => a.torre === filtros.torre);
+    }
+    if (filtros.tipo) {
+        avances = avances.filter(a => a.tipoEspacio === filtros.tipo);
+    }
+    
+    // Ordenar por fecha descendente
+    avances.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+    
+    return { success: true, data: avances };
+}
+
+function mockGetProgreso() {
+    const avances = JSON.parse(localStorage.getItem('avances_mock') || '[]');
+    
+    // Calcular estadísticas básicas
+    const totalAvances = avances.length;
+    const avancesCompletados = avances.filter(a => (a.porcentaje || 0) >= 100).length;
+    const porcentajeGeneral = totalAvances > 0 ? (avancesCompletados / totalAvances) * 100 : 0;
+    
+    // Progreso por torre
+    const porTorre = {};
+    ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"].forEach(torre => {
+        const avancesTorre = avances.filter(a => a.torre === torre);
+        const completadosTorre = avancesTorre.filter(a => (a.porcentaje || 0) >= 100).length;
+        porTorre[torre] = avancesTorre.length > 0 ? (completadosTorre / avancesTorre.length) * 100 : 0;
+    });
+    
+    return {
+        success: true,
+        data: {
+            totalUnidades: 1247,
+            unidadesCompletadas: avancesCompletados,
+            porcentajeGeneral: porcentajeGeneral,
+            totalAvances: totalAvances,
+            porTorre: porTorre
+        }
+    };
+}
+
+function mockGuardarMedicion(data) {
+    let mediciones = JSON.parse(localStorage.getItem('mediciones_mock') || '[]');
+    
+    const nuevaMedicion = {
+        id: Date.now().toString(),
+        fecha: new Date().toISOString(),
+        usuario: usuarioActual?.nombre || 'Usuario',
+        ...data,
+        timestamp: new Date().getTime()
+    };
+    
+    mediciones.push(nuevaMedicion);
+    localStorage.setItem('mediciones_mock', JSON.stringify(mediciones));
+    
+    return { success: true, id: nuevaMedicion.id };
+}
+
+function mockGetMediciones() {
+    let mediciones = JSON.parse(localStorage.getItem('mediciones_mock') || '[]');
+    
+    // Ordenar por fecha descendente
+    mediciones.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+    
+    return { success: true, data: mediciones };
+}
+
+// Funciones específicas de la API
+async function login(username, password) {
+    return await callAPI('login', { username, password });
+}
+
+async function getEstructura() {
+    return await callAPI('getEstructura');
+}
+
+async function guardarAvance(datosAvance) {
+    return await callAPI('guardarAvance', datosAvance);
+}
+
+async function getAvances(filtros = {}) {
+    return await callAPI('getAvances', filtros);
+}
+
+async function getProgreso() {
+    return await callAPI('getProgreso');
+}
+
+async function guardarMedicion(datosMedicion) {
+    return await callAPI('guardarMedicion', datosMedicion);
+}
+
+async function getMediciones() {
+    return await callAPI('getMediciones');
+}
+
+// Función para manejar modo offline
+function guardarDatosOffline(tipo, datos) {
+    let datosOffline = JSON.parse(localStorage.getItem('datosOffline') || '{}');
+    
+    if (!datosOffline[tipo]) {
+        datosOffline[tipo] = [];
+    }
+    
+    datosOffline[tipo].push({
+        ...datos,
+        timestamp: new Date().getTime(),
+        offline: true
+    });
+    
+    localStorage.setItem('datosOffline', JSON.stringify(datosOffline));
+}
+
+// Función para sincronizar datos offline cuando vuelva la conexión
+async function sincronizarDatosOffline() {
+    const datosOffline = JSON.parse(localStorage.getItem('datosOffline') || '{}');
+    
+    for (const tipo in datosOffline) {
+        const datos = datosOffline[tipo];
+        
+        for (const item of datos) {
+            try {
+                let response;
+                switch(tipo) {
+                    case 'avances':
+                        response = await guardarAvance(item);
+                        break;
+                    case 'mediciones':
+                        response = await guardarMedicion(item);
+                        break;
+                }
+                
+                if (response.success) {
+                    console.log(`Sincronizado ${tipo}:`, item);
+                }
+            } catch (error) {
+                console.error(`Error sincronizando ${tipo}:`, error);
+            }
+        }
+    }
+    
+    // Limpiar datos offline después de sincronizar
+    localStorage.removeItem('datosOffline');
+}
+
+// Detectar cuando vuelve la conexión
+window.addEventListener('online', () => {
+    console.log('Conexión restaurada, sincronizando datos...');
+    sincronizarDatosOffline();
+});
+
+console.log('BDPA MVP - API cargada');
+</script>

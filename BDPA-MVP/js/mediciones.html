@@ -1,0 +1,391 @@
+<script>
+// BDPA MVP - Gestión de Mediciones
+
+// Función para mostrar tabs de mediciones
+function mostrarTabMedicion(tab) {
+    // Ocultar todos los tabs
+    document.querySelectorAll('.tab-content').forEach(content => {
+        content.classList.add('hidden');
+    });
+    
+    // Remover clase active de todos los botones
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    // Mostrar tab seleccionado
+    const tabContent = document.getElementById(`tab-${tab}-medicion`);
+    if (tabContent) {
+        tabContent.classList.remove('hidden');
+    }
+    
+    // Activar botón correspondiente
+    event.target.classList.add('active');
+    
+    // Cargar datos si es necesario
+    if (tab === 'consultar') {
+        cargarMediciones();
+    }
+}
+
+// Función para guardar medición
+async function guardarMedicion() {
+    const torre = document.getElementById('torre-medicion').value;
+    const piso = document.getElementById('piso-medicion').value;
+    const tipoMedicion = document.getElementById('tipo-medicion').value;
+    const valorPrincipal = document.getElementById('valor-principal').value;
+    const valorSecundario = document.getElementById('valor-secundario').value;
+    const estado = document.getElementById('estado-medicion').value;
+    const observaciones = document.getElementById('observaciones-medicion').value;
+    
+    // Validaciones básicas
+    if (!torre) {
+        mostrarNotificacion('Debe seleccionar una torre', 'error');
+        return;
+    }
+    
+    if (!piso) {
+        mostrarNotificacion('Debe seleccionar un piso', 'error');
+        return;
+    }
+    
+    if (!tipoMedicion) {
+        mostrarNotificacion('Debe seleccionar un tipo de medición', 'error');
+        return;
+    }
+    
+    if (!valorPrincipal) {
+        mostrarNotificacion('Debe ingresar el valor principal', 'error');
+        return;
+    }
+    
+    const valor1 = parseFloat(valorPrincipal);
+    const valor2 = valorSecundario ? parseFloat(valorSecundario) : null;
+    
+    if (isNaN(valor1)) {
+        mostrarNotificacion('El valor principal debe ser un número válido', 'error');
+        return;
+    }
+    
+    if (valorSecundario && isNaN(valor2)) {
+        mostrarNotificacion('El valor secundario debe ser un número válido', 'error');
+        return;
+    }
+    
+    mostrarLoader(true);
+    
+    try {
+        // Preparar datos de la medición
+        const datosMedicion = {
+            torre,
+            piso,
+            tipoMedicion,
+            valorPrincipal: valor1,
+            valorSecundario: valor2,
+            estado,
+            observaciones: observaciones.trim(),
+            fecha: new Date().toISOString(),
+            usuario: usuarioActual.nombre,
+            usuarioId: usuarioActual.id,
+            ubicacion: `Torre ${torre} - Piso ${piso}`
+        };
+        
+        // Validar rangos según tipo de medición
+        const validacion = validarRangosMedicion(tipoMedicion, valor1, valor2);
+        if (!validacion.valido) {
+            mostrarNotificacion(validacion.mensaje, 'warning');
+            // Continuar pero con advertencia
+        }
+        
+        // Guardar medición
+        const response = await guardarMedicion(datosMedicion);
+        
+        if (response.success) {
+            mostrarNotificacion('Medición guardada correctamente', 'success');
+            
+            // Limpiar formulario
+            limpiarFormularioMedicion();
+            
+            // Actualizar datos locales
+            medicionesData.unshift({
+                id: response.id,
+                ...datosMedicion
+            });
+            
+        } else {
+            throw new Error(response.message || 'Error al guardar medición');
+        }
+        
+    } catch (error) {
+        console.error('Error guardando medición:', error);
+        
+        // Guardar en modo offline
+        guardarDatosOffline('mediciones', datosMedicion);
+        mostrarNotificacion('Sin conexión. Medición guardada localmente', 'warning');
+        
+        // Limpiar formulario de todos modos
+        limpiarFormularioMedicion();
+    } finally {
+        mostrarLoader(false);
+    }
+}
+
+// Función para cargar mediciones
+async function cargarMediciones() {
+    mostrarLoader(true);
+    
+    try {
+        const response = await getMediciones();
+        
+        if (response.success) {
+            medicionesData = response.data;
+            mostrarListaMediciones();
+        } else {
+            throw new Error(response.message || 'Error al cargar mediciones');
+        }
+        
+    } catch (error) {
+        console.error('Error cargando mediciones:', error);
+        mostrarNotificacion('Error al cargar mediciones', 'error');
+        
+        // Cargar datos locales como fallback
+        cargarMedicionesLocales();
+    } finally {
+        mostrarLoader(false);
+    }
+}
+
+// Función para mostrar lista de mediciones
+function mostrarListaMediciones() {
+    const container = document.getElementById('lista-mediciones');
+    if (!container) return;
+    
+    if (medicionesData.length === 0) {
+        container.innerHTML = `
+            <div class="medicion-item">
+                <div class="medicion-info">
+                    <div class="avance-location">No hay mediciones registradas</div>
+                    <div class="avance-details">Comience registrando la primera medición</div>
+                </div>
+            </div>
+        `;
+        return;
+    }
+    
+    let html = '';
+    medicionesData.forEach(medicion => {
+        const estadoClass = getEstadoClass(medicion.estado);
+        const tipoTexto = getTipoMedicionTexto(medicion.tipoMedicion);
+        const valoresTexto = construirValoresTexto(medicion);
+        
+        html += `
+            <div class="medicion-item">
+                <div class="medicion-info">
+                    <div class="avance-location">${medicion.ubicacion}</div>
+                    <div class="avance-details">
+                        <strong>${tipoTexto}</strong><br>
+                        ${formatearFecha(medicion.fecha)} - ${medicion.usuario}
+                        ${medicion.observaciones ? `<br><em>${medicion.observaciones}</em>` : ''}
+                    </div>
+                </div>
+                <div class="medicion-valores">
+                    <div style="font-weight: bold; margin-bottom: 5px;">${valoresTexto}</div>
+                    <span class="estado-badge estado-${estadoClass}">${medicion.estado}</span>
+                </div>
+            </div>
+        `;
+    });
+    
+    container.innerHTML = html;
+}
+
+// Funciones auxiliares para mediciones
+function validarRangosMedicion(tipo, valor1, valor2) {
+    const rangos = {
+        coaxial: { min: 45, max: 75, unidad: 'dBμV' },
+        fibra: { min: -30, max: -8, unidad: 'dBm' },
+        wifi: { min: -80, max: -30, unidad: 'dBm' },
+        certificacion: { min: 0, max: 100, unidad: '%' }
+    };
+    
+    const rango = rangos[tipo];
+    if (!rango) {
+        return { valido: true };
+    }
+    
+    if (valor1 < rango.min || valor1 > rango.max) {
+        return {
+            valido: false,
+            mensaje: `Valor fuera del rango esperado para ${tipo}: ${rango.min} a ${rango.max} ${rango.unidad}`
+        };
+    }
+    
+    return { valido: true };
+}
+
+function getTipoMedicionTexto(tipo) {
+    const tipos = {
+        coaxial: 'Coaxial (dBμV)',
+        fibra: 'Fibra Óptica (dBm)',
+        wifi: 'WiFi (dBm)',
+        certificacion: 'Certificación Final'
+    };
+    
+    return tipos[tipo] || tipo;
+}
+
+function construirValoresTexto(medicion) {
+    let texto = medicion.valorPrincipal.toString();
+    
+    if (medicion.valorSecundario !== null && medicion.valorSecundario !== undefined) {
+        texto += ` / ${medicion.valorSecundario}`;
+    }
+    
+    // Agregar unidad según tipo
+    const unidades = {
+        coaxial: 'dBμV',
+        fibra: 'dBm',
+        wifi: 'dBm',
+        certificacion: '%'
+    };
+    
+    const unidad = unidades[medicion.tipoMedicion];
+    if (unidad) {
+        texto += ` ${unidad}`;
+    }
+    
+    return texto;
+}
+
+function getEstadoClass(estado) {
+    const clases = {
+        'OK': 'ok',
+        'ADVERTENCIA': 'advertencia',
+        'FALLA': 'falla'
+    };
+    
+    return clases[estado] || 'ok';
+}
+
+function limpiarFormularioMedicion() {
+    document.getElementById('torre-medicion').value = '';
+    document.getElementById('piso-medicion').value = '';
+    document.getElementById('tipo-medicion').value = '';
+    document.getElementById('valor-principal').value = '';
+    document.getElementById('valor-secundario').value = '';
+    document.getElementById('estado-medicion').value = 'OK';
+    document.getElementById('observaciones-medicion').value = '';
+}
+
+function cargarMedicionesLocales() {
+    // Cargar mediciones desde localStorage como fallback
+    const medicionesLocales = JSON.parse(localStorage.getItem('mediciones_mock') || '[]');
+    medicionesData = medicionesLocales;
+    mostrarListaMediciones();
+}
+
+// Función para exportar mediciones (opcional)
+function exportarMediciones() {
+    if (medicionesData.length === 0) {
+        mostrarNotificacion('No hay mediciones para exportar', 'warning');
+        return;
+    }
+    
+    // Crear CSV simple
+    let csv = 'Fecha,Torre,Piso,Tipo,Valor Principal,Valor Secundario,Estado,Usuario,Observaciones\n';
+    
+    medicionesData.forEach(medicion => {
+        csv += `"${formatearFecha(medicion.fecha)}","${medicion.torre}","${medicion.piso}","${getTipoMedicionTexto(medicion.tipoMedicion)}","${medicion.valorPrincipal}","${medicion.valorSecundario || ''}","${medicion.estado}","${medicion.usuario}","${medicion.observaciones || ''}"\n`;
+    });
+    
+    // Descargar archivo
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `mediciones_los_encinos_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    mostrarNotificacion('Mediciones exportadas correctamente', 'success');
+}
+
+// Función para generar reporte de mediciones
+function generarReporteMediciones() {
+    if (medicionesData.length === 0) {
+        mostrarNotificacion('No hay mediciones para generar reporte', 'warning');
+        return;
+    }
+    
+    // Calcular estadísticas
+    const total = medicionesData.length;
+    const ok = medicionesData.filter(m => m.estado === 'OK').length;
+    const advertencias = medicionesData.filter(m => m.estado === 'ADVERTENCIA').length;
+    const fallas = medicionesData.filter(m => m.estado === 'FALLA').length;
+    
+    // Estadísticas por tipo
+    const porTipo = {};
+    medicionesData.forEach(m => {
+        if (!porTipo[m.tipoMedicion]) {
+            porTipo[m.tipoMedicion] = { total: 0, ok: 0, advertencias: 0, fallas: 0 };
+        }
+        porTipo[m.tipoMedicion].total++;
+        porTipo[m.tipoMedicion][m.estado.toLowerCase()]++;
+    });
+    
+    // Crear reporte HTML
+    let reporteHTML = `
+        <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px;">
+            <h1 style="text-align: center; color: #2c3e50;">Reporte de Mediciones - Los Encinos</h1>
+            <p style="text-align: center; color: #666;">Generado el ${new Date().toLocaleString('es-CL')}</p>
+            
+            <h2>Resumen General</h2>
+            <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px;">
+                <tr style="background: #f8f9fa;">
+                    <th style="border: 1px solid #ddd; padding: 10px;">Total Mediciones</th>
+                    <th style="border: 1px solid #ddd; padding: 10px;">OK</th>
+                    <th style="border: 1px solid #ddd; padding: 10px;">Advertencias</th>
+                    <th style="border: 1px solid #ddd; padding: 10px;">Fallas</th>
+                </tr>
+                <tr>
+                    <td style="border: 1px solid #ddd; padding: 10px; text-align: center;">${total}</td>
+                    <td style="border: 1px solid #ddd; padding: 10px; text-align: center; color: #27ae60;">${ok}</td>
+                    <td style="border: 1px solid #ddd; padding: 10px; text-align: center; color: #f39c12;">${advertencias}</td>
+                    <td style="border: 1px solid #ddd; padding: 10px; text-align: center; color: #e74c3c;">${fallas}</td>
+                </tr>
+            </table>
+            
+            <h2>Detalle por Tipo de Medición</h2>
+            <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px;">
+                <tr style="background: #f8f9fa;">
+                    <th style="border: 1px solid #ddd; padding: 10px;">Tipo</th>
+                    <th style="border: 1px solid #ddd; padding: 10px;">Total</th>
+                    <th style="border: 1px solid #ddd; padding: 10px;">OK</th>
+                    <th style="border: 1px solid #ddd; padding: 10px;">Advertencias</th>
+                    <th style="border: 1px solid #ddd; padding: 10px;">Fallas</th>
+                </tr>
+                ${Object.keys(porTipo).map(tipo => `
+                    <tr>
+                        <td style="border: 1px solid #ddd; padding: 10px;">${getTipoMedicionTexto(tipo)}</td>
+                        <td style="border: 1px solid #ddd; padding: 10px; text-align: center;">${porTipo[tipo].total}</td>
+                        <td style="border: 1px solid #ddd; padding: 10px; text-align: center; color: #27ae60;">${porTipo[tipo].ok || 0}</td>
+                        <td style="border: 1px solid #ddd; padding: 10px; text-align: center; color: #f39c12;">${porTipo[tipo].advertencias || 0}</td>
+                        <td style="border: 1px solid #ddd; padding: 10px; text-align: center; color: #e74c3c;">${porTipo[tipo].fallas || 0}</td>
+                    </tr>
+                `).join('')}
+            </table>
+        </div>
+    `;
+    
+    // Abrir en nueva ventana
+    const ventana = window.open('', '_blank');
+    ventana.document.write(reporteHTML);
+    ventana.document.close();
+    
+    mostrarNotificacion('Reporte generado correctamente', 'success');
+}
+
+console.log('BDPA MVP - Módulo de mediciones cargado');
+</script>
