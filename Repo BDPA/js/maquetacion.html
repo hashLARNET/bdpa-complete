@@ -685,8 +685,11 @@ function actualizarConfiguracionRed() {
 
 // Abrir modal de registro de mediciones (función placeholder)
 function abrirModalRegistroMediciones() {
-    alert('Esta función abrirá el modal independiente de Registro de Mediciones que generará una hoja de cálculo separada.');
-    // En la implementación real, aquí se abriría el modal específico de mediciones
+    if (typeof mostrarModalMediciones === 'function') {
+        mostrarModalMediciones();
+    } else {
+        alert('Esta función abrirá el modal independiente de Registro de Mediciones que generará una hoja de cálculo separada.');
+    }
 }
 
 // ============================================================================

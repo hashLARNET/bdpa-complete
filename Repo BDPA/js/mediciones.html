@@ -94,6 +94,51 @@ async function cargarEstructuraMedicion() {
     }
 }
 
+// ---------------------------------------------------------------
+// Funciones para los select dependientes del modal antiguo
+// ---------------------------------------------------------------
+
+function cargarTorresMedicion() {
+    // Reutiliza la carga de estructura para poblar las torres
+    cargarEstructuraMedicion();
+}
+
+function cargarPisosMedicion() {
+    const torreId = document.getElementById('medicion-torre').value;
+    const selectPiso = document.getElementById('medicion-piso');
+    if (!selectPiso || !torreId) return;
+
+    selectPiso.innerHTML = '<option value="">Seleccionar piso...</option>';
+    const torre = estructuraEdificio.torres?.find(t => t.id === torreId);
+    if (torre) {
+        torre.pisos.forEach(piso => {
+            const opt = document.createElement('option');
+            opt.value = piso.id;
+            opt.textContent = piso.numero;
+            selectPiso.appendChild(opt);
+        });
+    }
+}
+
+function cargarUnidadesMedicion() {
+    const torreId = document.getElementById('medicion-torre').value;
+    const pisoId = document.getElementById('medicion-piso').value;
+    const selectUnidad = document.getElementById('medicion-unidad');
+    if (!selectUnidad) return;
+
+    selectUnidad.innerHTML = '<option value="">Seleccionar unidad...</option>';
+    const torre = estructuraEdificio.torres?.find(t => t.id === torreId);
+    const piso = torre?.pisos.find(p => p.id === pisoId);
+    if (piso) {
+        piso.departamentos.forEach(depto => {
+            const opt = document.createElement('option');
+            opt.value = depto.id;
+            opt.textContent = depto.numero;
+            selectUnidad.appendChild(opt);
+        });
+    }
+}
+
 // Cambiar tipo de medición
 function cambiarTipoMedicion() {
     const tipo = document.getElementById('medicion-tipo-senal').value;
@@ -540,4 +585,4 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 console.log('[MEDICIONES] Archivo js/mediciones.html cargado completamente');
-</script
+</script>
