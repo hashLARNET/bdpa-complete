@@ -287,26 +287,20 @@
                             <label>Torre:</label>
                             <select id="torre-medicion">
                                 <option value="">Seleccionar...</option>
-                                <option value="A">Torre A</option>
-                                <option value="B">Torre B</option>
-                                <option value="C">Torre C</option>
-                                <option value="D">Torre D</option>
-                                <option value="E">Torre E</option>
-                                <option value="F">Torre F</option>
-                                <option value="G">Torre G</option>
-                                <option value="H">Torre H</option>
-                                <option value="I">Torre I</option>
-                                <option value="J">Torre J</option>
                             </select>
                         </div>
                         <div class="form-group">
                             <label>Piso:</label>
                             <select id="piso-medicion">
                                 <option value="">Seleccionar...</option>
-                                <option value="1">Piso 1</option>
-                                <option value="3">Piso 3</option>
                             </select>
                         </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Unidad:</label>
+                        <select id="identificador-medicion">
+                            <option value="">Primero seleccione torre y piso</option>
+                        </select>
                     </div>
                 </div>
 
@@ -324,18 +318,55 @@
                     </div>
                 </div>
 
-                <div class="form-section">
-                    <h3>Valores</h3>
+                <!-- Campos específicos por tipo de medición -->
+                <div id="campos-coaxial" class="form-section hidden">
+                    <h3>Medición Coaxial</h3>
+                    <div class="form-group">
+                        <label>Valor (dBμV):</label>
+                        <input type="number" id="valor-coaxial" step="0.1" placeholder="Ej: 65.5">
+                        <small>Rango recomendado: 45-75 dBμV</small>
+                    </div>
+                </div>
+
+                <div id="campos-fo" class="form-section hidden">
+                    <h3>Medición Fibra Óptica</h3>
                     <div class="form-row">
                         <div class="form-group">
-                            <label>Valor Principal:</label>
-                            <input type="number" id="valor-principal" step="0.1" placeholder="Ej: 65.5">
+                            <label>Potencia TX (dBm):</label>
+                            <input type="number" id="potencia-tx" step="0.01" placeholder="Ej: -20.5">
                         </div>
                         <div class="form-group">
-                            <label>Valor Secundario:</label>
-                            <input type="number" id="valor-secundario" step="0.1" placeholder="Opcional">
+                            <label>Potencia RX (dBm):</label>
+                            <input type="number" id="potencia-rx" step="0.01" placeholder="Ej: -21.0">
                         </div>
                     </div>
+                    <small>La atenuación se calculará automáticamente</small>
+                </div>
+
+                <div id="campos-wifi" class="form-section hidden">
+                    <h3>Medición WiFi</h3>
+                    <div class="form-group">
+                        <label>Potencia (dBm):</label>
+                        <input type="number" id="valor-wifi" step="0.1" placeholder="Ej: -45.0">
+                        <small>Rango típico: -80 a -30 dBm</small>
+                    </div>
+                </div>
+
+                <div id="campos-certificacion" class="form-section hidden">
+                    <h3>Certificación Final</h3>
+                    <div class="form-group">
+                        <label>Resultado:</label>
+                        <select id="resultado-certificacion">
+                            <option value="">Seleccionar...</option>
+                            <option value="APROBADO">Aprobado</option>
+                            <option value="APROBADO_CON_OBSERVACIONES">Aprobado con observaciones</option>
+                            <option value="RECHAZADO">Rechazado</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h3>Estado y Observaciones</h3>
                     <div class="form-group">
                         <label>Estado:</label>
                         <select id="estado-medicion">
@@ -344,11 +375,8 @@
                             <option value="FALLA">Falla - Requiere corrección</option>
                         </select>
                     </div>
-                </div>
-
-                <div class="form-section">
-                    <h3>Observaciones</h3>
                     <div class="form-group">
+                        <label>Observaciones:</label>
                         <textarea id="observaciones-medicion" rows="3" placeholder="Detalles de la medición..."></textarea>
                     </div>
                 </div>
@@ -356,6 +384,9 @@
                 <div class="form-actions">
                     <button type="button" onclick="guardarMedicion()" class="btn btn-primary btn-large">
                         <i class="fas fa-save"></i> Guardar Medición
+                    </button>
+                    <button type="button" onclick="limpiarFormularioMedicion()" class="btn btn-secondary">
+                        <i class="fas fa-eraser"></i> Limpiar
                     </button>
                 </div>
             </div>
@@ -373,6 +404,12 @@
     <div id="loader" class="loader hidden">
         <div class="spinner"></div>
         <p>Cargando...</p>
+    </div>
+
+    <!-- Loader específico para mediciones -->
+    <div id="mediciones-loader" class="loader hidden">
+        <div class="spinner"></div>
+        <p>Procesando mediciones...</p>
     </div>
 
     <!-- Notificaciones -->

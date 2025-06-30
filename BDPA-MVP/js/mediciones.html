@@ -1,7 +1,36 @@
 <script>
-// BDPA MVP - Gestión de Mediciones
+// BDPA MVP - Gestión de Mediciones Corregida
 
-// Función para mostrar tabs de mediciones
+// Variables globales
+let medicionesData = [];
+let estructuraObra = {};
+let tipoMedicionActual = '';
+
+// Configuración de valores de referencia
+const VALORES_REFERENCIA = {
+    COAXIAL: {
+        min: 45,
+        max: 75,
+        tolerance: 3
+    },
+    FO: {
+        potenciaMin: -30,
+        potenciaMax: -8,
+        atenuacionMax: 0.5
+    },
+    WIFI: {
+        min: -80,
+        max: -30
+    }
+};
+
+// ============================================================================
+// FUNCIONES PRINCIPALES
+// ============================================================================
+
+/**
+ * Mostrar tabs de mediciones
+ */
 function mostrarTabMedicion(tab) {
     // Ocultar todos los tabs
     document.querySelectorAll('.tab-content').forEach(content => {
@@ -20,125 +49,323 @@ function mostrarTabMedicion(tab) {
     }
     
     // Activar botón correspondiente
-    event.target.classList.add('active');
+    if (event && event.target) {
+        event.target.classList.add('active');
+    }
     
     // Cargar datos si es necesario
     if (tab === 'consultar') {
         cargarMediciones();
+    } else if (tab === 'registrar') {
+        cargarEstructuraParaMediciones();
     }
 }
 
-// Función para guardar medición
-async function guardarMedicion() {
+/**
+ * Cargar estructura para mediciones
+ */
+async function cargarEstructuraParaMediciones() {
+    try {
+        const response = await callAPI('getEstructura');
+        
+        if (response.success) {
+            estructuraObra = response.data;
+            cargarTorresDisponibles();
+        } else {
+            throw new Error(response.message || 'Error al cargar estructura');
+        }
+    } catch (error) {
+        console.error('Error cargando estructura:', error);
+        mostrarNotificacion('Error al cargar estructura de la obra', 'error');
+    }
+}
+
+/**
+ * Cargar torres disponibles
+ */
+function cargarTorresDisponibles() {
+    const selectTorre = document.getElementById('torre-medicion');
+    if (!selectTorre) return;
+    
+    selectTorre.innerHTML = '<option value="">Seleccionar torre...</option>';
+    
+    // Torres fijas de Los Encinos
+    const torres = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
+    
+    torres.forEach(torre => {
+        const option = document.createElement('option');
+        option.value = torre;
+        option.textContent = `Torre ${torre}`;
+        selectTorre.appendChild(option);
+    });
+}
+
+/**
+ * Cargar pisos cuando se selecciona una torre
+ */
+function cargarPisosPorTorre() {
+    const torre = document.getElementById('torre-medicion').value;
+    const selectPiso = document.getElementById('piso-medicion');
+    
+    if (!torre || !selectPiso) return;
+    
+    // Limpiar selects dependientes
+    selectPiso.innerHTML = '<option value="">Seleccionar piso...</option>';
+    document.getElementById('identificador-medicion').innerHTML = '<option value="">Primero seleccione torre y piso</option>';
+    
+    // Los Encinos tiene pisos 1 y 3
+    const pisos = [1, 3];
+    
+    pisos.forEach(piso => {
+        const option = document.createElement('option');
+        option.value = piso;
+        option.textContent = `Piso ${piso}`;
+        selectPiso.appendChild(option);
+    });
+}
+
+/**
+ * Cargar identificadores (unidades) por torre y piso
+ */
+async function cargarIdentificadoresPorTorrePiso() {
     const torre = document.getElementById('torre-medicion').value;
     const piso = document.getElementById('piso-medicion').value;
+    const selectIdentificador = document.getElementById('identificador-medicion');
+    
+    if (!torre || !piso || !selectIdentificador) return;
+    
+    selectIdentificador.innerHTML = '<option value="">Cargando...</option>';
+    
+    try {
+        // Obtener unidades específicas de la estructura
+        const response = await callAPI('getUnidadesPorTorrePiso', { torre, piso });
+        
+        if (response.success && response.data) {
+            selectIdentificador.innerHTML = '<option value="">Seleccionar unidad...</option>';
+            
+            response.data.forEach(unidad => {
+                const option = document.createElement('option');
+                option.value = unidad.identificador;
+                option.textContent = unidad.identificador;
+                selectIdentificador.appendChild(option);
+            });
+        } else {
+            // Fallback: generar unidades basándose en la estructura conocida
+            generarUnidadesFallback(torre, piso, selectIdentificador);
+        }
+    } catch (error) {
+        console.error('Error cargando unidades:', error);
+        generarUnidadesFallback(torre, piso, selectIdentificador);
+    }
+}
+
+/**
+ * Generar unidades como fallback
+ */
+function generarUnidadesFallback(torre, piso, selectElement) {
+    selectElement.innerHTML = '<option value="">Seleccionar unidad...</option>';
+    
+    // Estructura simplificada de Los Encinos
+    const estructuraUnidades = {
+        'A': {
+            1: ['A101', 'A102', 'A103', 'A104', 'A105', 'A106', 'A107', 'A108', 'A109'],
+            3: ['A301', 'A302', 'A303', 'A304', 'A305', 'A306', 'A307', 'A308', 'A309']
+        },
+        'B': {
+            1: ['B101', 'B102', 'B103', 'B104', 'B105', 'B106', 'B107', 'B108', 'B109', 'B110', 'B111', 'B112', 'B113', 'B114', 'B115'],
+            3: ['B301', 'B302', 'B303', 'B304', 'B305', 'B306', 'B307', 'B308', 'B309', 'B310', 'B311', 'B312', 'B313', 'B314', 'B315']
+        }
+        // Agregar más torres según necesidad
+    };
+    
+    const unidades = estructuraUnidades[torre]?.[parseInt(piso)] || [];
+    
+    unidades.forEach(unidad => {
+        const option = document.createElement('option');
+        option.value = unidad;
+        option.textContent = unidad;
+        selectElement.appendChild(option);
+    });
+    
+    if (unidades.length === 0) {
+        selectElement.innerHTML = '<option value="">No hay unidades disponibles</option>';
+    }
+}
+
+/**
+ * Mostrar campos de medición según el tipo
+ */
+function mostrarCamposMedicion() {
+    const tipo = document.getElementById('tipo-medicion').value;
+    
+    // Ocultar todos los campos
+    document.getElementById('campos-coaxial').classList.add('hidden');
+    document.getElementById('campos-fo').classList.add('hidden');
+    document.getElementById('campos-wifi').classList.add('hidden');
+    document.getElementById('campos-certificacion').classList.add('hidden');
+    
+    // Mostrar campos según el tipo
+    switch(tipo) {
+        case 'coaxial':
+            document.getElementById('campos-coaxial').classList.remove('hidden');
+            break;
+        case 'fibra':
+            document.getElementById('campos-fo').classList.remove('hidden');
+            break;
+        case 'wifi':
+            document.getElementById('campos-wifi').classList.remove('hidden');
+            break;
+        case 'certificacion':
+            document.getElementById('campos-certificacion').classList.remove('hidden');
+            break;
+    }
+    
+    tipoMedicionActual = tipo;
+}
+
+/**
+ * Validar valores de medición
+ */
+function validarValoresMedicion() {
+    const tipo = tipoMedicionActual;
+    let valido = true;
+    let valores = {};
+    
+    switch(tipo) {
+        case 'coaxial':
+            const valorCoaxial = parseFloat(document.getElementById('valor-coaxial').value);
+            if (isNaN(valorCoaxial)) {
+                mostrarNotificacion('Debe ingresar un valor válido para coaxial', 'error');
+                return false;
+            }
+            
+            if (valorCoaxial < VALORES_REFERENCIA.COAXIAL.min || valorCoaxial > VALORES_REFERENCIA.COAXIAL.max) {
+                if (!confirm(`Valor fuera del rango recomendado (${VALORES_REFERENCIA.COAXIAL.min}-${VALORES_REFERENCIA.COAXIAL.max} dBμV). ¿Continuar?`)) {
+                    return false;
+                }
+            }
+            
+            valores = { coaxial: valorCoaxial };
+            break;
+            
+        case 'fibra':
+            const potenciaTx = parseFloat(document.getElementById('potencia-tx').value);
+            const potenciaRx = parseFloat(document.getElementById('potencia-rx').value);
+            
+            if (isNaN(potenciaTx) || isNaN(potenciaRx)) {
+                mostrarNotificacion('Debe ingresar valores válidos para potencia TX y RX', 'error');
+                return false;
+            }
+            
+            const atenuacion = potenciaTx - potenciaRx;
+            valores = { 
+                potenciaTx, 
+                potenciaRx, 
+                atenuacion: atenuacion.toFixed(2) 
+            };
+            break;
+            
+        case 'wifi':
+            const valorWifi = parseFloat(document.getElementById('valor-wifi').value);
+            if (isNaN(valorWifi)) {
+                mostrarNotificacion('Debe ingresar un valor válido para WiFi', 'error');
+                return false;
+            }
+            
+            valores = { wifi: valorWifi };
+            break;
+            
+        case 'certificacion':
+            const resultado = document.getElementById('resultado-certificacion').value;
+            if (!resultado) {
+                mostrarNotificacion('Debe seleccionar un resultado de certificación', 'error');
+                return false;
+            }
+            
+            valores = { certificacion: resultado };
+            break;
+            
+        default:
+            mostrarNotificacion('Debe seleccionar un tipo de medición', 'error');
+            return false;
+    }
+    
+    return { valido: true, valores };
+}
+
+/**
+ * Guardar medición
+ */
+async function guardarMedicion() {
+    // Validar campos básicos
+    const torre = document.getElementById('torre-medicion').value;
+    const piso = document.getElementById('piso-medicion').value;
+    const identificador = document.getElementById('identificador-medicion').value;
     const tipoMedicion = document.getElementById('tipo-medicion').value;
-    const valorPrincipal = document.getElementById('valor-principal').value;
-    const valorSecundario = document.getElementById('valor-secundario').value;
     const estado = document.getElementById('estado-medicion').value;
     const observaciones = document.getElementById('observaciones-medicion').value;
     
-    // Validaciones básicas
-    if (!torre) {
-        mostrarNotificacion('Debe seleccionar una torre', 'error');
+    if (!torre || !piso || !identificador || !tipoMedicion) {
+        mostrarNotificacion('Debe completar todos los campos obligatorios', 'error');
         return;
     }
     
-    if (!piso) {
-        mostrarNotificacion('Debe seleccionar un piso', 'error');
+    // Validar valores específicos del tipo de medición
+    const validacion = validarValoresMedicion();
+    if (!validacion.valido) {
         return;
     }
-    
-    if (!tipoMedicion) {
-        mostrarNotificacion('Debe seleccionar un tipo de medición', 'error');
-        return;
-    }
-    
-    if (!valorPrincipal) {
-        mostrarNotificacion('Debe ingresar el valor principal', 'error');
-        return;
-    }
-    
-    const valor1 = parseFloat(valorPrincipal);
-    const valor2 = valorSecundario ? parseFloat(valorSecundario) : null;
-    
-    if (isNaN(valor1)) {
-        mostrarNotificacion('El valor principal debe ser un número válido', 'error');
-        return;
-    }
-    
-    if (valorSecundario && isNaN(valor2)) {
-        mostrarNotificacion('El valor secundario debe ser un número válido', 'error');
-        return;
-    }
-    
-    mostrarLoader(true);
     
     try {
-        // Preparar datos de la medición
+        mostrarLoader(true);
+        
         const datosMedicion = {
             torre,
-            piso,
+            piso: parseInt(piso),
+            identificador,
             tipoMedicion,
-            valorPrincipal: valor1,
-            valorSecundario: valor2,
+            valores: JSON.stringify(validacion.valores),
             estado,
             observaciones: observaciones.trim(),
             fecha: new Date().toISOString(),
-            usuario: usuarioActual.nombre,
-            usuarioId: usuarioActual.id,
-            ubicacion: `Torre ${torre} - Piso ${piso}`
+            usuario: usuarioActual?.nombre || 'Usuario',
+            timestamp: new Date().getTime()
         };
         
-        // Validar rangos según tipo de medición
-        const validacion = validarRangosMedicion(tipoMedicion, valor1, valor2);
-        if (!validacion.valido) {
-            mostrarNotificacion(validacion.mensaje, 'warning');
-            // Continuar pero con advertencia
-        }
-        
-        // Guardar medición
-        const response = await guardarMedicion(datosMedicion);
+        const response = await callAPI('guardarMedicion', datosMedicion);
         
         if (response.success) {
             mostrarNotificacion('Medición guardada correctamente', 'success');
-            
-            // Limpiar formulario
             limpiarFormularioMedicion();
             
-            // Actualizar datos locales
-            medicionesData.unshift({
-                id: response.id,
-                ...datosMedicion
-            });
-            
+            // Actualizar lista si estamos en la pestaña de consulta
+            const tabConsultar = document.getElementById('tab-consultar-medicion');
+            if (tabConsultar && !tabConsultar.classList.contains('hidden')) {
+                cargarMediciones();
+            }
         } else {
             throw new Error(response.message || 'Error al guardar medición');
         }
         
     } catch (error) {
         console.error('Error guardando medición:', error);
-        
-        // Guardar en modo offline
-        guardarDatosOffline('mediciones', datosMedicion);
-        mostrarNotificacion('Sin conexión. Medición guardada localmente', 'warning');
-        
-        // Limpiar formulario de todos modos
-        limpiarFormularioMedicion();
+        mostrarNotificacion('Error al guardar medición: ' + error.message, 'error');
     } finally {
         mostrarLoader(false);
     }
 }
 
-// Función para cargar mediciones
+/**
+ * Cargar mediciones existentes
+ */
 async function cargarMediciones() {
-    mostrarLoader(true);
-    
     try {
-        const response = await getMediciones();
+        mostrarLoader(true);
+        
+        const response = await callAPI('getMediciones');
         
         if (response.success) {
-            medicionesData = response.data;
+            medicionesData = response.data || [];
             mostrarListaMediciones();
         } else {
             throw new Error(response.message || 'Error al cargar mediciones');
@@ -147,15 +374,14 @@ async function cargarMediciones() {
     } catch (error) {
         console.error('Error cargando mediciones:', error);
         mostrarNotificacion('Error al cargar mediciones', 'error');
-        
-        // Cargar datos locales como fallback
-        cargarMedicionesLocales();
     } finally {
         mostrarLoader(false);
     }
 }
 
-// Función para mostrar lista de mediciones
+/**
+ * Mostrar lista de mediciones
+ */
 function mostrarListaMediciones() {
     const container = document.getElementById('lista-mediciones');
     if (!container) return;
@@ -181,7 +407,7 @@ function mostrarListaMediciones() {
         html += `
             <div class="medicion-item">
                 <div class="medicion-info">
-                    <div class="avance-location">${medicion.ubicacion}</div>
+                    <div class="avance-location">Torre ${medicion.torre} - Piso ${medicion.piso} - ${medicion.identificador}</div>
                     <div class="avance-details">
                         <strong>${tipoTexto}</strong><br>
                         ${formatearFecha(medicion.fecha)} - ${medicion.usuario}
@@ -199,29 +425,35 @@ function mostrarListaMediciones() {
     container.innerHTML = html;
 }
 
-// Funciones auxiliares para mediciones
-function validarRangosMedicion(tipo, valor1, valor2) {
-    const rangos = {
-        coaxial: { min: 45, max: 75, unidad: 'dBμV' },
-        fibra: { min: -30, max: -8, unidad: 'dBm' },
-        wifi: { min: -80, max: -30, unidad: 'dBm' },
-        certificacion: { min: 0, max: 100, unidad: '%' }
-    };
+/**
+ * Limpiar formulario de medición
+ */
+function limpiarFormularioMedicion() {
+    document.getElementById('torre-medicion').value = '';
+    document.getElementById('piso-medicion').value = '';
+    document.getElementById('identificador-medicion').innerHTML = '<option value="">Primero seleccione torre y piso</option>';
+    document.getElementById('tipo-medicion').value = '';
+    document.getElementById('estado-medicion').value = 'OK';
+    document.getElementById('observaciones-medicion').value = '';
     
-    const rango = rangos[tipo];
-    if (!rango) {
-        return { valido: true };
-    }
+    // Limpiar campos específicos
+    document.getElementById('valor-coaxial').value = '';
+    document.getElementById('potencia-tx').value = '';
+    document.getElementById('potencia-rx').value = '';
+    document.getElementById('valor-wifi').value = '';
+    document.getElementById('resultado-certificacion').value = '';
     
-    if (valor1 < rango.min || valor1 > rango.max) {
-        return {
-            valido: false,
-            mensaje: `Valor fuera del rango esperado para ${tipo}: ${rango.min} a ${rango.max} ${rango.unidad}`
-        };
-    }
+    // Ocultar todos los campos específicos
+    document.querySelectorAll('[id^="campos-"]').forEach(campo => {
+        campo.classList.add('hidden');
+    });
     
-    return { valido: true };
+    tipoMedicionActual = '';
 }
+
+// ============================================================================
+// FUNCIONES AUXILIARES
+// ============================================================================
 
 function getTipoMedicionTexto(tipo) {
     const tipos = {
@@ -235,26 +467,24 @@ function getTipoMedicionTexto(tipo) {
 }
 
 function construirValoresTexto(medicion) {
-    let texto = medicion.valorPrincipal.toString();
-    
-    if (medicion.valorSecundario !== null && medicion.valorSecundario !== undefined) {
-        texto += ` / ${medicion.valorSecundario}`;
+    try {
+        const valores = JSON.parse(medicion.valores);
+        
+        switch(medicion.tipoMedicion) {
+            case 'coaxial':
+                return `${valores.coaxial} dBμV`;
+            case 'fibra':
+                return `TX: ${valores.potenciaTx} dBm, RX: ${valores.potenciaRx} dBm, Att: ${valores.atenuacion} dB`;
+            case 'wifi':
+                return `${valores.wifi} dBm`;
+            case 'certificacion':
+                return valores.certificacion;
+            default:
+                return 'N/A';
+        }
+    } catch (error) {
+        return 'Error en valores';
     }
-    
-    // Agregar unidad según tipo
-    const unidades = {
-        coaxial: 'dBμV',
-        fibra: 'dBm',
-        wifi: 'dBm',
-        certificacion: '%'
-    };
-    
-    const unidad = unidades[medicion.tipoMedicion];
-    if (unidad) {
-        texto += ` ${unidad}`;
-    }
-    
-    return texto;
 }
 
 function getEstadoClass(estado) {
@@ -267,125 +497,50 @@ function getEstadoClass(estado) {
     return clases[estado] || 'ok';
 }
 
-function limpiarFormularioMedicion() {
-    document.getElementById('torre-medicion').value = '';
-    document.getElementById('piso-medicion').value = '';
-    document.getElementById('tipo-medicion').value = '';
-    document.getElementById('valor-principal').value = '';
-    document.getElementById('valor-secundario').value = '';
-    document.getElementById('estado-medicion').value = 'OK';
-    document.getElementById('observaciones-medicion').value = '';
-}
-
-function cargarMedicionesLocales() {
-    // Cargar mediciones desde localStorage como fallback
-    const medicionesLocales = JSON.parse(localStorage.getItem('mediciones_mock') || '[]');
-    medicionesData = medicionesLocales;
-    mostrarListaMediciones();
-}
-
-// Función para exportar mediciones (opcional)
-function exportarMediciones() {
-    if (medicionesData.length === 0) {
-        mostrarNotificacion('No hay mediciones para exportar', 'warning');
-        return;
-    }
-    
-    // Crear CSV simple
-    let csv = 'Fecha,Torre,Piso,Tipo,Valor Principal,Valor Secundario,Estado,Usuario,Observaciones\n';
-    
-    medicionesData.forEach(medicion => {
-        csv += `"${formatearFecha(medicion.fecha)}","${medicion.torre}","${medicion.piso}","${getTipoMedicionTexto(medicion.tipoMedicion)}","${medicion.valorPrincipal}","${medicion.valorSecundario || ''}","${medicion.estado}","${medicion.usuario}","${medicion.observaciones || ''}"\n`;
-    });
-    
-    // Descargar archivo
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `mediciones_los_encinos_${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    
-    mostrarNotificacion('Mediciones exportadas correctamente', 'success');
-}
-
-// Función para generar reporte de mediciones
-function generarReporteMediciones() {
-    if (medicionesData.length === 0) {
-        mostrarNotificacion('No hay mediciones para generar reporte', 'warning');
-        return;
-    }
-    
-    // Calcular estadísticas
-    const total = medicionesData.length;
-    const ok = medicionesData.filter(m => m.estado === 'OK').length;
-    const advertencias = medicionesData.filter(m => m.estado === 'ADVERTENCIA').length;
-    const fallas = medicionesData.filter(m => m.estado === 'FALLA').length;
-    
-    // Estadísticas por tipo
-    const porTipo = {};
-    medicionesData.forEach(m => {
-        if (!porTipo[m.tipoMedicion]) {
-            porTipo[m.tipoMedicion] = { total: 0, ok: 0, advertencias: 0, fallas: 0 };
+function mostrarLoader(mostrar) {
+    const loader = document.getElementById('mediciones-loader');
+    if (loader) {
+        if (mostrar) {
+            loader.classList.remove('hidden');
+        } else {
+            loader.classList.add('hidden');
         }
-        porTipo[m.tipoMedicion].total++;
-        porTipo[m.tipoMedicion][m.estado.toLowerCase()]++;
-    });
-    
-    // Crear reporte HTML
-    let reporteHTML = `
-        <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px;">
-            <h1 style="text-align: center; color: #2c3e50;">Reporte de Mediciones - Los Encinos</h1>
-            <p style="text-align: center; color: #666;">Generado el ${new Date().toLocaleString('es-CL')}</p>
-            
-            <h2>Resumen General</h2>
-            <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px;">
-                <tr style="background: #f8f9fa;">
-                    <th style="border: 1px solid #ddd; padding: 10px;">Total Mediciones</th>
-                    <th style="border: 1px solid #ddd; padding: 10px;">OK</th>
-                    <th style="border: 1px solid #ddd; padding: 10px;">Advertencias</th>
-                    <th style="border: 1px solid #ddd; padding: 10px;">Fallas</th>
-                </tr>
-                <tr>
-                    <td style="border: 1px solid #ddd; padding: 10px; text-align: center;">${total}</td>
-                    <td style="border: 1px solid #ddd; padding: 10px; text-align: center; color: #27ae60;">${ok}</td>
-                    <td style="border: 1px solid #ddd; padding: 10px; text-align: center; color: #f39c12;">${advertencias}</td>
-                    <td style="border: 1px solid #ddd; padding: 10px; text-align: center; color: #e74c3c;">${fallas}</td>
-                </tr>
-            </table>
-            
-            <h2>Detalle por Tipo de Medición</h2>
-            <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px;">
-                <tr style="background: #f8f9fa;">
-                    <th style="border: 1px solid #ddd; padding: 10px;">Tipo</th>
-                    <th style="border: 1px solid #ddd; padding: 10px;">Total</th>
-                    <th style="border: 1px solid #ddd; padding: 10px;">OK</th>
-                    <th style="border: 1px solid #ddd; padding: 10px;">Advertencias</th>
-                    <th style="border: 1px solid #ddd; padding: 10px;">Fallas</th>
-                </tr>
-                ${Object.keys(porTipo).map(tipo => `
-                    <tr>
-                        <td style="border: 1px solid #ddd; padding: 10px;">${getTipoMedicionTexto(tipo)}</td>
-                        <td style="border: 1px solid #ddd; padding: 10px; text-align: center;">${porTipo[tipo].total}</td>
-                        <td style="border: 1px solid #ddd; padding: 10px; text-align: center; color: #27ae60;">${porTipo[tipo].ok || 0}</td>
-                        <td style="border: 1px solid #ddd; padding: 10px; text-align: center; color: #f39c12;">${porTipo[tipo].advertencias || 0}</td>
-                        <td style="border: 1px solid #ddd; padding: 10px; text-align: center; color: #e74c3c;">${porTipo[tipo].fallas || 0}</td>
-                    </tr>
-                `).join('')}
-            </table>
-        </div>
-    `;
-    
-    // Abrir en nueva ventana
-    const ventana = window.open('', '_blank');
-    ventana.document.write(reporteHTML);
-    ventana.document.close();
-    
-    mostrarNotificacion('Reporte generado correctamente', 'success');
+    }
 }
 
-console.log('BDPA MVP - Módulo de mediciones cargado');
+function formatearFecha(fecha) {
+    if (!fecha) return '-';
+    const date = new Date(fecha);
+    return date.toLocaleDateString('es-CL') + ' ' + date.toLocaleTimeString('es-CL', {
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
+// ============================================================================
+// INICIALIZACIÓN
+// ============================================================================
+
+// Inicializar cuando el DOM esté listo
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('[MEDICIONES] Módulo de mediciones cargado');
+    
+    // Configurar event listeners
+    const torreMedicion = document.getElementById('torre-medicion');
+    if (torreMedicion) {
+        torreMedicion.addEventListener('change', cargarPisosPorTorre);
+    }
+    
+    const pisoMedicion = document.getElementById('piso-medicion');
+    if (pisoMedicion) {
+        pisoMedicion.addEventListener('change', cargarIdentificadoresPorTorrePiso);
+    }
+    
+    const tipoMedicion = document.getElementById('tipo-medicion');
+    if (tipoMedicion) {
+        tipoMedicion.addEventListener('change', mostrarCamposMedicion);
+    }
+});
+
+console.log('[MEDICIONES] Archivo js/mediciones.html cargado completamente');
 </script>

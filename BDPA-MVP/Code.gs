@@ -47,6 +47,8 @@ function processAPI(payload) {
         return handleLogin(data);
       case 'getEstructura':
         return handleGetEstructura();
+      case 'getUnidadesPorTorrePiso':
+        return handleGetUnidadesPorTorrePiso(data);
       case 'guardarAvance':
         return handleGuardarAvance(data);
       case 'getAvances':
@@ -143,6 +145,53 @@ function handleGetEstructura() {
   } catch (error) {
     console.error('Error obteniendo estructura:', error);
     return { success: false, message: 'Error al cargar estructura' };
+  }
+}
+
+/**
+ * Obtener unidades por torre y piso
+ */
+function handleGetUnidadesPorTorrePiso(data) {
+  try {
+    const { torre, piso } = data;
+    
+    if (!torre || !piso) {
+      return { success: false, message: 'Torre y piso son requeridos' };
+    }
+    
+    const sheet = getSheet(CONFIG.SHEETS.ESTRUCTURA);
+    const estructura = sheet.getDataRange().getValues();
+    
+    // Filtrar unidades por torre, piso y tipo 'Unidad'
+    const unidades = [];
+    for (let i = 1; i < estructura.length; i++) {
+      const [torreRow, pisoRow, sector, tipoEspacio, identificador, activo] = estructura[i];
+      
+      if (torreRow === torre && 
+          pisoRow == piso && 
+          tipoEspacio === 'Unidad' && 
+          activo) {
+        unidades.push({
+          torre: torreRow,
+          piso: pisoRow,
+          sector: sector,
+          identificador: identificador,
+          tipoEspacio: tipoEspacio
+        });
+      }
+    }
+    
+    // Ordenar por identificador
+    unidades.sort((a, b) => a.identificador.localeCompare(b.identificador));
+    
+    return {
+      success: true,
+      data: unidades
+    };
+    
+  } catch (error) {
+    console.error('Error obteniendo unidades:', error);
+    return { success: false, message: 'Error al cargar unidades' };
   }
 }
 
@@ -316,21 +365,19 @@ function handleGuardarMedicion(data) {
     const id = Utilities.getUuid();
     const timestamp = new Date();
     
-    // Preparar datos para insertar
+    // Preparar datos para insertar según la nueva estructura
     const rowData = [
-      id,
-      data.fecha || timestamp.toISOString(),
-      data.torre,
-      data.piso,
-      data.tipoMedicion,
-      JSON.stringify({
-        principal: data.valorPrincipal,
-        secundario: data.valorSecundario
-      }),
-      data.estado,
-      data.usuario,
-      data.observaciones || '',
-      timestamp
+      id,                           // ID
+      data.fecha || timestamp.toISOString(), // Fecha
+      data.torre,                   // Torre
+      data.piso,                    // Piso
+      data.identificador,           // Identificador (nuevo campo)
+      data.tipoMedicion,           // TipoMedicion
+      data.valores,                // Valores (JSON string)
+      data.estado,                 // Estado
+      data.usuario,                // Usuario
+      data.observaciones || '',    // Observaciones
+      timestamp                    // Timestamp
     ];
     
     // Insertar en la hoja
@@ -356,31 +403,23 @@ function handleGetMediciones() {
       return { success: true, data: [] };
     }
     
-    // Convertir a objetos
+    // Convertir a objetos según la nueva estructura
     const mediciones = [];
     for (let i = 1; i < data.length; i++) {
-      const [id, fecha, torre, piso, tipoMedicion, valores, estado, usuario, observaciones, timestamp] = data[i];
-      
-      let valoresParsed = {};
-      try {
-        valoresParsed = JSON.parse(valores);
-      } catch (e) {
-        valoresParsed = { principal: valores, secundario: null };
-      }
+      const [id, fecha, torre, piso, identificador, tipoMedicion, valores, estado, usuario, observaciones, timestamp] = data[i];
       
       mediciones.push({
         id,
         fecha,
         torre,
         piso,
+        identificador,
         tipoMedicion,
-        valorPrincipal: valoresParsed.principal,
-        valorSecundario: valoresParsed.secundario,
+        valores,
         estado,
         usuario,
         observaciones,
-        timestamp,
-        ubicacion: `Torre ${torre} - Piso ${piso}`
+        timestamp
       });
     }
     
@@ -452,7 +491,7 @@ function initializeSheet(sheet, sheetName) {
       break;
       
     case CONFIG.SHEETS.MEDICIONES:
-      headers = ['ID', 'Fecha', 'Torre', 'Piso', 'TipoMedicion', 'Valores', 'Estado', 'Usuario', 'Observaciones', 'Timestamp'];
+      headers = ['ID', 'Fecha', 'Torre', 'Piso', 'Identificador', 'TipoMedicion', 'Valores', 'Estado', 'Usuario', 'Observaciones', 'Timestamp'];
       sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
       break;
   }
@@ -509,4 +548,11 @@ function testAPI() {
     data: {}
   });
   console.log('Estructura test:', estructuraResult);
+  
+  // Test unidades por torre y piso
+  const unidadesResult = processAPI({
+    action: 'getUnidadesPorTorrePiso',
+    data: { torre: 'A', piso: 1 }
+  });
+  console.log('Unidades test:', unidadesResult);
 }
