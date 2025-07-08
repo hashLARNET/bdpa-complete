@@ -69,8 +69,8 @@ Crear un nuevo Google Sheets con estas hojas:
 
 #### Hoja "Mediciones"
 ```
-| ID | Fecha | Torre | Piso | TipoMedicion | Valores | Estado | Usuario | Observaciones | Timestamp |
-|----|-------|-------|------|--------------|---------|--------|---------|---------------|-----------|
+| ID | Fecha | Torre | Piso | Identificador | TipoMedicion | Valores | Estado | Usuario | Observaciones | Timestamp |
+|----|-------|-------|------|---------------|--------------|---------|--------|---------|---------------|-----------|
 ```
 
 ### 2. Configurar Google Apps Script
