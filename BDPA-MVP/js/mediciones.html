@@ -347,6 +347,13 @@ function validarValoresMedicion() {
  * Guardar medición
  */
 async function guardarMedicion() {
+    // Verificar que callAPI esté disponible
+    if (typeof callAPI !== 'function') {
+        console.error('callAPI no está disponible');
+        mostrarNotificacion('Error de sistema: API no disponible', 'error');
+        return;
+    }
+    
     // Validar campos básicos
     const torre = document.getElementById('torre-medicion').value;
     const piso = document.getElementById('piso-medicion').value;
@@ -367,7 +374,7 @@ async function guardarMedicion() {
     }
     
     try {
-        mostrarLoader(true);
+        mostrarLoaderMediciones(true);
         
         const datosMedicion = {
             torre,
@@ -382,7 +389,11 @@ async function guardarMedicion() {
             timestamp: new Date().getTime()
         };
         
+        console.log('[MEDICIONES] Guardando:', datosMedicion);
+        
         const response = await callAPI('guardarMedicion', datosMedicion);
+        
+        console.log('[MEDICIONES] Respuesta:', response);
         
         if (response.success) {
             mostrarNotificacion('Medición guardada correctamente', 'success');
@@ -394,14 +405,21 @@ async function guardarMedicion() {
                 cargarMediciones();
             }
         } else {
-            throw new Error(response.message || 'Error al guardar medición');
+            const errorMsg = response.message || 'Error al guardar medición';
+            console.error('[MEDICIONES] Error del servidor:', errorMsg);
+            mostrarNotificacion(errorMsg, 'error');
         }
         
     } catch (error) {
         console.error('Error guardando medición:', error);
-        mostrarNotificacion('Error al guardar medición: ' + error.message, 'error');
+        
+        if (error.message.includes('timeout') || error.message.includes('network')) {
+            mostrarNotificacion('Error de conexión. Verifique su internet.', 'error');
+        } else {
+            mostrarNotificacion('Error al guardar medición: ' + error.message, 'error');
+        }
     } finally {
-        mostrarLoader(false);
+        mostrarLoaderMediciones(false);
     }
 }
 
@@ -556,13 +574,23 @@ function getEstadoClass(estado) {
 }
 
 function mostrarLoader(mostrar) {
-    const loader = document.getElementById('mediciones-loader');
-    if (loader) {
-        if (mostrar) {
-            loader.classList.remove('hidden');
-        } else {
-            loader.classList.add('hidden');
-        }
+    let loader = document.getElementById('mediciones-loader');
+    
+    if (!loader) {
+        loader = document.createElement('div');
+        loader.id = 'mediciones-loader';
+        loader.className = 'loader hidden';
+        loader.innerHTML = `
+            <div class="spinner"></div>
+            <p>Procesando mediciones...</p>
+        `;
+        document.body.appendChild(loader);
+    }
+    
+    if (mostrar) {
+        loader.classList.remove('hidden');
+    } else {
+        loader.classList.add('hidden');
     }
 }
 
@@ -583,6 +611,42 @@ function formatearFecha(fecha) {
 document.addEventListener('DOMContentLoaded', function() {
     console.log('[MEDICIONES] Módulo de mediciones cargado');
     
+    // Verificar elementos DOM críticos
+    const elementosCriticos = [
+        'torre-medicion',
+        'piso-medicion', 
+        'identificador-medicion',
+        'tipo-medicion'
+    ];
+    
+    elementosCriticos.forEach(id => {
+        const elemento = document.getElementById(id);
+        if (!elemento) {
+            console.warn(`[MEDICIONES] Elemento ${id} no encontrado`);
+        }
+    });
+    
+    // Configurar event listeners de forma segura
+    const torreMedicion = document.getElementById('torre-medicion');
+    if (torreMedicion) {
+        torreMedicion.addEventListener('change', cargarPisosPorTorre);
+    }
+    
+    const pisoMedicion = document.getElementById('piso-medicion');
+    if (pisoMedicion) {
+        pisoMedicion.addEventListener('change', cargarIdentificadoresPorTorrePiso);
+    }
+    
+    const tipoMedicion = document.getElementById('tipo-medicion');
+    if (tipoMedicion) {
+        tipoMedicion.addEventListener('change', mostrarCamposMedicion);
+    }
+    
+    // Definir funciones globales para botones HTML
+    window.guardarMedicion = guardarMedicion;
+    window.limpiarFormularioMedicion = limpiarFormularioMedicion;
+    window.mostrarTabMedicion = mostrarTabMedicion;
+    
     // Configurar event listeners
     const torreMedicion = document.getElementById('torre-medicion');
     if (torreMedicion) {
@@ -599,6 +663,14 @@ document.addEventListener('DOMContentLoaded', function() {
         tipoMedicion.addEventListener('change', mostrarCamposMedicion);
     }
 });
+
+// Exportar funciones principales
+window.medicionesModule = {
+    guardarMedicion,
+    cargarMediciones,
+    mostrarTabMedicion,
+    limpiarFormularioMedicion
+};
 
 console.log('[MEDICIONES] Archivo js/mediciones.html cargado completamente');
 </script>

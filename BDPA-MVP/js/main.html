@@ -4,6 +4,7 @@ let usuarioActual = null;
 let estructuraObra = null;
 let avancesData = [];
 let medicionesData = [];
+let sistemaCargado = false;
 
 // Configuración de la obra Los Encinos
 const OBRA_CONFIG = {
@@ -165,10 +166,36 @@ const ESTRUCTURA_UNIDADES = {
 
 // Funciones de utilidad
 function mostrarNotificacion(mensaje, tipo = 'info') {
+    // Crear contenedor si no existe
+    let container = document.getElementById('notifications-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'notifications-container';
+        container.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10000;
+            max-width: 300px;
+        `;
+        document.body.appendChild(container);
+    }
+    
     const container = document.getElementById('notifications-container');
     const notification = document.createElement('div');
     notification.className = `notification ${tipo}`;
+    notification.style.cssText = `
+        background: white;
+        padding: 15px 20px;
+        margin-bottom: 10px;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        border-left: 4px solid ${tipo === 'success' ? '#27ae60' : tipo === 'error' ? '#e74c3c' : tipo === 'warning' ? '#f39c12' : '#3498db'};
+        animation: slideIn 0.3s ease;
+    `;
     notification.textContent = mensaje;
+    
+    container.appendChild(notification);
     
     container.appendChild(notification);
     
@@ -177,11 +204,25 @@ function mostrarNotificacion(mensaje, tipo = 'info') {
         if (notification.parentNode) {
             notification.parentNode.removeChild(notification);
         }
+            notification.parentNode.removeChild(notification);
+        }
     }, 4000);
 }
 
 function mostrarLoader(mostrar = true) {
-    const loader = document.getElementById('loader');
+    let loader = document.getElementById('loader');
+    
+    if (!loader) {
+        loader = document.createElement('div');
+        loader.id = 'loader';
+        loader.className = 'loader hidden';
+        loader.innerHTML = `
+            <div class="spinner"></div>
+            <p>Cargando...</p>
+        `;
+        document.body.appendChild(loader);
+    }
+    
     if (mostrar) {
         loader.classList.remove('hidden');
     } else {

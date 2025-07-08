@@ -1,32 +1,75 @@
 <script>
 // BDPA MVP - API Functions
-const API_BASE_URL = 'https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec';
+const API_CONFIG = {
+    baseUrl: 'https://script.google.com/macros/s/AKfycbznW8BbpJFn7jIkDfrKp97VIdxcvNlf-ofv1SPk8p8w4f_1iwRNJSlcJO0TWbmHLP2K/exec',
+    timeout: 30000,
+    retryAttempts: 3,
+    retryDelay: 1000
+};
+
+// Estado de conexión
+let connectionState = {
+    isOnline: true,
+    lastCheck: null
+};
 
 // Función principal para llamadas a la API
 async function callAPI(action, data = {}) {
+    const requestId = Date.now().toString(36);
+    
     try {
+        console.log(`[API-${requestId}] ${action}:`, data);
+        
         const payload = {
             action: action,
             data: data,
-            timestamp: new Date().getTime()
+            timestamp: Date.now(),
+            requestId: requestId
         };
         
         // Para desarrollo local, usar Google Apps Script
         if (typeof google !== 'undefined' && google.script && google.script.run) {
-            return await new Promise((resolve, reject) => {
+            const result = await new Promise((resolve, reject) => {
+                const timeoutId = setTimeout(() => {
+                    reject(new Error('Request timeout'));
+                }, API_CONFIG.timeout);
+                
                 google.script.run
-                    .withSuccessHandler(resolve)
-                    .withFailureHandler(reject)
-                    .processAPI(payload);
+                    .withSuccessHandler(response => {
+                        clearTimeout(timeoutId);
+                        resolve(response);
+                    })
+                    .withFailureHandler(error => {
+                        clearTimeout(timeoutId);
+                        reject(new Error(error.message || 'Google Script error'));
+                    })
+                    .processAPI(action, data, null);
             });
+            
+            console.log(`[API-${requestId}] Success:`, result);
+            connectionState.isOnline = true;
+            connectionState.lastCheck = Date.now();
+            
+            return result;
         }
         
         // Fallback para testing sin GAS
         return await mockAPI(action, data);
         
     } catch (error) {
-        console.error('Error en API:', error);
-        return { success: false, message: 'Error de conexión' };
+        console.error(`[API-${requestId}] Error:`, error);
+        
+        // Detectar problemas de conexión
+        if (error.name === 'TypeError' || error.message.includes('timeout')) {
+            connectionState.isOnline = false;
+        }
+        
+        return { 
+            success: false, 
+            message: error.message || 'Error de conexión',
+            error: true,
+            offline: !connectionState.isOnline
+        };
     }
 }
 

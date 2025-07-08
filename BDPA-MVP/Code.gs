@@ -36,11 +36,9 @@ function include(filename) {
 /**
  * Función principal de la API
  */
-function processAPI(payload) {
+function processAPI(action, data, sessionToken) {
   try {
-    console.log('API Request:', payload);
-    
-    const { action, data } = payload;
+    console.log('API Request:', { action, data });
     
     switch(action) {
       case 'login':
@@ -67,7 +65,7 @@ function processAPI(payload) {
     console.error('Error en processAPI:', error);
     return { 
       success: false, 
-      message: 'Error interno del servidor: ' + error.message 
+      message: 'Error interno: ' + error.message 
     };
   }
 }
