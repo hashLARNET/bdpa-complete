@@ -8,6 +8,16 @@ let tipoMedicionActual = '';
 
 // Configuración de valores de referencia
 const VALORES_REFERENCIA = {
+    ALAMBRICO_T1: {
+        min: 45,
+        max: 75,
+        tolerance: 3
+    },
+    ALAMBRICO_T2: {
+        min: 45,
+        max: 75,
+        tolerance: 3
+    },
     COAXIAL: {
         min: 45,
         max: 75,
@@ -199,6 +209,8 @@ function mostrarCamposMedicion() {
     const tipo = document.getElementById('tipo-medicion').value;
     
     // Ocultar todos los campos
+    document.getElementById('campos-alambrico-t1').classList.add('hidden');
+    document.getElementById('campos-alambrico-t2').classList.add('hidden');
     document.getElementById('campos-coaxial').classList.add('hidden');
     document.getElementById('campos-fo').classList.add('hidden');
     document.getElementById('campos-wifi').classList.add('hidden');
@@ -206,6 +218,12 @@ function mostrarCamposMedicion() {
     
     // Mostrar campos según el tipo
     switch(tipo) {
+        case 'alambrico-t1':
+            document.getElementById('campos-alambrico-t1').classList.remove('hidden');
+            break;
+        case 'alambrico-t2':
+            document.getElementById('campos-alambrico-t2').classList.remove('hidden');
+            break;
         case 'coaxial':
             document.getElementById('campos-coaxial').classList.remove('hidden');
             break;
@@ -232,6 +250,38 @@ function validarValoresMedicion() {
     let valores = {};
     
     switch(tipo) {
+        case 'alambrico-t1':
+            const valorT1 = parseFloat(document.getElementById('valor-alambrico-t1').value);
+            if (isNaN(valorT1)) {
+                mostrarNotificacion('Debe ingresar un valor válido para Alámbrico T1', 'error');
+                return false;
+            }
+            
+            if (valorT1 < VALORES_REFERENCIA.ALAMBRICO_T1.min || valorT1 > VALORES_REFERENCIA.ALAMBRICO_T1.max) {
+                if (!confirm(`Valor fuera del rango recomendado (${VALORES_REFERENCIA.ALAMBRICO_T1.min}-${VALORES_REFERENCIA.ALAMBRICO_T1.max} dBμV). ¿Continuar?`)) {
+                    return false;
+                }
+            }
+            
+            valores = { alambricoT1: valorT1 };
+            break;
+            
+        case 'alambrico-t2':
+            const valorT2 = parseFloat(document.getElementById('valor-alambrico-t2').value);
+            if (isNaN(valorT2)) {
+                mostrarNotificacion('Debe ingresar un valor válido para Alámbrico T2', 'error');
+                return false;
+            }
+            
+            if (valorT2 < VALORES_REFERENCIA.ALAMBRICO_T2.min || valorT2 > VALORES_REFERENCIA.ALAMBRICO_T2.max) {
+                if (!confirm(`Valor fuera del rango recomendado (${VALORES_REFERENCIA.ALAMBRICO_T2.min}-${VALORES_REFERENCIA.ALAMBRICO_T2.max} dBμV). ¿Continuar?`)) {
+                    return false;
+                }
+            }
+            
+            valores = { alambricoT2: valorT2 };
+            break;
+            
         case 'coaxial':
             const valorCoaxial = parseFloat(document.getElementById('valor-coaxial').value);
             if (isNaN(valorCoaxial)) {
@@ -437,6 +487,8 @@ function limpiarFormularioMedicion() {
     document.getElementById('observaciones-medicion').value = '';
     
     // Limpiar campos específicos
+    document.getElementById('valor-alambrico-t1').value = '';
+    document.getElementById('valor-alambrico-t2').value = '';
     document.getElementById('valor-coaxial').value = '';
     document.getElementById('potencia-tx').value = '';
     document.getElementById('potencia-rx').value = '';
@@ -457,6 +509,8 @@ function limpiarFormularioMedicion() {
 
 function getTipoMedicionTexto(tipo) {
     const tipos = {
+        'alambrico-t1': 'Alámbrico T1 (dBμV)',
+        'alambrico-t2': 'Alámbrico T2 (dBμV)',
         coaxial: 'Coaxial (dBμV)',
         fibra: 'Fibra Óptica (dBm)',
         wifi: 'WiFi (dBm)',
@@ -471,6 +525,10 @@ function construirValoresTexto(medicion) {
         const valores = JSON.parse(medicion.valores);
         
         switch(medicion.tipoMedicion) {
+            case 'alambrico-t1':
+                return `${valores.alambricoT1} dBμV`;
+            case 'alambrico-t2':
+                return `${valores.alambricoT2} dBμV`;
             case 'coaxial':
                 return `${valores.coaxial} dBμV`;
             case 'fibra':
